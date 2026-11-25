@@ -1,0 +1,6 @@
+{
+  "name": "潮鲜沸鼎 · 海鲜自助火锅店长",
+  "description": "海鲜自助火锅模拟经营游戏原型：亲自参与迎宾、摆菜、上锅底、收桌、洗碗、摆台，雇佣分级员工获取强力加成，扩店解锁海鲜品类，应对经营惩罚挑战。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
