@@ -514,8 +514,8 @@ export const ACHIEVEMENTS_CATALOG: AchievementDef[] = [
   },
   {
     id: 'ach_all_zones',
-    title: '六大档口大满贯',
-    description: '通过门店发展树完整扩建全部 6 大前场档口区域。',
+    title: '七大档口大满贯',
+    description: '通过门店发展树完整扩建全部 7 大前场档口区域。',
     accentColor: '#38BDF8',
   },
   {

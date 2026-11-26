@@ -968,7 +968,7 @@ export function StoreConfigModal({
                 className="relative"
                 style={{
                   width: `${PAD_X * 2 + 5 * COL_W - 20}px`,
-                  height: `${PAD_Y + 4 * ROW_H + 16}px`,
+                  height: `${PAD_Y + 5 * ROW_H + 16}px`,
                 }}
               >
                 {/* Stage Column Headers */}
@@ -994,7 +994,7 @@ export function StoreConfigModal({
                 <svg
                   className="absolute inset-0 pointer-events-none"
                   width={PAD_X * 2 + 5 * COL_W}
-                  height={PAD_Y + 4 * ROW_H + 20}
+                  height={PAD_Y + 5 * ROW_H + 20}
                 >
                   {TECH_TREE_NODES.map((node) => {
                     const to = getNodeXY(node.stage, node.row);

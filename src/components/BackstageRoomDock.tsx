@@ -320,7 +320,9 @@ export function BackstageRoomDock({
             {BACKSTAGE_ROOMS.map((r) => {
               const active = currentRoomId === r.id;
               const hasUnrecruitedNpc =
-                r.sideStoryStaffId && !world.specialStaffBonds[r.sideStoryStaffId].recruited;
+                !world.mainStoryCompleted &&
+                r.sideStoryStaffId &&
+                !world.specialStaffBonds[r.sideStoryStaffId].recruited;
               const needsClosingProcure =
                 r.id === 'cold_storage' && isClosing && lowWarehouseCount > 0;
               return (
@@ -359,8 +361,14 @@ export function BackstageRoomDock({
             <span>
               当前位于 <strong className="text-[#FFF6E5]">后场中央走廊</strong> · 使用{' '}
               <strong className="text-[#E8C97A]">WASD / 方向键</strong> 或{' '}
-              <strong className="text-[#E8C97A]">点击任意房间</strong> 走入巡视（带{' '}
-              <span className="text-[#FACC15] font-bold">!</span> 的房间有可招募的神秘访客）
+              <strong className="text-[#E8C97A]">点击任意房间</strong> 走入巡视
+              {world.mainStoryCompleted ? (
+                <span className="text-[#6EE7B7] font-semibold">（终章已完结 · 无尽纯经营模式）</span>
+              ) : (
+                <>
+                  （带 <span className="text-[#FACC15] font-bold">!</span> 的房间有可招募的神秘访客）
+                </>
+              )}
             </span>
           </div>
         ) : (
@@ -373,7 +381,12 @@ export function BackstageRoomDock({
                 >
                   {roomRect.name}
                 </span>
-                {npcDef && npcBond && (
+                {world.mainStoryCompleted && (
+                  <span className="text-[11px] font-semibold text-[#6EE7B7]">
+                    · 终章已完结（剧情不再触发）
+                  </span>
+                )}
+                {!world.mainStoryCompleted && npcDef && npcBond && (
                   <span className="text-[11px] text-[#E8C97A]">
                     · 室内人物：
                     {npcBond.recruited
@@ -414,19 +427,21 @@ export function BackstageRoomDock({
                 </button>
               )}
 
-              {/* 3. Daily Room Story Event */}
-              <button
-                disabled={storyDoneToday}
-                onClick={() => onTriggerRoomStory(roomRect.id)}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-                  storyDoneToday
-                    ? 'game-btn-disabled'
-                    : 'game-btn-wood text-[#E8C97A] border-[#b6924d] cursor-pointer'
-                }`}
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-                {storyDoneToday ? '今日巡视剧情已看' : '巡视互动剧情'}
-              </button>
+              {/* 3. Daily Room Story Event (Frozen after main ending) */}
+              {!world.mainStoryCompleted && (
+                <button
+                  disabled={storyDoneToday}
+                  onClick={() => onTriggerRoomStory(roomRect.id)}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
+                    storyDoneToday
+                      ? 'game-btn-disabled'
+                      : 'game-btn-wood text-[#E8C97A] border-[#b6924d] cursor-pointer'
+                  }`}
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  {storyDoneToday ? '今日巡视剧情已看' : '巡视互动剧情'}
+                </button>
+              )}
 
               {/* 4. Office Sub-Drawers */}
               {roomRect.id === 'office' && (
@@ -452,74 +467,87 @@ export function BackstageRoomDock({
                 </>
               )}
 
-              {/* 5. Special Staff NPC Side-Story Recruitment OR Personal Arc */}
-              {npcStaffId && npcBond && npcDef && !npcBond.recruited && recruitCheck && (
-                <button
-                  disabled={!recruitCheck.canTrigger}
-                  onClick={() => onTriggerRecruitmentSideStory(npcStaffId)}
-                  className={`inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-                    recruitCheck.canTrigger ? 'game-btn-gold cursor-pointer' : 'game-btn-disabled'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  {recruitCheck.hint}
-                </button>
-              )}
+              {/* 5. Special Staff NPC Side-Story Recruitment OR Personal Arc (Frozen after main ending) */}
+              {!world.mainStoryCompleted &&
+                npcStaffId &&
+                npcBond &&
+                npcDef &&
+                !npcBond.recruited &&
+                recruitCheck && (
+                  <button
+                    disabled={!recruitCheck.canTrigger}
+                    onClick={() => onTriggerRecruitmentSideStory(npcStaffId)}
+                    className={`inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${
+                      recruitCheck.canTrigger ? 'game-btn-gold cursor-pointer' : 'game-btn-disabled'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {recruitCheck.hint}
+                  </button>
+                )}
 
-              {npcStaffId && npcBond && npcDef && npcBond.recruited && (
-                <>
-                  {availQuests.includes(npcStaffId) && (
+              {!world.mainStoryCompleted &&
+                npcStaffId &&
+                npcBond &&
+                npcDef &&
+                npcBond.recruited && (
+                  <>
+                    {availQuests.includes(npcStaffId) && (
+                      <button
+                        onClick={() => onTriggerSpecialQuest(npcStaffId)}
+                        className="game-btn-gold inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        {npcDef.name}第{npcBond.storyStage + 1}幕剧情
+                      </button>
+                    )}
                     <button
-                      onClick={() => onTriggerSpecialQuest(npcStaffId)}
+                      onClick={() => onInteractSpecialStaff(npcStaffId, 'CHAT')}
+                      className="game-btn-wood px-2.5 py-1.5 rounded-lg text-xs font-bold text-[#F9A8D4] cursor-pointer whitespace-nowrap"
+                    >
+                      闲聊 +5
+                    </button>
+                    <button
+                      onClick={() => onInteractSpecialStaff(npcStaffId, 'GIFT')}
+                      className="game-btn-wood px-2.5 py-1.5 rounded-lg text-xs font-bold text-[#F2CE74] cursor-pointer whitespace-nowrap"
+                    >
+                      赠礼 ¥45
+                    </button>
+                    {npcBond.affection >= 80 && npcBond.relationship !== 'MARRIED' && (
+                      <button
+                        onClick={() => onConfessOrPropose(npcStaffId)}
+                        className="game-btn-gold inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
+                      >
+                        <Heart className="w-3.5 h-3.5" />
+                        {npcBond.relationship === 'DATING' ? '海港求婚' : '倾心表白'}
+                      </button>
+                    )}
+                  </>
+                )}
+
+              {/* 6. Dormitory Partner Maintenance Actions (Frozen after main ending) */}
+              {!world.mainStoryCompleted &&
+                roomRect.id === 'dormitory' &&
+                partnerId &&
+                partnerBond &&
+                partnerDef && (
+                  <>
+                    <button
+                      onClick={() => onSpendTimePartner(partnerId, false)}
+                      className="game-btn-wood inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-[#F9A8D4] cursor-pointer whitespace-nowrap"
+                    >
+                      <Heart className="w-3.5 h-3.5" />
+                      陪伴{partnerDef.name}（亲密{Math.round(partnerBond.partnerBond)}%）
+                    </button>
+                    <button
+                      onClick={() => onSpendTimePartner(partnerId, true)}
                       className="game-btn-gold inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      {npcDef.name}第{npcBond.storyStage + 1}幕剧情
+                      满足心愿 ¥50
                     </button>
-                  )}
-                  <button
-                    onClick={() => onInteractSpecialStaff(npcStaffId, 'CHAT')}
-                    className="game-btn-wood px-2.5 py-1.5 rounded-lg text-xs font-bold text-[#F9A8D4] cursor-pointer whitespace-nowrap"
-                  >
-                    闲聊 +5
-                  </button>
-                  <button
-                    onClick={() => onInteractSpecialStaff(npcStaffId, 'GIFT')}
-                    className="game-btn-wood px-2.5 py-1.5 rounded-lg text-xs font-bold text-[#F2CE74] cursor-pointer whitespace-nowrap"
-                  >
-                    赠礼 ¥45
-                  </button>
-                  {npcBond.affection >= 80 && npcBond.relationship !== 'MARRIED' && (
-                    <button
-                      onClick={() => onConfessOrPropose(npcStaffId)}
-                      className="game-btn-gold inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
-                    >
-                      <Heart className="w-3.5 h-3.5" />
-                      {npcBond.relationship === 'DATING' ? '海港求婚' : '倾心表白'}
-                    </button>
-                  )}
-                </>
-              )}
-
-              {/* 6. Dormitory Partner Maintenance Actions */}
-              {roomRect.id === 'dormitory' && partnerId && partnerBond && partnerDef && (
-                <>
-                  <button
-                    onClick={() => onSpendTimePartner(partnerId, false)}
-                    className="game-btn-wood inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-[#F9A8D4] cursor-pointer whitespace-nowrap"
-                  >
-                    <Heart className="w-3.5 h-3.5" />
-                    陪伴{partnerDef.name}（亲密{Math.round(partnerBond.partnerBond)}%）
-                  </button>
-                  <button
-                    onClick={() => onSpendTimePartner(partnerId, true)}
-                    className="game-btn-gold inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    满足心愿 ¥50
-                  </button>
-                </>
-              )}
+                  </>
+                )}
             </div>
           </div>
         )}

@@ -90,7 +90,7 @@ export function MainMenuScreen({
             </h1>
 
             <p className="text-sm md:text-base text-[#E6D6C0] leading-relaxed max-w-md pt-1">
-              执掌海畔火锅名馆，开店前于门店配置中心调兵遣将、扩建六大前场档口与秘制锅底；开市后迎宾上锅、冷库补货、清桌洗碗，在客流高峰与食安红线中问鼎海上御膳传奇。
+              执掌海畔火锅名馆，开店前于门店配置中心调兵遣将、扩建七大前场档口与秘制锅底；开市后迎宾上锅、冷库补货、清桌洗碗，在客流高峰与食安红线中问鼎海上御膳传奇。
             </p>
           </div>
 
@@ -194,7 +194,7 @@ export function MainMenuScreen({
                   1. <strong className="text-[#FFF6E5]">开店前准备</strong>：点击左上角「门店配置」或按 C 键进入门店配置中心，切换店面类型、调整菜单策略卡、研学门店发展树或签约雇员。
                 </p>
                 <p>
-                  2. <strong className="text-[#FFF6E5]">正式开店营业</strong>：点击右下角圆形「正式开店」印玺开门迎客，迎宾上锅、从后场冷库向六大前场档口补货、现烹熟食、收桌洗碗。
+                  2. <strong className="text-[#FFF6E5]">正式开店营业</strong>：点击右下角圆形「正式开店」印玺开门迎客，迎宾上锅、从后场冷库向七大前场档口补货、现烹熟食、收桌洗碗。
                 </p>
                 <p>
                   3. <strong className="text-[#FFF6E5]">闭店采购与手动结算</strong>：22:00 闭店收尾后，可前往后场冷库手动下单补货（或雇佣「库存采购员」自动补单），货品将于次日闭店后到货入库；全厅整洁后手动点击打烊结算。

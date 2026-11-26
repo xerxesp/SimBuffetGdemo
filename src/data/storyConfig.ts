@@ -16,14 +16,24 @@ import {
   StoryPhilosophy,
 } from '../types/game';
 
-export const TITLE_KEYART_URL = '/src/assets/images/hotpot_title_keyart_1795580644561.jpg';
+import titleKeyartImg from '../assets/images/hotpot_title_keyart_1795580644561.jpg';
+import portraitLinXiImg from '../assets/images/portrait_lin_xi_1795600830788.jpg';
+import portraitShenZhiweiImg from '../assets/images/portrait_shen_zhiwei_1795600827822.jpg';
+import portraitSuXingyaoImg from '../assets/images/portrait_su_xingyao_1795600831241.jpg';
+import portraitElderChenImg from '../assets/images/portrait_elder_chen_1795600831785.jpg';
+import portraitCriticEditorImg from '../assets/images/portrait_critic_editor_1795600833176.jpg';
+import portraitHarborHeirImg from '../assets/images/portrait_harbor_heir_1795580642982.jpg';
+import portraitHotelDirectorImg from '../assets/images/portrait_hotel_director_1795580644419.jpg';
+import portraitBrothArtisanImg from '../assets/images/portrait_broth_artisan_1795580645240.jpg';
+
+export const TITLE_KEYART_URL = titleKeyartImg;
 
 export const NPC_PORTRAIT_URLS = {
-  lin_xi: '/src/assets/images/portrait_lin_xi_1795600830788.jpg',
-  shen_zhiwei: '/src/assets/images/portrait_shen_zhiwei_1795600827822.jpg',
-  su_xingyao: '/src/assets/images/portrait_su_xingyao_1795600831241.jpg',
-  elder_chen: '/src/assets/images/portrait_elder_chen_1795600831785.jpg',
-  critic_editor: '/src/assets/images/portrait_critic_editor_1795600833176.jpg',
+  lin_xi: portraitLinXiImg,
+  shen_zhiwei: portraitShenZhiweiImg,
+  su_xingyao: portraitSuXingyaoImg,
+  elder_chen: portraitElderChenImg,
+  critic_editor: portraitCriticEditorImg,
 } as const;
 
 export function resolveSpeakerPortrait(
@@ -84,7 +94,7 @@ export const MANAGER_CHARACTERS: ManagerCharacterDef[] = [
     id: 'harbor_heir',
     name: '林潮生',
     title: '渔港少东家',
-    portraitUrl: '/src/assets/images/portrait_harbor_heir_1795580642982.jpg',
+    portraitUrl: portraitHarborHeirImg,
     accentColor: '#5CC8FF',
     backstory:
       '潮汕三代远洋渔船传人，带着一手码头直采冷链闯荡繁华都市，决心让老百姓吃上最鲜活的海鲜自助。',
@@ -107,7 +117,7 @@ export const MANAGER_CHARACTERS: ManagerCharacterDef[] = [
     id: 'hotel_director',
     name: '苏婉清',
     title: '五星酒店前总监',
-    portraitUrl: '/src/assets/images/portrait_hotel_director_1795580644419.jpg',
+    portraitUrl: portraitHotelDirectorImg,
     accentColor: '#F2BE54',
     backstory:
       '曾执掌海景五星酒店餐饮部的金牌礼宾官，辞去高薪自立门户，以润物无声的极致服务俘获满城食客。',
@@ -130,7 +140,7 @@ export const MANAGER_CHARACTERS: ManagerCharacterDef[] = [
     id: 'broth_artisan',
     name: '陆铁锅',
     title: '川潮秘汤传人',
-    portraitUrl: '/src/assets/images/portrait_broth_artisan_1795580645240.jpg',
+    portraitUrl: portraitBrothArtisanImg,
     accentColor: '#F67248',
     backstory:
       '游历巴蜀与闽粤的江湖奇厨，凭一口滚沸鲜香的秘制海鲜高汤走红夜市，亲力亲为效率惊人。',
@@ -1575,7 +1585,7 @@ export function buildEndingEpilogue(world: GameWorld): EndingEpilogueReport {
   else if (WARMTH >= CRAFT && WARMTH >= EMPIRE) dominant = 'WARMTH';
 
   const charDef = getCharacterDef(world.characterId);
-  const allZonesBuilt = world.unlockedZones.length >= 6;
+  const allZonesBuilt = world.unlockedZones.length >= 7;
   const partnerId = world.activePartnerId;
   const partnerDef = partnerId ? getSpecialStaffDef(partnerId) : null;
   const partnerState = partnerId ? world.specialStaffBonds[partnerId] : null;
@@ -1591,7 +1601,7 @@ export function buildEndingEpilogue(world: GameWorld): EndingEpilogueReport {
     title: '《百年潮鲜 · 传世匠心老号》',
     summary:
       `“潮鲜沸鼎”拒绝了盲目加盟，坚守活鲜直采与四季应季锅底。${
-        allZonesBuilt ? '六大顶级海鲜自助明档齐备，从活捞海鲜缸到刺身铁板皆成行业教科书，' : ''
+        allZonesBuilt ? '七大顶级海鲜自助明档齐备，从活捞海鲜缸到刺身与铁板烧烤皆成行业教科书，' : ''
       }每年都有无数饕客专程乘飞机前来打卡，成为载入城市美食典籍的百年传奇老字号。`,
   };
   if (dominant === 'EMPIRE') {
@@ -1599,7 +1609,7 @@ export function buildEndingEpilogue(world: GameWorld): EndingEpilogueReport {
       title: '《沸鼎扬帆 · 跨海餐饮帝国》',
       summary:
         `从街角四张木桌起家，“潮鲜沸鼎”凭借自建深海冷链、标准化明档与精准的餐位分层策略成功登陆资本市场。${
-          allZonesBuilt ? '旗下六大主题海鲜体验区风靡亚洲各大港口城市，' : ''
+          allZonesBuilt ? '旗下七大主题海鲜体验区风靡亚洲各大港口城市，' : ''
         }五年内开出八十余家星级海鲜殿堂，彻底改写了现代海鲜自助的商业版图。`,
     };
   } else if (dominant === 'WARMTH') {
@@ -1607,7 +1617,7 @@ export function buildEndingEpilogue(world: GameWorld): EndingEpilogueReport {
       title: '《港湾红灯 · 永不打烊的深夜食堂》',
       summary:
         `尽管早已声名远播，“潮鲜沸鼎”依旧保留着门口那排暖红纸灯笼与贴满手写祝福的迎宾墙。${
-          allZonesBuilt ? '丰盛的六大明档让老街坊与远方来客都能各得其乐，' : ''
+          allZonesBuilt ? '丰盛的七大明档让老街坊与远方来客都能各得其乐，' : ''
         }一代代港城人在这里庆祝升职、求婚与重逢，成为整座城市最温柔的情感地标。`,
     };
   }

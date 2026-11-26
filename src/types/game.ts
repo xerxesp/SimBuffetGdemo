@@ -149,6 +149,7 @@ export type BuffetZoneId =
   | 'ice_seafood'
   | 'sashimi_sushi'
   | 'cooked_hot'
+  | 'teppan_bbq'
   | 'hotpot_sides'
   | 'drinks_dessert';
 
@@ -517,7 +518,7 @@ export type TechNodeKind =
 export interface TechTreeNodeDef {
   id: string;
   stage: 1 | 2 | 3 | 4 | 5;
-  row: 0 | 1 | 2 | 3;
+  row: 0 | 1 | 2 | 3 | 4;
   kind: TechNodeKind;
   title: string;
   shortDesc: string;

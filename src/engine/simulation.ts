@@ -772,6 +772,7 @@ function checkGameOver(world: GameWorld) {
 }
 
 function handleSpecialCustomerFinished(world: GameWorld, cust: CustomerParty) {
+  if (world.mainStoryCompleted) return;
   if (!cust.specialStoryId) return;
   const storyId = cust.specialStoryId;
   const def = getSpecialStoryDef(storyId);
@@ -1288,7 +1289,8 @@ export interface SolidCollider {
 export function getFrontHallColliders(world: GameWorld): SolidCollider[] {
   const colliders: SolidCollider[] = [];
 
-  // 1. Top 4 kitchen stations (inset 8px horizontally so the 3 archways 221, 406, 682 stay cleanly passable!)
+  // 1. Top 4 kitchen stations (inset 8px horizontally so the 3 archways 221, 406, 682 stay cleanly passable,
+  //    and trimmed slightly on south edge so player standpoints at y=126 have generous clearance!)
   const topStations = [
     STATIONS.SINK,
     STATIONS.CLEAN_RACK,
@@ -1300,11 +1302,11 @@ export function getFrontHallColliders(world: GameWorld): SolidCollider[] {
       minX: st.x - st.w / 2 + 8,
       maxX: st.x + st.w / 2 - 8,
       minY: st.y - st.h / 2,
-      maxY: st.y + st.h / 2,
+      maxY: st.y + st.h / 2 - 6,
     });
   }
 
-  // 2. Reception Desk
+  // 2. Reception Desk (maxX = 128; player reception standpoint sits cleanly outside at x = 144)
   colliders.push({
     minX: STATIONS.RECEPTION.x - 42,
     maxX: STATIONS.RECEPTION.x + 42,
@@ -1355,7 +1357,7 @@ export function pushOutsideColliders(
   r = 11
 ): { x: number; y: number } {
   const bounds = getFrontHallBounds(world.shopLevel);
-  let cx = Math.max(124, Math.min(bounds.width - 24, x));
+  let cx = Math.max(112, Math.min(bounds.width - 24, x));
   let cy = Math.max(114, Math.min(bounds.height - 24, y));
   const colliders = getFrontHallColliders(world);
 
@@ -1375,7 +1377,7 @@ export function pushOutsideColliders(
         moved = true;
       }
     }
-    cx = Math.max(124, Math.min(bounds.width - 24, cx));
+    cx = Math.max(112, Math.min(bounds.width - 24, cx));
     cy = Math.max(114, Math.min(bounds.height - 24, cy));
     if (!moved) break;
   }
@@ -1393,7 +1395,7 @@ function resolveFrontHallStep(
 ): { x: number; y: number; blocked: boolean } {
   const bounds = getFrontHallBounds(world.shopLevel);
   const minY = allowArchwayNorth ? -8 : 114;
-  let tx = Math.max(124, Math.min(bounds.width - 24, wantX));
+  let tx = Math.max(112, Math.min(bounds.width - 24, wantX));
   let ty = Math.max(minY, Math.min(bounds.height - 24, wantY));
 
   const colliders = getFrontHallColliders(world);
@@ -1441,14 +1443,21 @@ function advanceActorTasks(
   const dy = step.targetY - actor.y;
   const dist = Math.hypot(dx, dy);
 
-  if (dist > 6) {
+  const isInteractiveTask = step.type !== 'WALK_TO' && step.type !== 'ENTER_BACKSTAGE';
+  const arriveDist = actor.isPlayer && isInteractiveTask ? 12 : 6;
+
+  if (dist > arriveDist) {
     const moveDist = actor.speed * dt;
     const rawNextX = moveDist >= dist ? step.targetX : actor.x + (dx / dist) * moveDist;
     const rawNextY = moveDist >= dist ? step.targetY : actor.y + (dy / dist) * moveDist;
 
     if (actor.isPlayer && step.type !== 'ENTER_BACKSTAGE') {
       const res = resolveFrontHallStep(world, actor.x, actor.y, rawNextX, rawNextY, true, 10);
-      if (Math.hypot(res.x - actor.x, res.y - actor.y) < moveDist * 0.22 && res.blocked) {
+      // If blocked right next to an interactive station/table edge, snap-complete instead of stalling!
+      if (isInteractiveTask && res.blocked && dist <= 22) {
+        actor.x = res.x;
+        actor.y = res.y;
+      } else if (Math.hypot(res.x - actor.x, res.y - actor.y) < moveDist * 0.22 && res.blocked) {
         // Smart tangential detour around table/buffet corner so click-to-walk glides cleanly!
         const perpX = -dy / dist;
         const perpY = dx / dist;
@@ -1475,16 +1484,20 @@ function advanceActorTasks(
         const pick = dA <= dB ? tryA : tryB;
         actor.x = pick.x;
         actor.y = pick.y;
+        actor.walkCycle += dt * 10;
+        return;
       } else {
         actor.x = res.x;
         actor.y = res.y;
+        actor.walkCycle += dt * 10;
+        return;
       }
     } else {
       actor.x = rawNextX;
       actor.y = rawNextY;
+      actor.walkCycle += dt * 10;
+      return;
     }
-    actor.walkCycle += dt * 10;
-    return;
   }
 
   const baseDur = step.duration ?? 0;
@@ -2597,8 +2610,9 @@ export function tickWorld(world: GameWorld, rawDt: number) {
       return;
     }
 
-    // 0. In-service unexpected incidents & branching side-quests!
+    // 0. In-service unexpected incidents & branching side-quests! (Disabled once ending reached)
     if (
+      !world.mainStoryCompleted &&
       progress >= 0.24 &&
       progress <= 0.8 &&
       world.incidentsTriggeredToday < 1 &&
@@ -2618,9 +2632,12 @@ export function tickWorld(world: GameWorld, rawDt: number) {
       }
     }
 
-    // 1. Hidden special customer organic discovery & arrival
-    world.specialVisitCooldown -= dt;
+    // 1. Hidden special customer organic discovery & arrival (Disabled once ending reached)
+    if (!world.mainStoryCompleted) {
+      world.specialVisitCooldown -= dt;
+    }
     if (
+      !world.mainStoryCompleted &&
       world.specialVisitCooldown <= 0 &&
       world.queue.length < 5 &&
       progress < 0.82 &&
@@ -3050,6 +3067,11 @@ export function tickWorld(world: GameWorld, rawDt: number) {
   }
 }
 
+const TOP_STATION_STAND_Y = 126;
+const SINK_STAND_X = Math.max(130, STATIONS.SINK.x + 12);
+const RECEPTION_STAND_X = STATIONS.RECEPTION.x + 58;
+const RECEPTION_STAND_Y = STATIONS.RECEPTION.y + 4;
+
 function prependDropIfNeeded(world: GameWorld, neededCarry: GameWorld['player']['carrying']): TaskStep[] {
   const cur = world.player.carrying;
   if (cur === 'NONE' || cur === neededCarry) return [];
@@ -3057,8 +3079,8 @@ function prependDropIfNeeded(world: GameWorld, neededCarry: GameWorld['player'][
     return [
       {
         type: 'DROP_DIRTY',
-        targetX: STATIONS.SINK.x + 10,
-        targetY: STATIONS.SINK.y + 44,
+        targetX: SINK_STAND_X,
+        targetY: TOP_STATION_STAND_Y,
         duration: 0.2,
       },
     ];
@@ -3084,8 +3106,8 @@ export function handleCanvasClick(
   if (!isActivePlayPhase(world.phase) || world.pendingStoryModal) return;
   const p = world.player;
 
-  // During PREP (开店前) or CLOSING (闭店时), clicking any staff member starts a conversation!
-  if (world.phase === 'PREP' || world.phase === 'CLOSING') {
+  // During PREP (开店前) or CLOSING (闭店时), clicking any staff member starts a conversation (disabled post-ending!)
+  if (!world.mainStoryCompleted && (world.phase === 'PREP' || world.phase === 'CLOSING')) {
     const clickedStaff = [...world.staff]
       .sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))
       .find((s) => Math.hypot(s.x - x, s.y - y) <= 28);
@@ -3147,8 +3169,8 @@ export function handleCanvasClick(
       ...pre,
       {
         type: 'WELCOME_GUEST',
-        targetX: STATIONS.RECEPTION.x + 34,
-        targetY: STATIONS.RECEPTION.y + 8,
+        targetX: RECEPTION_STAND_X,
+        targetY: RECEPTION_STAND_Y,
         targetId: ready.id,
         duration: 0.45,
       },
@@ -3163,8 +3185,8 @@ export function handleCanvasClick(
     if (p.carrying === 'DIRTY_DISHES') {
       steps.push({
         type: 'DROP_DIRTY',
-        targetX: STATIONS.SINK.x,
-        targetY: STATIONS.SINK.y + 44,
+        targetX: SINK_STAND_X,
+        targetY: TOP_STATION_STAND_Y,
         duration: 0.2,
       });
     } else if (p.carrying !== 'NONE') {
@@ -3173,8 +3195,8 @@ export function handleCanvasClick(
     if (world.dirtyDishes > 0 || p.carrying === 'DIRTY_DISHES') {
       steps.push({
         type: 'WASH_DISHES',
-        targetX: STATIONS.SINK.x,
-        targetY: STATIONS.SINK.y + 44,
+        targetX: SINK_STAND_X,
+        targetY: TOP_STATION_STAND_Y,
         duration: 0.85,
       });
       p.taskQueue = steps;
@@ -3198,7 +3220,7 @@ export function handleCanvasClick(
       {
         type: 'PICKUP_CLEAN_DISH',
         targetX: STATIONS.CLEAN_RACK.x,
-        targetY: STATIONS.CLEAN_RACK.y + 44,
+        targetY: TOP_STATION_STAND_Y,
         duration: 0.3,
       },
     ];
@@ -3233,7 +3255,7 @@ export function handleCanvasClick(
       {
         type: 'PICKUP_BROTH',
         targetX: STATIONS.BROTH_KITCHEN.x,
-        targetY: STATIONS.BROTH_KITCHEN.y + 44,
+        targetY: TOP_STATION_STAND_Y,
         brothId: waiting.customer.brothId,
         duration: 0.4,
       },
@@ -3264,7 +3286,7 @@ export function handleCanvasClick(
       steps.push({
         type: 'PICKUP_SEAFOOD',
         targetX: STATIONS.COLD_PREP.x,
-        targetY: STATIONS.COLD_PREP.y + 44,
+        targetY: TOP_STATION_STAND_Y,
         duration: 0.35,
       });
     }
@@ -3316,7 +3338,7 @@ export function handleCanvasClick(
           steps.push({
             type: 'COOK_FOOD',
             targetX: STATIONS.COLD_PREP.x - 16,
-            targetY: STATIONS.COLD_PREP.y + 44,
+            targetY: TOP_STATION_STAND_Y,
             duration: 0.75,
           });
         }
@@ -3332,7 +3354,7 @@ export function handleCanvasClick(
         return;
       }
 
-      // Cold/Live/Sashimi/Drinks/Sides zone: find closest slot in this zone (or any low slot)
+      // Cold/Live/Sashimi/Drinks/Teppan/Sides zone: find closest slot in this zone (or any low slot)
       const zoneSlots = world.buffetSlots.filter((s) => {
         const d = SEAFOOD_CATALOG.find((item) => item.id === s.itemId);
         return d?.zone === zoneId;
@@ -3389,7 +3411,7 @@ export function handleCanvasClick(
         steps.push({
           type: 'PICKUP_SEAFOOD',
           targetX: STATIONS.COLD_PREP.x,
-          targetY: STATIONS.COLD_PREP.y + 44,
+          targetY: TOP_STATION_STAND_Y,
           duration: 0.35,
         });
       }
@@ -3417,7 +3439,7 @@ export function handleCanvasClick(
           steps.push({
             type: 'PICKUP_BROTH',
             targetX: STATIONS.BROTH_KITCHEN.x,
-            targetY: STATIONS.BROTH_KITCHEN.y + 44,
+            targetY: TOP_STATION_STAND_Y,
             brothId: table.customer.brothId,
             duration: 0.4,
           });
@@ -3448,8 +3470,8 @@ export function handleCanvasClick(
           },
           {
             type: 'DROP_DIRTY',
-            targetX: STATIONS.SINK.x + 10,
-            targetY: STATIONS.SINK.y + 44,
+            targetX: SINK_STAND_X,
+            targetY: TOP_STATION_STAND_Y,
             duration: 0.2,
           },
         ];
@@ -3483,7 +3505,7 @@ export function handleCanvasClick(
           {
             type: 'PICKUP_CLEAN_DISH',
             targetX: STATIONS.CLEAN_RACK.x,
-            targetY: STATIONS.CLEAN_RACK.y + 44,
+            targetY: TOP_STATION_STAND_Y,
             duration: 0.3,
           },
           {
@@ -3505,8 +3527,8 @@ export function handleCanvasClick(
           ...pre,
           {
             type: 'WELCOME_GUEST',
-            targetX: STATIONS.RECEPTION.x + 34,
-            targetY: STATIONS.RECEPTION.y + 8,
+            targetX: RECEPTION_STAND_X,
+            targetY: RECEPTION_STAND_Y,
             targetId: table.id,
             duration: 0.45,
           },

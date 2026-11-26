@@ -750,6 +750,20 @@ export function applyCompletedTechNode(world: GameWorld, nodeId: string): string
       summary = '商用高温消毒柜（18套）与深冷冰台（每格+2份）安装竣工！';
       break;
     }
+    case 'tech_zone_teppan': {
+      addZone('teppan_bbq');
+      addDish('bbq_garlic_oyster');
+      addDish('teppan_lamb');
+      addDish('teppan_foie_gras');
+      const placed = autoPlaceNewlyUnlockedZone(world, 'teppan_bbq');
+      world.reputation = Math.min(100, world.reputation + 4);
+      summary = `前场「铁板烧烤区」扩建完工！已解锁炭烤海鲜串、铁板羊排与铁板鹅肝三张烧烤卡；${
+        placed
+          ? `已自动布置至【${placed.label}】，可在「前厅区域布局」自由调整。`
+          : '请前往「前厅区域布局」选择区域位安放。'
+      }`;
+      break;
+    }
     case 'tech_regime_hall':
       addRegime('seafood_hall');
       upgradeShopLevelTo(world, 3);
@@ -1232,7 +1246,7 @@ export function tickBackstagePlayer(
       exitBackstageToDiningHall(world, arrivedX > 120 ? arrivedX : undefined);
     } else if (interactType === 'NPC' && interactScene) {
       const roomRect = getBackstageRoomRect(interactScene);
-      if (roomRect.sideStoryStaffId) {
+      if (roomRect.sideStoryStaffId && !world.mainStoryCompleted) {
         const bond = world.specialStaffBonds[roomRect.sideStoryStaffId];
         if (!bond.recruited) {
           triggerSpecialStaffRecruitmentSideStory(world, roomRect.sideStoryStaffId);
@@ -1294,6 +1308,9 @@ export function canTriggerRecruitmentSideStory(
   staffId: SpecialStaffId
 ): { canTrigger: boolean; stage: 0 | 1 | 2; hint: string } {
   const bond = world.specialStaffBonds[staffId];
+  if (world.mainStoryCompleted) {
+    return { canTrigger: false, stage: bond.recruitmentStage, hint: '终章后无尽经营不再触发剧情' };
+  }
   if (bond.recruited || bond.recruitmentStage >= 2) {
     return { canTrigger: false, stage: 2, hint: '已入队' };
   }

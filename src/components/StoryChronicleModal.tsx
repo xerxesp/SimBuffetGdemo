@@ -69,7 +69,9 @@ export function StoryChronicleModal({
                 店长纪略 · 特殊店员羁绊与堂口见闻录
               </h2>
               <p className="text-xs text-[#C5AE92]">
-                主线满足条件将自动触发人物对话剧情；未邂逅的江湖奇遇严格保密
+                {world.mainStoryCompleted
+                  ? '主线终章已圆满落幕 · 无尽模式将不再触发新剧情推进，此处仅供回顾档案与重温结局画卷'
+                  : '主线满足条件将自动触发人物对话剧情；未邂逅的江湖奇遇严格保密'}
               </p>
             </div>
           </div>
@@ -213,15 +215,19 @@ export function StoryChronicleModal({
                       特殊店员羁绊与个人线（共 5 幕）
                     </h3>
                     <p className="text-xs text-[#C5AE92] mt-0.5">
-                      开店前/闭店后推进专属剧情与伴侣维护，决定各自未来归宿
+                      {world.mainStoryCompleted
+                        ? '终章已定格，此处永久收录已结缘伙伴的羁绊档案'
+                        : '开店前/闭店后推进专属剧情与伴侣维护，决定各自未来归宿'}
                     </p>
                   </div>
-                  <button
-                    onClick={onOpenDormitory}
-                    className="text-xs font-bold text-[#E8C97A] hover:text-[#FFF6E5] underline underline-offset-2 cursor-pointer whitespace-nowrap"
-                  >
-                    前往宿舍茶室互动 →
-                  </button>
+                  {!world.mainStoryCompleted && (
+                    <button
+                      onClick={onOpenDormitory}
+                      className="text-xs font-bold text-[#E8C97A] hover:text-[#FFF6E5] underline underline-offset-2 cursor-pointer whitespace-nowrap"
+                    >
+                      前往宿舍茶室互动 →
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-2.5">
@@ -271,12 +277,14 @@ export function StoryChronicleModal({
                               </div>
                             ) : (
                               <div className="text-[11px] text-[#FCD34D]">
-                                招募支线进展 1/2 · 请于明日开店前或闭店后重访后场房间邀其正式入队！
+                                {world.mainStoryCompleted
+                                  ? '招募支线进展 1/2（终章已定格）'
+                                  : '招募支线进展 1/2 · 请于明日开店前或闭店后重访后场房间邀其正式入队！'}
                               </div>
                             )}
                           </div>
 
-                          {bond.recruited && questReady && nextQuest && (
+                          {!world.mainStoryCompleted && bond.recruited && questReady && nextQuest && (
                             <button
                               onClick={() => onTriggerSpecialQuest(sp.id)}
                               className="game-btn-gold inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold cursor-pointer shrink-0 whitespace-nowrap"

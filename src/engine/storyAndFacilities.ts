@@ -66,6 +66,7 @@ function pushAlert(
 
 const EXPANDABLE_ZONE_TECH_NODE: Partial<Record<BuffetZoneId, string>> = {
   drinks_dessert: 'tech_zone_drinks',
+  teppan_bbq: 'tech_zone_teppan',
   sashimi_sushi: 'tech_zone_sashimi',
   live_seafood: 'tech_zone_live',
 };
@@ -657,6 +658,7 @@ export function recruitSpecialStaff(world: GameWorld, staffId: SpecialStaffId): 
 
 export function getAvailableSpecialStaffQuests(world: GameWorld): SpecialStaffId[] {
   if (world.phase !== 'PREP' && world.phase !== 'CLOSING') return [];
+  if (world.mainStoryCompleted) return [];
   const available: SpecialStaffId[] = [];
   for (const def of SPECIAL_STAFF_CATALOG) {
     const bond = world.specialStaffBonds[def.id];
@@ -671,6 +673,10 @@ export function getAvailableSpecialStaffQuests(world: GameWorld): SpecialStaffId
 }
 
 export function triggerSpecialStaffQuest(world: GameWorld, staffId: SpecialStaffId): boolean {
+  if (world.mainStoryCompleted) {
+    pushAlert(world, '主线结局已圆满落幕，当前为纯经营无尽模式，不再触发剧情故事。', 'info');
+    return false;
+  }
   if (world.phase !== 'PREP' && world.phase !== 'CLOSING') {
     pushAlert(world, '特殊店员人物剧情任务仅限在「开店前准备」或「闭店收尾」阶段开启！', 'warning');
     return false;
@@ -704,6 +710,7 @@ export function triggerSpecialStaffQuest(world: GameWorld, staffId: SpecialStaff
 }
 
 export function talkToStaffMember(world: GameWorld, staff: HiredStaff): boolean {
+  if (world.mainStoryCompleted) return false;
   if (world.phase !== 'PREP' && world.phase !== 'CLOSING') {
     return false;
   }
@@ -731,6 +738,10 @@ export function interactWithSpecialStaff(
   staffId: SpecialStaffId,
   mode: 'CHAT' | 'GIFT'
 ): boolean {
+  if (world.mainStoryCompleted) {
+    pushAlert(world, '主线结局已圆满落幕，当前为纯经营无尽模式，不再触发人物剧情互动。', 'info');
+    return false;
+  }
   const bond = world.specialStaffBonds[staffId];
   const def = getSpecialStaffDef(staffId);
   if (!bond.recruited) return false;
@@ -796,6 +807,10 @@ export function interactWithSpecialStaff(
 }
 
 export function confessOrProposeSpecialStaff(world: GameWorld, staffId: SpecialStaffId): boolean {
+  if (world.mainStoryCompleted) {
+    pushAlert(world, '主线结局已圆满落幕，当前为纯经营无尽模式，不再触发情感剧情。', 'info');
+    return false;
+  }
   if (world.phase !== 'PREP' && world.phase !== 'CLOSING') {
     pushAlert(world, '表白交往或求婚仪式需在「开店前」或「闭店后」的静谧时光进行！', 'warning');
     return false;
@@ -861,6 +876,10 @@ export function spendTimeWithPartner(
   staffId: SpecialStaffId,
   fulfillWish: boolean
 ): boolean {
+  if (world.mainStoryCompleted) {
+    pushAlert(world, '主线结局已圆满落幕，当前为纯经营无尽模式，不再触发伴侣剧情。', 'info');
+    return false;
+  }
   const bond = world.specialStaffBonds[staffId];
   const def = getSpecialStaffDef(staffId);
   if (bond.relationship !== 'DATING' && bond.relationship !== 'MARRIED') return false;
@@ -1233,6 +1252,10 @@ export function triggerFacilitySceneStory(
   world: GameWorld,
   sceneId: FacilitySceneId
 ): boolean {
+  if (world.mainStoryCompleted) {
+    pushAlert(world, '主线结局已圆满落幕，当前为纯经营无尽模式，不再触发场馆剧情。', 'info');
+    return false;
+  }
   if (world.facilityEventsDoneToday.includes(sceneId)) {
     pushAlert(world, '该场景今日互动剧情已触发过，明日再来巡视看看新动态吧！', 'info');
     return false;

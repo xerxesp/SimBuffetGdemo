@@ -595,7 +595,7 @@ export function syncWorldToEncyclopedia(world: GameWorld): string[] {
   }
   if (world.cash >= 3000) grant('ach_cash_3000');
   if (world.cash >= 10000) grant('ach_cash_10000');
-  if (world.unlockedZones.length >= 6) grant('ach_all_zones');
+  if (world.unlockedZones.length >= 7) grant('ach_all_zones');
   if (world.discoveredSynergyIds.length >= 2) grant('ach_synergy_master');
   if (world.year >= 2) grant('ach_full_year');
   if (playerRank <= 3) grant('ach_top3_city');
