@@ -108,7 +108,7 @@ export function BackstageRoomDock({
       .reduce((acc, d) => acc + d.quantity, 0);
 
   return (
-    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 w-[94vw] max-w-[940px] pointer-events-none flex flex-col items-center gap-2">
+    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 w-[94vw] max-w-[940px] pointer-events-none flex flex-col items-center gap-2">
       {/* Expandable Warehouse Closing Procurement Drawer (Cold Storage / Office) */}
       {canOpenWarehouse && drawerMode === 'WAREHOUSE' && (
         <div className="pointer-events-auto game-panel rounded-xl p-3.5 w-full max-w-[820px] space-y-2.5 max-h-[44vh] flex flex-col">
@@ -313,7 +313,7 @@ export function BackstageRoomDock({
       )}
 
       {/* Main Floating Room Command Dock */}
-      <div className="pointer-events-auto game-panel rounded-xl px-4 py-2.5 w-full space-y-2">
+      <div className="pointer-events-auto hud-float backdrop-blur-md rounded-xl px-4 py-2.5 w-full space-y-2">
         {/* Top Row: Quick Room Jump Bar + Exit to Dining Hall */}
         <div className="flex items-center justify-between gap-2 flex-wrap border-b border-[#593b25] pb-2">
           <div className="flex items-center gap-1.5 flex-wrap">

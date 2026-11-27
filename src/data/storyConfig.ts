@@ -17,14 +17,14 @@ import {
 } from '../types/game';
 
 import titleKeyartImg from '../assets/images/hotpot_title_keyart_1795580644561.jpg';
-import portraitLinXiImg from '../assets/images/portrait_lin_xi_1795600830788.jpg';
+import portraitLinXiImg from '../assets/images/vn_portrait_lin_xi_1795709046807.jpg';
 import portraitShenZhiweiImg from '../assets/images/portrait_shen_zhiwei_1795600827822.jpg';
-import portraitSuXingyaoImg from '../assets/images/portrait_su_xingyao_1795600831241.jpg';
+import portraitSuXingyaoImg from '../assets/images/vn_portrait_su_xingyao_1795709048705.jpg';
 import portraitElderChenImg from '../assets/images/portrait_elder_chen_1795600831785.jpg';
 import portraitCriticEditorImg from '../assets/images/portrait_critic_editor_1795600833176.jpg';
-import portraitHarborHeirImg from '../assets/images/portrait_harbor_heir_1795580642982.jpg';
-import portraitHotelDirectorImg from '../assets/images/portrait_hotel_director_1795580644419.jpg';
-import portraitBrothArtisanImg from '../assets/images/portrait_broth_artisan_1795580645240.jpg';
+import portraitHarborHeirImg from '../assets/images/vn_portrait_lin_chaosheng_1795709046048.jpg';
+import portraitHotelDirectorImg from '../assets/images/vn_portrait_su_wanqing_1795709045889.jpg';
+import portraitBrothArtisanImg from '../assets/images/vn_portrait_lu_tieguo_1795709048996.jpg';
 
 export const TITLE_KEYART_URL = titleKeyartImg;
 

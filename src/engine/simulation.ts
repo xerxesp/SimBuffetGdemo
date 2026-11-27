@@ -1,4 +1,5 @@
 import {
+  applyAdaptiveFrontHallLayout,
   BROTH_CATALOG,
   BUFFET_CAPACITY_TIERS,
   BUFFET_ZONES_CONFIG,
@@ -10,19 +11,22 @@ import {
   DAYS_PER_SEASON,
   DISHWARE_UPGRADE_TIERS,
   generateCandidatePool,
+  getAdaptiveTablePositions,
   getBuffetZoneDef,
   getFrontHallBounds,
+  getFrontHallEntranceLayout,
   getPadStandPoint,
   getSeasonDef,
   getShopConfig,
   isAvailableInSeason,
+  FRONT_HALL_ZONE_PADS,
   SEAFOOD_CATALOG,
   SEASON_ORDER,
   SHOP_LEVEL_CONFIG,
   STAFF_ROLE_META,
+  STARTER_PURCHASED_PAD_IDS,
   STATIONS,
   TABLE_EXPANSION_TIERS,
-  TABLE_POSITIONS,
   TABLE_UNLOCK_ORDER,
 } from '../data/gameConfig';
 import {
@@ -46,6 +50,7 @@ import {
   GameWorld,
   HiredStaff,
   PendingOrder,
+  RegimeId,
   SpecialCustomerId,
   StaffCandidate,
   StaffRole,
@@ -60,6 +65,7 @@ import {
   TECH_TREE_NODES,
 } from '../data/policyAndTechConfig';
 import {
+  applyCompletedRegimePurchase,
   applyCompletedTechNode,
   createInitialPolicySlots,
   enterBackstageScene,
@@ -68,11 +74,14 @@ import {
   syncActiveMenuFromPolicySlots,
 } from './policyAndTech';
 import {
+  autoPlaceNewlyUnlockedZone,
   deliverArrivedWarehouseOrders,
+  ensureZonePadAssignments,
   getEffectiveTicketPrice,
   getPadForBuffetZone,
   getTicketFilterPreview,
   getUnlockedZonePads,
+  getVisibleFrontHallPads,
   isBuffetZoneUnlocked,
   rebuildActiveBuffetSlots,
   runInventoryClerkAutoOrders,
@@ -89,6 +98,7 @@ import {
   saveGameToSlot,
   syncWorldToEncyclopedia,
 } from './tycoonSystems';
+import { awardPlayerXpFromCash } from './playerProgression';
 import { pickServiceIncident } from '../data/serviceIncidentsConfig';
 
 let uidCounter = 1;
@@ -178,6 +188,8 @@ function createEmptyDailyStats(day: number, shopLevel: number): DailyStats {
     healthInspectionsFailed: 0,
     reputationChange: 0,
     cookedDishesServed: 0,
+    xpEarned: 0,
+    levelsGained: 0,
   };
 }
 
@@ -225,12 +237,13 @@ export function createInitialWorld(
     unlockedBrothIds.push(charDef.bonuses.freeBrothId);
   }
 
-  const tableLimit = 4;
+  const tableLimit = 6;
   const unlockedIndices = new Set(TABLE_UNLOCK_ORDER.slice(0, tableLimit));
+  const initialTablePositions = getAdaptiveTablePositions(1, tableLimit);
 
-  const tables: DiningTable[] = TABLE_POSITIONS.map((pos, idx) => {
+  const tables: DiningTable[] = initialTablePositions.map((pos, idx) => {
     const isUnlocked = unlockedIndices.has(idx);
-    const initialReady = idx === 0 || idx === 1;
+    const initialReady = idx === 0 || idx === 1 || idx === 2;
     return {
       id: idx,
       x: pos.x,
@@ -356,6 +369,10 @@ export function createInitialWorld(
     cash: charDef.startingCash,
     reputation: charDef.startingReputation,
     hygiene: 96,
+    playerLevel: 1,
+    playerXp: 0,
+    upgradePoints: 0,
+    totalUpgradePointsEarned: 0,
 
     rawIngredients: 34,
     rawIngredientsMax: 65,
@@ -393,6 +410,7 @@ export function createInitialWorld(
 
     activeRegimeId: 'street_stall',
     unlockedRegimeIds: ['street_stall'],
+    purchasedRegimeIds: ['street_stall'],
     regimeSwitchCooldown: 0,
     policySlots: createInitialPolicySlots('street_stall', characterId),
     unlockedOpsCardIds: [],
@@ -402,12 +420,13 @@ export function createInitialWorld(
 
     shopLevel: 1,
     tableLimit,
-    dishwareMax: 8,
-    cleanDishes: 5,
+    dishwareMax: 14,
+    cleanDishes: 10,
     dirtyDishes: 1,
     buffetCapacityBonus: initialBuffetBonus,
 
     unlockedZones,
+    purchasedPadIds: [...STARTER_PURCHASED_PAD_IDS],
     zonePadAssignments: createDefaultZonePadAssignments(),
     unlockedSeafoodIds,
     activeSeafoodIds: [...unlockedSeafoodIds],
@@ -719,9 +738,11 @@ function createCustomerParty(world: GameWorld): CustomerParty {
 }
 
 function repositionQueue(world: GameWorld) {
+  const entrance = getFrontHallEntranceLayout(world.shopLevel);
   world.queue.forEach((q, idx) => {
-    q.x = 86;
-    q.y = 304 + idx * 54;
+    const pos = entrance.getQueueSlotPos(idx);
+    q.x = pos.x;
+    q.y = pos.y;
   });
 }
 
@@ -982,10 +1003,11 @@ function completeTaskStep(
 
       sound.playBell();
       spawnParticles(world, targetTable.x, targetTable.y, 'SPARKLE', 5);
+      const entrance = getFrontHallEntranceLayout(world.shopLevel);
       addFloatingText(
         world,
-        STATIONS.RECEPTION.x,
-        STATIONS.RECEPTION.y - 26,
+        entrance.reception.x,
+        entrance.reception.y - 26,
         party.displayName ? `贵客${party.displayName}入座！` : party.isVip ? '贵宾入座！' : '欢迎光临！',
         '#E5A93B'
       );
@@ -1306,12 +1328,13 @@ export function getFrontHallColliders(world: GameWorld): SolidCollider[] {
     });
   }
 
-  // 2. Reception Desk (maxX = 128; player reception standpoint sits cleanly outside at x = 144)
+  // 2. Adaptive Front-Entrance Reception Desk (moves cleanly with shopLevel Lv.1..Lv.5)
+  const entranceRec = getFrontHallEntranceLayout(world.shopLevel).reception;
   colliders.push({
-    minX: STATIONS.RECEPTION.x - 42,
-    maxX: STATIONS.RECEPTION.x + 42,
-    minY: STATIONS.RECEPTION.y - 24,
-    maxY: STATIONS.RECEPTION.y + 24,
+    minX: entranceRec.x - entranceRec.w * 0.5,
+    maxX: entranceRec.x + entranceRec.w * 0.5,
+    minY: entranceRec.y - entranceRec.h * 0.5,
+    maxY: entranceRec.y + entranceRec.h * 0.5,
   });
 
   // 3. All unlocked Dining Tables (table + surrounding chairs footprint)
@@ -1350,6 +1373,8 @@ function hitsAnyCollider(x: number, y: number, colliders: SolidCollider[], r: nu
   return false;
 }
 
+const FRONT_HALL_MIN_X = 26;
+
 export function pushOutsideColliders(
   world: GameWorld,
   x: number,
@@ -1357,7 +1382,7 @@ export function pushOutsideColliders(
   r = 11
 ): { x: number; y: number } {
   const bounds = getFrontHallBounds(world.shopLevel);
-  let cx = Math.max(112, Math.min(bounds.width - 24, x));
+  let cx = Math.max(FRONT_HALL_MIN_X, Math.min(bounds.width - 24, x));
   let cy = Math.max(114, Math.min(bounds.height - 24, y));
   const colliders = getFrontHallColliders(world);
 
@@ -1377,11 +1402,162 @@ export function pushOutsideColliders(
         moved = true;
       }
     }
-    cx = Math.max(112, Math.min(bounds.width - 24, cx));
+    cx = Math.max(FRONT_HALL_MIN_X, Math.min(bounds.width - 24, cx));
     cy = Math.max(114, Math.min(bounds.height - 24, cy));
     if (!moved) break;
   }
   return { x: cx, y: cy };
+}
+
+const PATH_GRID_CELL = 12;
+const PATH_CLEARANCE_RADIUS = 11;
+const PLAYER_STEP_RADIUS = 10;
+const STATION_TWO_GRID_RANGE = PATH_GRID_CELL * 2; // 2-grid perimeter around target station
+const GHOST_STUCK_TRIGGER_SECONDS = 2.0; // Trigger temporary ghost mode after being stuck > 2s
+const GHOST_MODE_DURATION_SECONDS = 1.6; // Brief collision-ignoring window to exit overlap cleanly
+const GHOST_MODE_MIN_ACTIVE_SECONDS = 0.35; // Minimum active time before early exit once clear
+
+interface ColliderPenetrationResult {
+  penetrating: boolean;
+  depth: number;
+  collider: SolidCollider | null;
+}
+
+function detectColliderPenetration(
+  x: number,
+  y: number,
+  colliders: SolidCollider[],
+  r = PLAYER_STEP_RADIUS
+): ColliderPenetrationResult {
+  let maxDepth = 0;
+  let hitCollider: SolidCollider | null = null;
+  for (const c of colliders) {
+    const left = x - (c.minX - r);
+    const right = c.maxX + r - x;
+    const top = y - (c.minY - r);
+    const bottom = c.maxY + r - y;
+    if (left > 0 && right > 0 && top > 0 && bottom > 0) {
+      const depth = Math.min(left, right, top, bottom);
+      if (depth > maxDepth) {
+        maxDepth = depth;
+        hitCollider = c;
+      }
+    }
+  }
+  return {
+    penetrating: hitCollider !== null,
+    depth: maxDepth,
+    collider: hitCollider,
+  };
+}
+
+function isWithinTwoGridOfStationCollider(
+  x: number,
+  y: number,
+  colliders: SolidCollider[],
+  range = STATION_TWO_GRID_RANGE
+): boolean {
+  for (const c of colliders) {
+    const clampedX = Math.max(c.minX, Math.min(c.maxX, x));
+    const clampedY = Math.max(c.minY, Math.min(c.maxY, y));
+    if (Math.hypot(x - clampedX, y - clampedY) <= range + PLAYER_STEP_RADIUS) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function triggerPlayerGhostMode(world: GameWorld) {
+  world.player.ghostModeTimer = GHOST_MODE_DURATION_SECONDS;
+  world.player.stationStuckTime = 0;
+  const activeStep = world.player.taskQueue[0];
+  if (activeStep) {
+    activeStep.stationStuckTime = 0;
+    activeStep.stuckTime = 0;
+    activeStep.waypoints = [{ x: activeStep.targetX, y: activeStep.targetY }];
+  }
+}
+
+function updatePlayerGhostMode(world: GameWorld, dt: number) {
+  const timer = world.player.ghostModeTimer ?? 0;
+  if (timer <= 0) return;
+
+  const nextTimer = Math.max(0, timer - dt);
+  world.player.ghostModeTimer = nextTimer;
+
+  if (nextTimer <= 0) return;
+
+  // Exit temporary ghost mode early once the manager has walked completely outside overlapping colliders
+  if (nextTimer <= GHOST_MODE_DURATION_SECONDS - GHOST_MODE_MIN_ACTIVE_SECONDS) {
+    const colliders = getFrontHallColliders(world);
+    const pen = detectColliderPenetration(world.player.x, world.player.y, colliders, PLAYER_STEP_RADIUS);
+    if (!pen.penetrating) {
+      world.player.ghostModeTimer = 0;
+    }
+  }
+}
+
+function findNearestWalkableIn3x3(
+  world: GameWorld,
+  centerX: number,
+  centerY: number,
+  colliders: SolidCollider[],
+  stepSize = PATH_GRID_CELL,
+  r = PATH_CLEARANCE_RADIUS,
+  preferX?: number,
+  preferY?: number,
+  allowArchwayNorth = false
+): { x: number; y: number; found: boolean } {
+  const bounds = getFrontHallBounds(world.shopLevel);
+  const minX = FRONT_HALL_MIN_X;
+  const maxX = bounds.width - 24;
+  const minY = allowArchwayNorth ? -8 : 114;
+  const maxY = bounds.height - 24;
+
+  const clampedCx = Math.max(minX, Math.min(maxX, centerX));
+  const clampedCy = Math.max(minY, Math.min(maxY, centerY));
+
+  const tryGrid3x3 = (stride: number): { x: number; y: number; found: boolean } | null => {
+    let bestX = clampedCx;
+    let bestY = clampedCy;
+    let bestScore = Infinity;
+    let found = false;
+
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = Math.max(minX, Math.min(maxX, clampedCx + dx * stride));
+        const ny = Math.max(minY, Math.min(maxY, clampedCy + dy * stride));
+        if (hitsAnyCollider(nx, ny, colliders, r)) continue;
+
+        const distFromCenter = Math.hypot(nx - centerX, ny - centerY);
+        const preferBias =
+          preferX !== undefined && preferY !== undefined
+            ? Math.hypot(nx - preferX, ny - preferY) * 0.32
+            : 0;
+        const score = distFromCenter + preferBias;
+        if (score < bestScore) {
+          bestScore = score;
+          bestX = nx;
+          bestY = ny;
+          found = true;
+        }
+      }
+    }
+
+    return found ? { x: bestX, y: bestY, found: true } : null;
+  };
+
+  // Primary 3x3 grid probe around the blocked position / target station
+  const ring1 = tryGrid3x3(stepSize);
+  if (ring1) return ring1;
+
+  // Secondary wider 3x3 grid probe when pressed against a wide table/buffet corner
+  const ring2 = tryGrid3x3(stepSize * 2);
+  if (ring2) return ring2;
+
+  const pushed = pushOutsideColliders(world, clampedCx, clampedCy, r);
+  const clearAfterPush = !hitsAnyCollider(pushed.x, pushed.y, colliders, r);
+  return { x: pushed.x, y: pushed.y, found: clearAfterPush };
 }
 
 function resolveFrontHallStep(
@@ -1391,31 +1567,466 @@ function resolveFrontHallStep(
   wantX: number,
   wantY: number,
   allowArchwayNorth: boolean,
-  r = 10
-): { x: number; y: number; blocked: boolean } {
+  r = PLAYER_STEP_RADIUS,
+  ignoreColliders = false
+): { x: number; y: number; blocked: boolean; penetrating: boolean } {
   const bounds = getFrontHallBounds(world.shopLevel);
   const minY = allowArchwayNorth ? -8 : 114;
-  let tx = Math.max(112, Math.min(bounds.width - 24, wantX));
-  let ty = Math.max(minY, Math.min(bounds.height - 24, wantY));
+  const tx = Math.max(FRONT_HALL_MIN_X, Math.min(bounds.width - 24, wantX));
+  const ty = Math.max(minY, Math.min(bounds.height - 24, wantY));
+  const stepDist = Math.hypot(tx - curX, ty - curY);
 
   const colliders = getFrontHallColliders(world);
 
-  // Unstuck safeguard if actor is currently embedded inside a newly placed collider
-  if (hitsAnyCollider(curX, curY, colliders, r - 1)) {
-    const escaped = pushOutsideColliders(world, tx, ty, r);
-    return { x: escaped.x, y: escaped.y, blocked: false };
+  // Temporary ghost mode: ignore interior collision volumes while still respecting outer room walls
+  if (ignoreColliders) {
+    const postPen = detectColliderPenetration(tx, ty, colliders, r);
+    return { x: tx, y: ty, blocked: false, penetrating: postPen.penetrating };
+  }
+
+  // Collider penetration detection: if currently overlapping a solid collider, attempt 3x3 escape first
+  const curPen = detectColliderPenetration(curX, curY, colliders, r - 0.5);
+  if (curPen.penetrating) {
+    const escaped = findNearestWalkableIn3x3(
+      world,
+      curX,
+      curY,
+      colliders,
+      PATH_GRID_CELL,
+      r,
+      tx,
+      ty,
+      allowArchwayNorth
+    );
+    const afterPen = detectColliderPenetration(escaped.x, escaped.y, colliders, r - 0.5);
+    return {
+      x: escaped.x,
+      y: escaped.y,
+      blocked: afterPen.penetrating,
+      penetrating: afterPen.penetrating,
+    };
   }
 
   if (!hitsAnyCollider(tx, ty, colliders, r)) {
-    return { x: tx, y: ty, blocked: false };
+    return { x: tx, y: ty, blocked: false, penetrating: false };
   }
-  if (!hitsAnyCollider(tx, curY, colliders, r)) {
-    return { x: tx, y: curY, blocked: true };
+
+  const canSlideX = Math.abs(tx - curX) > 0.05 && !hitsAnyCollider(tx, curY, colliders, r);
+  const canSlideY = Math.abs(ty - curY) > 0.05 && !hitsAnyCollider(curX, ty, colliders, r);
+  if (canSlideX && canSlideY) {
+    const distX = Math.hypot(tx - tx, curY - ty);
+    const distY = Math.hypot(curX - tx, ty - ty);
+    return distX <= distY
+      ? { x: tx, y: curY, blocked: true, penetrating: false }
+      : { x: curX, y: ty, blocked: true, penetrating: false };
   }
-  if (!hitsAnyCollider(curX, ty, colliders, r)) {
-    return { x: curX, y: ty, blocked: true };
+  if (canSlideX) {
+    return { x: tx, y: curY, blocked: true, penetrating: false };
   }
-  return { x: curX, y: curY, blocked: true };
+  if (canSlideY) {
+    return { x: curX, y: ty, blocked: true, penetrating: false };
+  }
+
+  // Both axes blocked (corner snag): attempt 3x3 local unstuck nudge toward the nearest clear cell
+  const probeStride = Math.max(10, Math.min(PATH_GRID_CELL, stepDist + 6));
+  const unstuck = findNearestWalkableIn3x3(
+    world,
+    curX,
+    curY,
+    colliders,
+    probeStride,
+    r,
+    tx,
+    ty,
+    allowArchwayNorth
+  );
+  if (unstuck.found) {
+    const udx = unstuck.x - curX;
+    const udy = unstuck.y - curY;
+    const udist = Math.hypot(udx, udy);
+    if (udist > 0.5) {
+      const moveAmt = Math.min(udist, Math.max(stepDist, 3.5));
+      const nx = curX + (udx / udist) * moveAmt;
+      const ny = curY + (udy / udist) * moveAmt;
+      if (!hitsAnyCollider(nx, ny, colliders, r)) {
+        return { x: nx, y: ny, blocked: true, penetrating: false };
+      }
+    }
+  }
+
+  const finalPen = detectColliderPenetration(curX, curY, colliders, r);
+  return { x: curX, y: curY, blocked: true, penetrating: finalPen.penetrating };
+}
+
+function hasClearFrontHallSegment(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  colliders: SolidCollider[],
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number,
+  r = PATH_CLEARANCE_RADIUS
+): boolean {
+  const dist = Math.hypot(bx - ax, by - ay);
+  if (dist < 1) return true;
+  const steps = Math.max(2, Math.ceil(dist / 4));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const x = ax + (bx - ax) * t;
+    const y = ay + (by - ay) * t;
+    if (x < minX || x > maxX || y < minY || y > maxY) return false;
+    if (hitsAnyCollider(x, y, colliders, r)) return false;
+  }
+  return true;
+}
+
+function findFrontHallPath(
+  world: GameWorld,
+  startX: number,
+  startY: number,
+  rawGoalX: number,
+  rawGoalY: number
+): Array<{ x: number; y: number }> {
+  const bounds = getFrontHallBounds(world.shopLevel);
+  const minX = FRONT_HALL_MIN_X;
+  const maxX = bounds.width - 24;
+  const minY = 114;
+  const maxY = bounds.height - 24;
+  const colliders = getFrontHallColliders(world);
+
+  // If the start or target station point touches an obstacle, probe the 3x3 grid for the nearest walkable cell
+  const clampedStartX = Math.max(minX, Math.min(maxX, startX));
+  const clampedStartY = Math.max(minY, Math.min(maxY, startY));
+  const safeStart = hitsAnyCollider(clampedStartX, clampedStartY, colliders, PATH_CLEARANCE_RADIUS)
+    ? findNearestWalkableIn3x3(
+        world,
+        clampedStartX,
+        clampedStartY,
+        colliders,
+        PATH_GRID_CELL,
+        PATH_CLEARANCE_RADIUS,
+        rawGoalX,
+        rawGoalY
+      )
+    : { x: clampedStartX, y: clampedStartY, found: true };
+
+  const clampedGoalX = Math.max(minX, Math.min(maxX, rawGoalX));
+  const clampedGoalY = Math.max(minY, Math.min(maxY, rawGoalY));
+  const safeGoal = hitsAnyCollider(clampedGoalX, clampedGoalY, colliders, PATH_CLEARANCE_RADIUS)
+    ? findNearestWalkableIn3x3(
+        world,
+        clampedGoalX,
+        clampedGoalY,
+        colliders,
+        PATH_GRID_CELL,
+        PATH_CLEARANCE_RADIUS,
+        safeStart.x,
+        safeStart.y
+      )
+    : { x: clampedGoalX, y: clampedGoalY, found: true };
+
+  const goalX = Math.max(minX, Math.min(maxX, safeGoal.x));
+  const goalY = Math.max(minY, Math.min(maxY, safeGoal.y));
+
+  // Fast path: straight line is completely clear
+  if (
+    hasClearFrontHallSegment(
+      safeStart.x,
+      safeStart.y,
+      goalX,
+      goalY,
+      colliders,
+      minX,
+      maxX,
+      minY,
+      maxY,
+      PATH_CLEARANCE_RADIUS
+    )
+  ) {
+    const startOffset = Math.hypot(safeStart.x - startX, safeStart.y - startY);
+    if (startOffset > 2.5 && Math.hypot(goalX - safeStart.x, goalY - safeStart.y) > 6) {
+      return [
+        { x: safeStart.x, y: safeStart.y },
+        { x: goalX, y: goalY },
+      ];
+    }
+    return [{ x: goalX, y: goalY }];
+  }
+
+  const cell = PATH_GRID_CELL;
+  const cols = Math.ceil((maxX - minX) / cell) + 1;
+  const rows = Math.ceil((maxY - minY) / cell) + 1;
+  const total = cols * rows;
+
+  const toGx = (x: number) => Math.max(0, Math.min(cols - 1, Math.round((x - minX) / cell)));
+  const toGy = (y: number) => Math.max(0, Math.min(rows - 1, Math.round((y - minY) / cell)));
+  const toWx = (gx: number) => Math.min(maxX, minX + gx * cell);
+  const toWy = (gy: number) => Math.min(maxY, minY + gy * cell);
+
+  const walkable = new Uint8Array(total);
+  for (let gy = 0; gy < rows; gy++) {
+    const wy = toWy(gy);
+    for (let gx = 0; gx < cols; gx++) {
+      const wx = toWx(gx);
+      if (!hitsAnyCollider(wx, wy, colliders, PATH_CLEARANCE_RADIUS)) {
+        walkable[gy * cols + gx] = 1;
+      }
+    }
+  }
+
+  // Prefer the nearest clear cell in the immediate 3x3 neighborhood before expanding outward
+  const findNearestWalkableCell = (
+    gx0: number,
+    gy0: number,
+    preferWx: number,
+    preferWy: number
+  ): number => {
+    const idx0 = gy0 * cols + gx0;
+    if (walkable[idx0]) return idx0;
+    let bestIdx = -1;
+    let bestScore = Infinity;
+    for (let radius = 1; radius <= 6; radius++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+          const nx = gx0 + dx;
+          const ny = gy0 + dy;
+          if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+          const idx = ny * cols + nx;
+          if (walkable[idx]) {
+            const wx = toWx(nx);
+            const wy = toWy(ny);
+            const score =
+              Math.hypot(dx, dy) * cell + Math.hypot(wx - preferWx, wy - preferWy) * 0.2;
+            if (score < bestScore) {
+              bestScore = score;
+              bestIdx = idx;
+            }
+          }
+        }
+      }
+      if (bestIdx !== -1) return bestIdx;
+    }
+    return idx0;
+  };
+
+  const startIdx = findNearestWalkableCell(
+    toGx(safeStart.x),
+    toGy(safeStart.y),
+    goalX,
+    goalY
+  );
+  const goalIdx = findNearestWalkableCell(
+    toGx(goalX),
+    toGy(goalY),
+    safeStart.x,
+    safeStart.y
+  );
+
+  if (startIdx === goalIdx) {
+    const cellPt = { x: toWx(goalIdx % cols), y: toWy(Math.floor(goalIdx / cols)) };
+    if (!hitsAnyCollider(goalX, goalY, colliders, PATH_CLEARANCE_RADIUS)) {
+      return [{ x: goalX, y: goalY }];
+    }
+    return [cellPt];
+  }
+
+  const goalGx = goalIdx % cols;
+  const goalGy = Math.floor(goalIdx / cols);
+
+  const gScore = new Float32Array(total);
+  gScore.fill(Infinity);
+  const fScore = new Float32Array(total);
+  fScore.fill(Infinity);
+  const cameFrom = new Int32Array(total);
+  cameFrom.fill(-1);
+  const closed = new Uint8Array(total);
+
+  const heap: number[] = [];
+  const heapPush = (node: number) => {
+    heap.push(node);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (fScore[heap[parent]] <= fScore[heap[i]]) break;
+      const tmp = heap[parent];
+      heap[parent] = heap[i];
+      heap[i] = tmp;
+      i = parent;
+    }
+  };
+  const heapPop = (): number => {
+    const top = heap[0];
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      heap[0] = last;
+      let i = 0;
+      const n = heap.length;
+      while (true) {
+        let smallest = i;
+        const l = (i << 1) + 1;
+        const r = l + 1;
+        if (l < n && fScore[heap[l]] < fScore[heap[smallest]]) smallest = l;
+        if (r < n && fScore[heap[r]] < fScore[heap[smallest]]) smallest = r;
+        if (smallest === i) break;
+        const tmp = heap[i];
+        heap[i] = heap[smallest];
+        heap[smallest] = tmp;
+        i = smallest;
+      }
+    }
+    return top;
+  };
+
+  const heuristic = (gx: number, gy: number) => {
+    const dx = Math.abs(gx - goalGx);
+    const dy = Math.abs(gy - goalGy);
+    return Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
+  };
+
+  const startGx = startIdx % cols;
+  const startGy = Math.floor(startIdx / cols);
+  gScore[startIdx] = 0;
+  fScore[startIdx] = heuristic(startGx, startGy);
+  heapPush(startIdx);
+
+  const DIRS: ReadonlyArray<[number, number, number]> = [
+    [1, 0, 1],
+    [-1, 0, 1],
+    [0, 1, 1],
+    [0, -1, 1],
+    [1, 1, Math.SQRT2],
+    [1, -1, Math.SQRT2],
+    [-1, 1, Math.SQRT2],
+    [-1, -1, Math.SQRT2],
+  ];
+
+  let found = false;
+  let closestIdx = startIdx;
+  let closestH = heuristic(startGx, startGy);
+
+  while (heap.length > 0) {
+    const cur = heapPop();
+    if (closed[cur]) continue;
+    closed[cur] = 1;
+
+    if (cur === goalIdx) {
+      found = true;
+      break;
+    }
+
+    const cx = cur % cols;
+    const cy = Math.floor(cur / cols);
+    const curH = heuristic(cx, cy);
+    if (curH < closestH) {
+      closestH = curH;
+      closestIdx = cur;
+    }
+
+    for (let d = 0; d < DIRS.length; d++) {
+      const [dx, dy, cost] = DIRS[d];
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+      const nIdx = ny * cols + nx;
+      if (closed[nIdx] || !walkable[nIdx]) continue;
+
+      // Prevent diagonal corner cutting across table/buffet corners
+      if (dx !== 0 && dy !== 0) {
+        if (!walkable[cy * cols + nx] || !walkable[ny * cols + cx]) continue;
+      }
+
+      const tentativeG = gScore[cur] + cost;
+      if (tentativeG < gScore[nIdx]) {
+        cameFrom[nIdx] = cur;
+        gScore[nIdx] = tentativeG;
+        fScore[nIdx] = tentativeG + heuristic(nx, ny);
+        heapPush(nIdx);
+      }
+    }
+  }
+
+  const endIdx = found ? goalIdx : closestIdx;
+  const rawPts: Array<{ x: number; y: number }> = [];
+  let trace = endIdx;
+  while (trace !== -1 && trace !== startIdx) {
+    const gx = trace % cols;
+    const gy = Math.floor(trace / cols);
+    rawPts.push({ x: toWx(gx), y: toWy(gy) });
+    trace = cameFrom[trace];
+  }
+  rawPts.reverse();
+
+  // Append exact goal only if collision-free and reachable from the final A* cell without clipping a corner
+  const goalIsClear = !hitsAnyCollider(goalX, goalY, colliders, PATH_CLEARANCE_RADIUS);
+  if (goalIsClear) {
+    const lastPt = rawPts.length > 0 ? rawPts[rawPts.length - 1] : { x: safeStart.x, y: safeStart.y };
+    if (
+      Math.hypot(lastPt.x - goalX, lastPt.y - goalY) > 4 &&
+      hasClearFrontHallSegment(
+        lastPt.x,
+        lastPt.y,
+        goalX,
+        goalY,
+        colliders,
+        minX,
+        maxX,
+        minY,
+        maxY,
+        PATH_CLEARANCE_RADIUS
+      )
+    ) {
+      rawPts.push({ x: goalX, y: goalY });
+    }
+  }
+
+  if (rawPts.length === 0) {
+    rawPts.push({
+      x: toWx(endIdx % cols),
+      y: toWy(Math.floor(endIdx / cols)),
+    });
+  }
+
+  // String-pulling (line-of-sight smoothing) anchored from safeStart for direct, snag-free gliding around furniture
+  const smoothed: Array<{ x: number; y: number }> = [];
+  if (Math.hypot(safeStart.x - startX, safeStart.y - startY) > 2.5) {
+    smoothed.push({ x: safeStart.x, y: safeStart.y });
+  }
+  let anchorX = safeStart.x;
+  let anchorY = safeStart.y;
+  let i = 0;
+  while (i < rawPts.length) {
+    let farthest = i;
+    for (let j = rawPts.length - 1; j > i; j--) {
+      if (
+        hasClearFrontHallSegment(
+          anchorX,
+          anchorY,
+          rawPts[j].x,
+          rawPts[j].y,
+          colliders,
+          minX,
+          maxX,
+          minY,
+          maxY,
+          PATH_CLEARANCE_RADIUS
+        )
+      ) {
+        farthest = j;
+        break;
+      }
+    }
+    const chosen = rawPts[farthest];
+    smoothed.push(chosen);
+    anchorX = chosen.x;
+    anchorY = chosen.y;
+    i = farthest + 1;
+  }
+
+  return smoothed.length > 0 ? smoothed : [{ x: goalX, y: goalY }];
 }
 
 function advanceActorTasks(
@@ -1434,70 +2045,261 @@ function advanceActorTasks(
     taskQueue: TaskStep[];
     activeTaskLabel: string;
     walkCycle: number;
+    facing?: number;
   }
 ) {
   if (actor.taskQueue.length === 0) return;
 
   const step = actor.taskQueue[0];
-  const dx = step.targetX - actor.x;
-  const dy = step.targetY - actor.y;
-  const dist = Math.hypot(dx, dy);
-
   const isInteractiveTask = step.type !== 'WALK_TO' && step.type !== 'ENTER_BACKSTAGE';
-  const arriveDist = actor.isPlayer && isInteractiveTask ? 12 : 6;
+  const arriveDist = actor.isPlayer && isInteractiveTask ? 16 : 6;
+  step.repathCooldown = Math.max(0, (step.repathCooldown ?? 0) - dt);
 
-  if (dist > arriveDist) {
-    const moveDist = actor.speed * dt;
-    const rawNextX = moveDist >= dist ? step.targetX : actor.x + (dx / dist) * moveDist;
-    const rawNextY = moveDist >= dist ? step.targetY : actor.y + (dy / dist) * moveDist;
+  if (actor.isPlayer && step.type !== 'ENTER_BACKSTAGE') {
+    const distToGoal = Math.hypot(step.targetX - actor.x, step.targetY - actor.y);
+    if (distToGoal > arriveDist) {
+      if (!step.waypoints || step.waypoints.length === 0) {
+        // Proactive 3x3 clearance check near the target station before computing initial path
+        const colliders = getFrontHallColliders(world);
+        let planGoalX = step.targetX;
+        let planGoalY = step.targetY;
+        if (hitsAnyCollider(planGoalX, planGoalY, colliders, PATH_CLEARANCE_RADIUS)) {
+          const goalUnstuck = findNearestWalkableIn3x3(
+            world,
+            planGoalX,
+            planGoalY,
+            colliders,
+            PATH_GRID_CELL,
+            PATH_CLEARANCE_RADIUS,
+            actor.x,
+            actor.y
+          );
+          if (goalUnstuck.found) {
+            planGoalX = goalUnstuck.x;
+            planGoalY = goalUnstuck.y;
+          }
+        }
+        step.waypoints = findFrontHallPath(world, actor.x, actor.y, planGoalX, planGoalY);
+      }
 
-    if (actor.isPlayer && step.type !== 'ENTER_BACKSTAGE') {
-      const res = resolveFrontHallStep(world, actor.x, actor.y, rawNextX, rawNextY, true, 10);
-      // If blocked right next to an interactive station/table edge, snap-complete instead of stalling!
-      if (isInteractiveTask && res.blocked && dist <= 22) {
-        actor.x = res.x;
-        actor.y = res.y;
-      } else if (Math.hypot(res.x - actor.x, res.y - actor.y) < moveDist * 0.22 && res.blocked) {
-        // Smart tangential detour around table/buffet corner so click-to-walk glides cleanly!
-        const perpX = -dy / dist;
-        const perpY = dx / dist;
-        const tryA = resolveFrontHallStep(
+      // Pop any intermediate waypoints we are already standing on
+      while (
+        step.waypoints.length > 1 &&
+        Math.hypot(step.waypoints[0].x - actor.x, step.waypoints[0].y - actor.y) <= 8
+      ) {
+        step.waypoints.shift();
+      }
+
+      const wp = step.waypoints[0];
+      const wdx = wp.x - actor.x;
+      const wdy = wp.y - actor.y;
+      const wdist = Math.hypot(wdx, wdy);
+      const isFinalWp = step.waypoints.length === 1;
+      const wpThreshold = isFinalWp ? arriveDist : 8;
+
+      if (wdist > wpThreshold) {
+        const moveDist = actor.speed * dt;
+        const rawNextX = moveDist >= wdist ? wp.x : actor.x + (wdx / wdist) * moveDist;
+        const rawNextY = moveDist >= wdist ? wp.y : actor.y + (wdy / wdist) * moveDist;
+
+        const ghostActive = (world.player.ghostModeTimer ?? 0) > 0;
+        const colliders = getFrontHallColliders(world);
+        const prePen = detectColliderPenetration(actor.x, actor.y, colliders, PLAYER_STEP_RADIUS);
+
+        let res = resolveFrontHallStep(
           world,
           actor.x,
           actor.y,
-          actor.x + perpX * moveDist,
-          actor.y + perpY * moveDist,
+          rawNextX,
+          rawNextY,
           true,
-          10
+          PLAYER_STEP_RADIUS,
+          ghostActive
         );
-        const tryB = resolveFrontHallStep(
-          world,
-          actor.x,
-          actor.y,
-          actor.x - perpX * moveDist,
-          actor.y - perpY * moveDist,
-          true,
-          10
-        );
-        const dA = Math.hypot(tryA.x - step.targetX, tryA.y - step.targetY);
-        const dB = Math.hypot(tryB.x - step.targetX, tryB.y - step.targetY);
-        const pick = dA <= dB ? tryA : tryB;
-        actor.x = pick.x;
-        actor.y = pick.y;
-        actor.walkCycle += dt * 10;
-        return;
-      } else {
-        actor.x = res.x;
-        actor.y = res.y;
-        actor.walkCycle += dt * 10;
+        let moved = Math.hypot(res.x - actor.x, res.y - actor.y);
+
+        // Penetration & 2-grid target-station deadlock detection:
+        // If stalled > 2s within 2 grid cells of target station (or penetrating a collider), trigger temporary ghost mode
+        const inTwoGridOfStation =
+          distToGoal <= STATION_TWO_GRID_RANGE + PLAYER_STEP_RADIUS ||
+          prePen.penetrating ||
+          res.penetrating;
+        if (!ghostActive && inTwoGridOfStation && (res.blocked || res.penetrating || prePen.penetrating) && moved < moveDist * 0.4) {
+          step.stationStuckTime = (step.stationStuckTime ?? 0) + dt;
+          world.player.stationStuckTime = step.stationStuckTime;
+          if (step.stationStuckTime >= GHOST_STUCK_TRIGGER_SECONDS) {
+            triggerPlayerGhostMode(world);
+            res = resolveFrontHallStep(
+              world,
+              actor.x,
+              actor.y,
+              rawNextX,
+              rawNextY,
+              true,
+              PLAYER_STEP_RADIUS,
+              true
+            );
+            moved = Math.hypot(res.x - actor.x, res.y - actor.y);
+          }
+        } else if (!res.blocked && !res.penetrating && !prePen.penetrating && moved >= moveDist * 0.5) {
+          step.stationStuckTime = Math.max(0, (step.stationStuckTime ?? 0) - dt * 2);
+          world.player.stationStuckTime = step.stationStuckTime;
+        }
+
+        if ((world.player.ghostModeTimer ?? 0) > 0) {
+          const mvx = res.x - actor.x;
+          const mvy = res.y - actor.y;
+          if (Math.hypot(mvx, mvy) > 0.25) actor.facing = Math.atan2(mvy, mvx);
+          actor.x = res.x;
+          actor.y = res.y;
+          actor.walkCycle += dt * 10;
+          step.stuckTime = 0;
+          if (Math.hypot(step.targetX - actor.x, step.targetY - actor.y) > arriveDist) {
+            return;
+          }
+        } else if (isInteractiveTask && res.blocked && distToGoal <= 34 && !res.penetrating) {
+          // Right against the target station/table/buffet edge without overlap: arrive smoothly and execute immediately
+          actor.x = res.x;
+          actor.y = res.y;
+          step.stuckTime = 0;
+        } else if ((res.blocked || res.penetrating) && moved < moveDist * 0.3) {
+          step.stuckTime = (step.stuckTime ?? 0) + dt;
+
+          // Immediate 3x3 grid unstuck & replan when blocked near target station or mid-corridor (throttled)
+          if (step.repathCooldown <= 0) {
+            let redirectX = step.targetX;
+            let redirectY = step.targetY;
+            if (distToGoal <= 84) {
+              const stationProbe = findNearestWalkableIn3x3(
+                world,
+                step.targetX,
+                step.targetY,
+                colliders,
+                PATH_GRID_CELL,
+                PATH_CLEARANCE_RADIUS,
+                actor.x,
+                actor.y
+              );
+              if (stationProbe.found) {
+                redirectX = stationProbe.x;
+                redirectY = stationProbe.y;
+              }
+            }
+
+            const localProbe = findNearestWalkableIn3x3(
+              world,
+              actor.x,
+              actor.y,
+              colliders,
+              PATH_GRID_CELL,
+              PATH_CLEARANCE_RADIUS,
+              redirectX,
+              redirectY
+            );
+            const replanStartX = localProbe.found ? localProbe.x : actor.x;
+            const replanStartY = localProbe.found ? localProbe.y : actor.y;
+            const freshPath = findFrontHallPath(
+              world,
+              replanStartX,
+              replanStartY,
+              redirectX,
+              redirectY
+            );
+            if (
+              localProbe.found &&
+              Math.hypot(localProbe.x - actor.x, localProbe.y - actor.y) > 2.5
+            ) {
+              step.waypoints = [{ x: localProbe.x, y: localProbe.y }, ...freshPath];
+            } else {
+              step.waypoints = freshPath;
+            }
+            step.repathCooldown = 0.22;
+          }
+
+          if (step.stuckTime >= 0.38) {
+            if (isInteractiveTask && distToGoal <= 64 && !res.penetrating) {
+              // Within practical reach of target station/table: execute without stalling
+              step.stuckTime = 0;
+            } else {
+              // Attempt 3x3 escape step toward goal (preserves stationStuckTime so ghost mode activates if still trapped > 2s)
+              const escape = findNearestWalkableIn3x3(
+                world,
+                actor.x,
+                actor.y,
+                colliders,
+                PATH_GRID_CELL,
+                PLAYER_STEP_RADIUS,
+                wp.x,
+                wp.y
+              );
+              if (escape.found && Math.hypot(escape.x - actor.x, escape.y - actor.y) > 2) {
+                actor.x = escape.x;
+                actor.y = escape.y;
+              } else {
+                actor.x = res.x;
+                actor.y = res.y;
+              }
+              actor.walkCycle += dt * 10;
+              step.stuckTime = 0;
+              step.waypoints = findFrontHallPath(world, actor.x, actor.y, step.targetX, step.targetY);
+              return;
+            }
+          } else {
+            actor.x = res.x;
+            actor.y = res.y;
+            actor.walkCycle += dt * 10;
+            return;
+          }
+        } else {
+          const mvx = res.x - actor.x;
+          const mvy = res.y - actor.y;
+          if (Math.hypot(mvx, mvy) > 0.25) actor.facing = Math.atan2(mvy, mvx);
+          actor.x = res.x;
+          actor.y = res.y;
+          actor.walkCycle += dt * 10;
+          step.stuckTime = 0;
+
+          // Consume waypoint immediately if reached on this step
+          if (
+            step.waypoints.length > 1 &&
+            Math.hypot(wp.x - actor.x, wp.y - actor.y) <= 8
+          ) {
+            step.waypoints.shift();
+          }
+          if (!isFinalWp) {
+            return;
+          }
+          // For final waypoint (which may be a 3x3-adjusted station stand point), arrive once reached!
+          const distToFinalWp = Math.hypot(wp.x - actor.x, wp.y - actor.y);
+          const curDistToGoal = Math.hypot(step.targetX - actor.x, step.targetY - actor.y);
+          if (curDistToGoal > arriveDist && !(isInteractiveTask && distToFinalWp <= 6 && curDistToGoal <= 36)) {
+            return;
+          }
+        }
+      } else if (!isFinalWp) {
+        step.waypoints.shift();
         return;
       }
-    } else {
-      actor.x = rawNextX;
-      actor.y = rawNextY;
+    }
+  } else {
+    const dx = step.targetX - actor.x;
+    const dy = step.targetY - actor.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > arriveDist) {
+      const moveDist = actor.speed * dt;
+      if (dist > 0.5) actor.facing = Math.atan2(dy, dx);
+      actor.x = moveDist >= dist ? step.targetX : actor.x + (dx / dist) * moveDist;
+      actor.y = moveDist >= dist ? step.targetY : actor.y + (dy / dist) * moveDist;
       actor.walkCycle += dt * 10;
       return;
     }
+  }
+
+  // Face directly toward interactive station/table while performing timed action
+  const fdx = step.targetX - actor.x;
+  const fdy = step.targetY - actor.y;
+  if (Math.hypot(fdx, fdy) > 1.5) {
+    actor.facing = Math.atan2(fdy, fdx);
   }
 
   const baseDur = step.duration ?? 0;
@@ -1554,12 +2356,16 @@ function assignStaffTasks(world: GameWorld, dt: number) {
 
     switch (s.role) {
       case 'HOST': {
+        const entrance = getFrontHallEntranceLayout(world.shopLevel);
+        // Keep HOST home post adaptively synced behind the front entrance Reception Desk
+        s.homeX = entrance.hostHome.x;
+        s.homeY = entrance.hostHome.y;
         const readyTable = world.tables.find((t) => t.status === 'READY');
         if (world.queue.length > 0 && readyTable) {
           s.taskQueue.push({
             type: 'WELCOME_GUEST',
-            targetX: STATIONS.RECEPTION.x + 28,
-            targetY: STATIONS.RECEPTION.y + 8,
+            targetX: entrance.receptionStand.x,
+            targetY: entrance.receptionStand.y,
             targetId: readyTable.id,
             duration: 0.6,
           });
@@ -1924,6 +2730,7 @@ function settleCustomerBill(world: GameWorld, table: DiningTable) {
   const totalEarned = ticketPaid + tip;
   world.cash += totalEarned;
   world.totalCashEarned += totalEarned;
+  awardPlayerXpFromCash(world, totalEarned, { x: table.x, y: table.y });
   world.todayStats.ticketRevenue += ticketPaid;
   world.todayStats.tipRevenue += tip;
   world.todayStats.guestsServed += 1;
@@ -2114,8 +2921,32 @@ function applyCompletedOrder(world: GameWorld, order: PendingOrder): string | nu
       if (zoneId === 'cooked_hot') {
         world.cookedMaxStock += 4;
       }
+      const placed = autoPlaceNewlyUnlockedZone(world, zoneId);
+      rebuildActiveBuffetSlots(world);
       changeReputation(world, 5);
-      return `扩建分区「${zDef.name}」正式竣工开放！已解锁对应高端菜品与专属岗位招聘！`;
+      return `特色分区「${zDef.name}」正式竣工开放！${
+        placed
+          ? `已自动落位至【${placed.label}】，可在「前厅区域布局」调整。`
+          : '请于开店前购置空区域位或在「前厅区域布局」中替换安放。'
+      }`;
+    }
+
+    case 'PURCHASE_REGIME': {
+      if (!order.targetId) return null;
+      return applyCompletedRegimePurchase(world, order.targetId as RegimeId);
+    }
+
+    case 'PURCHASE_ZONE_PAD': {
+      const padId = order.targetId;
+      if (!padId) return null;
+      const pad = FRONT_HALL_ZONE_PADS.find((p) => p.id === padId);
+      if (!pad) return null;
+      if (!world.purchasedPadIds.includes(padId)) {
+        world.purchasedPadIds.push(padId);
+      }
+      ensureZonePadAssignments(world);
+      changeReputation(world, 2);
+      return `前厅扩建区域位「${pad.label}」施工竣工！请于开店前在「前厅区域布局」中为其配置特色菜品分区。`;
     }
 
     case 'UPGRADE_SHOP': {
@@ -2125,8 +2956,9 @@ function applyCompletedOrder(world: GameWorld, order: PendingOrder): string | nu
       world.shopLevel = cfg.level;
       world.rawIngredientsMax += 15;
       world.cookedMaxStock += 2;
+      applyAdaptiveFrontHallLayout(world);
       changeReputation(world, 6);
-      return `门店装潢竣工！正式晋升为 Lv.${cfg.level}「${cfg.title}」！`;
+      return `门店装潢竣工！正式晋升为 Lv.${cfg.level}「${cfg.title}」，前厅迎宾与餐桌格局已自适应调整！`;
     }
 
     case 'EXPAND_TABLES': {
@@ -2139,12 +2971,18 @@ function applyCompletedOrder(world: GameWorld, order: PendingOrder): string | nu
         const table = world.tables[idx];
         if (table && table.status === 'LOCKED') {
           table.status = 'NEEDS_TABLEWARE';
+        }
+      }
+      applyAdaptiveFrontHallLayout(world);
+      for (const idx of newlyUnlocked) {
+        const table = world.tables[idx];
+        if (table) {
           spawnParticles(world, table.x, table.y, 'SPARKLE', 8);
         }
       }
-      world.dishwareMax += 2;
-      world.cleanDishes += 2;
-      return `大厅扩建竣工！现开放至 ${world.tableLimit} 张餐桌（附赠 2 套餐具），请在开店前摆台。`;
+      world.dishwareMax += 4;
+      world.cleanDishes += 4;
+      return `大厅扩建竣工！现开放至 ${world.tableLimit} 张餐桌并已按前厅空间均匀排布（附赠 4 套餐具），请在开店前摆台。`;
     }
 
     case 'UPGRADE_DISHWARE': {
@@ -2532,6 +3370,7 @@ export function claimCurrentChapter(world: GameWorld): boolean {
 
   world.cash += chDef.rewardCash;
   world.totalCashEarned += chDef.rewardCash;
+  awardPlayerXpFromCash(world, chDef.rewardCash);
   changeReputation(world, chDef.rewardReputation);
   sound.playStoryFanfare();
 
@@ -2651,11 +3490,13 @@ export function tickWorld(world: GameWorld, rawDt: number) {
         prog.discovered = true;
 
         const party = createSpecialCustomerParty(world, storyId);
+        const entrance = getFrontHallEntranceLayout(world.shopLevel);
+        const slotPos = entrance.getQueueSlotPos(world.queue.length);
         world.queue.push({
           id: party.id,
           party,
-          x: 86,
-          y: 304 + world.queue.length * 54,
+          x: slotPos.x,
+          y: slotPos.y,
           waitTime: 0,
         });
         repositionQueue(world);
@@ -2663,8 +3504,8 @@ export function tickWorld(world: GameWorld, rawDt: number) {
         sound.playSpecialArrival();
         addFloatingText(
           world,
-          STATIONS.RECEPTION.x + 24,
-          286,
+          entrance.reception.x + 12,
+          entrance.reception.y - 34,
           firstDiscovery ? `发现奇遇食客「${def.customerName}」！` : `熟客「${def.customerName}」再度登门！`,
           def.color,
           15
@@ -2688,7 +3529,7 @@ export function tickWorld(world: GameWorld, rawDt: number) {
     const tycoonTickMods = evaluateTycoonModifiers(world);
     const repFactor = 0.55 + (world.reputation / 100) * 0.85;
     const rushFactor = world.rushHourActive ? 1.45 : 1.0;
-    const tableFactor = 0.8 + (world.tableLimit / 12) * 0.7;
+    const tableFactor = 0.8 + Math.min(3.8, (world.tableLimit / 12) * 0.9);
     const baseInterval =
       8.4 /
       (shopCfg.customerRate *
@@ -2699,21 +3540,25 @@ export function tickWorld(world: GameWorld, rawDt: number) {
         rushFactor *
         tableFactor);
 
+    const maxQueueLen = world.tableLimit >= 24 ? 8 : 6;
     world.spawnTimer -= dt;
-    if (world.spawnTimer <= 0 && world.queue.length < 6 && progress < 0.92) {
+    if (world.spawnTimer <= 0 && world.queue.length < maxQueueLen && progress < 0.92) {
       const party = createCustomerParty(world);
+      const entrance = getFrontHallEntranceLayout(world.shopLevel);
+      const slotPos = entrance.getQueueSlotPos(world.queue.length);
       world.queue.push({
         id: party.id,
         party,
-        x: 86,
-        y: 304 + world.queue.length * 54,
+        x: slotPos.x,
+        y: slotPos.y,
         waitTime: 0,
       });
       repositionQueue(world);
       if (party.isSuperCustomer) {
         addAlert(world, '「船王家族超VIP团」大驾光临！接待妥当将获超高消费与打赏！', 'success');
       }
-      world.spawnTimer = Math.max(2.1, baseInterval * (0.8 + Math.random() * 0.4));
+      const minInterval = world.tableLimit >= 36 ? 0.75 : world.tableLimit >= 24 ? 1.05 : world.tableLimit >= 12 ? 1.55 : 2.1;
+      world.spawnTimer = Math.max(minInterval, baseInterval * (0.8 + Math.random() * 0.4));
     }
 
     // 3. Update queue patience
@@ -2976,7 +3821,47 @@ export function tickWorld(world: GameWorld, rawDt: number) {
     }
   }
 
-  // 8. Update Player task execution
+  // 8. Update Player task execution (with collider penetration detection & temporary ghost mode lifecycle)
+  if (world.activeScene === 'DINING_HALL') {
+    updatePlayerGhostMode(world, dt);
+
+    if (world.player.y >= 112 && (world.player.ghostModeTimer ?? 0) <= 0) {
+      const hallColliders = getFrontHallColliders(world);
+      const pen = detectColliderPenetration(
+        world.player.x,
+        world.player.y,
+        hallColliders,
+        PLAYER_STEP_RADIUS - 0.5
+      );
+      if (pen.penetrating) {
+        const nextStep = world.player.taskQueue[0];
+        const escaped = findNearestWalkableIn3x3(
+          world,
+          world.player.x,
+          world.player.y,
+          hallColliders,
+          PATH_GRID_CELL,
+          PLAYER_STEP_RADIUS,
+          nextStep?.targetX,
+          nextStep?.targetY
+        );
+        if (escaped.found) {
+          world.player.x = escaped.x;
+          world.player.y = escaped.y;
+        } else {
+          world.player.stationStuckTime = (world.player.stationStuckTime ?? 0) + dt;
+          if (world.player.stationStuckTime >= GHOST_STUCK_TRIGGER_SECONDS) {
+            triggerPlayerGhostMode(world);
+          }
+        }
+      }
+    }
+  }
+
+  if ((world.player.manualMoveTimer ?? 0) > 0) {
+    world.player.manualMoveTimer = Math.max(0, (world.player.manualMoveTimer ?? 0) - dt);
+  }
+
   const speedMult = 1 + policyBonusesNow.speedBonus;
   if (world.player.taskQueue.length > 0) {
     const pAdapter = {
@@ -2991,6 +3876,7 @@ export function tickWorld(world: GameWorld, rawDt: number) {
       taskQueue: world.player.taskQueue,
       activeTaskLabel: world.player.activeTaskLabel,
       walkCycle: world.player.walkCycle,
+      facing: world.player.facing,
     };
     advanceActorTasks(world, dt, pAdapter);
     world.player.x = pAdapter.x;
@@ -3000,6 +3886,7 @@ export function tickWorld(world: GameWorld, rawDt: number) {
     world.player.carryBrothId = pAdapter.carryBrothId;
     world.player.taskQueue = pAdapter.taskQueue;
     world.player.walkCycle = pAdapter.walkCycle;
+    world.player.facing = pAdapter.facing;
     if (world.player.taskQueue.length === 0) {
       world.player.activeTaskLabel =
         world.player.carrying === 'NONE'
@@ -3028,6 +3915,7 @@ export function tickWorld(world: GameWorld, rawDt: number) {
       taskQueue: s.taskQueue,
       activeTaskLabel: s.activeTaskLabel,
       walkCycle: s.walkCycle,
+      facing: s.facing,
     };
     advanceActorTasks(world, dt, sAdapter);
     s.x = sAdapter.x;
@@ -3037,6 +3925,7 @@ export function tickWorld(world: GameWorld, rawDt: number) {
     s.carryBrothId = sAdapter.carryBrothId;
     s.taskQueue = sAdapter.taskQueue;
     s.walkCycle = sAdapter.walkCycle;
+    s.facing = sAdapter.facing;
   }
 
   // 10. Manual closing settlement only (no auto-settle when clean!)
@@ -3069,8 +3958,6 @@ export function tickWorld(world: GameWorld, rawDt: number) {
 
 const TOP_STATION_STAND_Y = 126;
 const SINK_STAND_X = Math.max(130, STATIONS.SINK.x + 12);
-const RECEPTION_STAND_X = STATIONS.RECEPTION.x + 58;
-const RECEPTION_STAND_Y = STATIONS.RECEPTION.y + 4;
 
 function prependDropIfNeeded(world: GameWorld, neededCarry: GameWorld['player']['carrying']): TaskStep[] {
   const cur = world.player.carrying;
@@ -3143,25 +4030,34 @@ export function handleCanvasClick(
     return;
   }
 
+  const entrance = getFrontHallEntranceLayout(world.shopLevel);
+  const clickedOutdoorVeranda =
+    x >= entrance.veranda.x - 10 &&
+    x <= entrance.veranda.x + entrance.veranda.w + 14 &&
+    y >= entrance.veranda.y - 14 &&
+    y <= entrance.veranda.y + entrance.veranda.h + 18;
+  const clickedQueuedGuest = world.queue.some((q) => Math.hypot(q.x - x, q.y - y) <= 28);
+
   if (
-    hitBox(x, y, STATIONS.RECEPTION.x, STATIONS.RECEPTION.y, STATIONS.RECEPTION.w + 20, STATIONS.RECEPTION.h + 20) ||
-    (x < 156 && y > 260)
+    hitBox(x, y, entrance.reception.x, entrance.reception.y, entrance.reception.w + 26, entrance.reception.h + 26) ||
+    clickedOutdoorVeranda ||
+    clickedQueuedGuest
   ) {
     if (world.phase === 'PREP') {
-      addFloatingText(world, STATIONS.RECEPTION.x, STATIONS.RECEPTION.y - 24, '筹备阶段未开门，点击「正式开店」迎客', '#F1BE51', 12);
+      addFloatingText(world, entrance.reception.x, entrance.reception.y - 24, '筹备阶段未开门，点击「正式开店」迎客', '#F1BE51', 12);
       return;
     }
     if (world.phase === 'CLOSING') {
-      addFloatingText(world, STATIONS.RECEPTION.x, STATIONS.RECEPTION.y - 24, '已打烊停止迎客，请先完成收尾清理', '#FBBF24', 12);
+      addFloatingText(world, entrance.reception.x, entrance.reception.y - 24, '已打烊停止迎客，请先完成收尾清理', '#FBBF24', 12);
       return;
     }
     if (world.queue.length === 0) {
-      addFloatingText(world, STATIONS.RECEPTION.x, STATIONS.RECEPTION.y - 24, '当前暂无排队顾客', '#94A3B8', 12);
+      addFloatingText(world, entrance.reception.x, entrance.reception.y - 24, '当前暂无排队顾客', '#94A3B8', 12);
       return;
     }
     const ready = world.tables.find((t) => t.status === 'READY');
     if (!ready) {
-      addFloatingText(world, STATIONS.RECEPTION.x, STATIONS.RECEPTION.y - 24, '请先摆餐具准备空桌！', '#F59E0B', 13);
+      addFloatingText(world, entrance.reception.x, entrance.reception.y - 24, '请先摆餐具准备空桌！', '#F59E0B', 13);
       return;
     }
     const pre = prependDropIfNeeded(world, 'NONE');
@@ -3169,8 +4065,8 @@ export function handleCanvasClick(
       ...pre,
       {
         type: 'WELCOME_GUEST',
-        targetX: RECEPTION_STAND_X,
-        targetY: RECEPTION_STAND_Y,
+        targetX: entrance.receptionStand.x,
+        targetY: entrance.receptionStand.y,
         targetId: ready.id,
         duration: 0.45,
       },
@@ -3308,9 +4204,23 @@ export function handleCanvasClick(
     return;
   }
 
-  // Clicking any unlocked Front-Hall Zone Pad (occupied -> restock/cook; empty -> open Zone Layout Config!)
-  for (const { pad, zoneId } of getUnlockedZonePads(world)) {
+  // Clicking any visible Front-Hall Zone Pad (unpurchased / empty -> open Zone Layout Config; occupied -> restock/cook!)
+  for (const { pad, purchased, buildingDays, zoneId } of getVisibleFrontHallPads(world)) {
     if (x >= pad.x && x <= pad.x + pad.w && y >= pad.y && y <= pad.y + pad.h) {
+      if (!purchased) {
+        sound.playClick();
+        addFloatingText(
+          world,
+          pad.x + pad.w * 0.5,
+          pad.y - 8,
+          buildingDays !== null
+            ? `【${pad.label}】扩建施工中 · 余${buildingDays}天`
+            : `打开【${pad.label}】购置扩建（¥${pad.purchaseCost}）`,
+          '#38BDF8',
+          12
+        );
+        return 'OPEN_ZONE_CONFIG';
+      }
       if (!zoneId) {
         sound.playClick();
         addFloatingText(
@@ -3527,8 +4437,8 @@ export function handleCanvasClick(
           ...pre,
           {
             type: 'WELCOME_GUEST',
-            targetX: RECEPTION_STAND_X,
-            targetY: RECEPTION_STAND_Y,
+            targetX: entrance.receptionStand.x,
+            targetY: entrance.receptionStand.y,
             targetId: table.id,
             duration: 0.45,
           },
@@ -3596,7 +4506,7 @@ export function movePlayerByKeys(world: GameWorld, dx: number, dy: number, dt: n
 
   const stepX = nx * p.speed * dt;
   const stepY = ny * p.speed * dt;
-  let wantX = Math.max(124, Math.min(bounds.width - 24, p.x + stepX));
+  let wantX = Math.max(FRONT_HALL_MIN_X, Math.min(bounds.width - 24, p.x + stepX));
   let wantY = Math.min(bounds.height - 24, p.y + stepY);
 
   const inArchwayBand = (xVal: number) =>
@@ -3627,11 +4537,60 @@ export function movePlayerByKeys(world: GameWorld, dx: number, dy: number, dt: n
     }
   }
 
-  // Enforce solid collision against tables, occupied buffet zones, reception & kitchen stations!
-  const resolved = resolveFrontHallStep(world, p.x, p.y, wantX, wantY, Boolean(curArch), 11);
+  // Enforce solid collision against tables, occupied buffet zones, reception & kitchen stations,
+  // with collider penetration detection and temporary ghost mode (>2s stuck within 2 grids of a station)
+  const colliders = getFrontHallColliders(world);
+  const prePen = detectColliderPenetration(p.x, p.y, colliders, PLAYER_STEP_RADIUS);
+  let ghostActive = (p.ghostModeTimer ?? 0) > 0;
+  let resolved = resolveFrontHallStep(
+    world,
+    p.x,
+    p.y,
+    wantX,
+    wantY,
+    Boolean(curArch),
+    PLAYER_STEP_RADIUS,
+    ghostActive
+  );
+
+  if (!ghostActive) {
+    const wantDist = Math.hypot(wantX - p.x, wantY - p.y);
+    const moved = Math.hypot(resolved.x - p.x, resolved.y - p.y);
+    const isStalled =
+      (resolved.blocked && wantDist > 0.2 && moved < wantDist * 0.25) ||
+      prePen.penetrating ||
+      resolved.penetrating;
+    const nearStation =
+      prePen.penetrating ||
+      resolved.penetrating ||
+      isWithinTwoGridOfStationCollider(p.x, p.y, colliders, STATION_TWO_GRID_RANGE);
+
+    if (isStalled && nearStation) {
+      p.stationStuckTime = (p.stationStuckTime ?? 0) + dt;
+      if (p.stationStuckTime >= GHOST_STUCK_TRIGGER_SECONDS) {
+        triggerPlayerGhostMode(world);
+        ghostActive = true;
+        resolved = resolveFrontHallStep(
+          world,
+          p.x,
+          p.y,
+          wantX,
+          wantY,
+          Boolean(curArch),
+          PLAYER_STEP_RADIUS,
+          true
+        );
+      }
+    } else if (!resolved.blocked && !resolved.penetrating && !prePen.penetrating) {
+      p.stationStuckTime = Math.max(0, (p.stationStuckTime ?? 0) - dt * 2);
+    }
+  }
+
   p.x = resolved.x;
   p.y = resolved.y;
+  p.facing = Math.atan2(ny, nx);
   p.walkCycle += dt * 11;
+  p.manualMoveTimer = 0.14;
   p.activeTaskLabel = '手动巡场中 · 按空格交互';
 
   // Walking straight NORTH through any of the 3 golden archways seamlessly steps into Backstage!
@@ -3662,8 +4621,9 @@ export function interactNearestStation(world: GameWorld) {
   let bestDist = 115;
   let bestTarget: { x: number; y: number } | null = null;
 
+  const entranceRec = getFrontHallEntranceLayout(world.shopLevel).reception;
   const points: Array<{ x: number; y: number }> = [
-    { x: STATIONS.RECEPTION.x, y: STATIONS.RECEPTION.y },
+    { x: entranceRec.x, y: entranceRec.y },
     { x: STATIONS.SINK.x, y: STATIONS.SINK.y },
     { x: STATIONS.CLEAN_RACK.x, y: STATIONS.CLEAN_RACK.y },
     { x: STATIONS.BROTH_KITCHEN.x, y: STATIONS.BROTH_KITCHEN.y },

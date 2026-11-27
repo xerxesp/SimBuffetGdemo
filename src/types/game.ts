@@ -151,7 +151,10 @@ export type BuffetZoneId =
   | 'cooked_hot'
   | 'teppan_bbq'
   | 'hotpot_sides'
-  | 'drinks_dessert';
+  | 'drinks_dessert'
+  | 'steam_dimsum'
+  | 'raw_marinated'
+  | 'wagyu_carving';
 
 export type FacilitySceneId =
   | 'cold_storage'
@@ -251,7 +254,9 @@ export type PendingOrderType =
   | 'UNLOCK_SEAFOOD'
   | 'UNLOCK_BROTH'
   | 'UNLOCK_ZONE'
-  | 'UNLOCK_TECH_NODE';
+  | 'UNLOCK_TECH_NODE'
+  | 'PURCHASE_REGIME'
+  | 'PURCHASE_ZONE_PAD';
 
 export interface PendingOrder {
   id: string;
@@ -396,6 +401,8 @@ export interface ZonePadDef {
   label: string;
   wingLabel: string;
   minShopLevel: number;
+  purchaseCost: number;
+  buildDays: number;
   x: number;
   y: number;
   w: number;
@@ -464,6 +471,8 @@ export interface DiningRegimeDef {
   name: string;
   eraLabel: string;
   baseTicketPrice: number;
+  purchaseCost: number;
+  setupDays: number;
   customerRateMult: number;
   vipBonus: number;
   accentColor: string;
@@ -524,6 +533,7 @@ export interface TechTreeNodeDef {
   shortDesc: string;
   detail: string;
   cost: number;
+  pointCost: number;
   researchDays: number;
   prereqs: string[];
   targetId?: string;
@@ -627,6 +637,10 @@ export interface TaskStep {
   brothId?: string;
   backstageTargetX?: number;
   backstageTargetY?: number;
+  waypoints?: Array<{ x: number; y: number }>;
+  stuckTime?: number;
+  repathCooldown?: number;
+  stationStuckTime?: number;
 }
 
 export interface PlayerState {
@@ -640,6 +654,9 @@ export interface PlayerState {
   activeTaskLabel: string;
   facing: number;
   walkCycle: number;
+  manualMoveTimer?: number;
+  ghostModeTimer?: number;
+  stationStuckTime?: number;
 }
 
 export interface StaffCandidate {
@@ -674,6 +691,7 @@ export interface HiredStaff extends StaffCandidate {
   activeTaskLabel: string;
   idleTimer: number;
   walkCycle: number;
+  facing?: number;
   tasksCompleted: number;
   fatigue: number; // 0..100, restored in dormitory
   morale: number; // 0..100
@@ -723,6 +741,8 @@ export interface DailyStats {
   healthInspectionsFailed: number;
   reputationChange: number;
   cookedDishesServed: number;
+  xpEarned?: number;
+  levelsGained?: number;
 }
 
 export interface GameWorld {
@@ -758,10 +778,14 @@ export interface GameWorld {
   pendingStoryModal: StoryModalEvent | null;
   specialVisitCooldown: number;
 
-  // Core Resources
+  // Core Resources & Player Level Progression
   cash: number;
   reputation: number;
   hygiene: number;
+  playerLevel: number;
+  playerXp: number;
+  upgradePoints: number;
+  totalUpgradePointsEarned: number;
 
   // New Facilities, Cooked Food & Backstage Inventory State
   rawIngredients: number;
@@ -787,6 +811,7 @@ export interface GameWorld {
 
   activeRegimeId: RegimeId;
   unlockedRegimeIds: RegimeId[];
+  purchasedRegimeIds: RegimeId[];
   regimeSwitchCooldown: number; // Days remaining before player can switch regime again
   policySlots: PolicySlotInstance[];
   unlockedOpsCardIds: string[];
@@ -803,6 +828,7 @@ export interface GameWorld {
   buffetCapacityBonus: number;
 
   unlockedZones: BuffetZoneId[];
+  purchasedPadIds: string[];
   zonePadAssignments: Record<string, BuffetZoneId | null>;
   unlockedSeafoodIds: string[];
   activeSeafoodIds: string[]; // Driven by Policy Card slots!

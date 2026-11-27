@@ -41,6 +41,7 @@ import {
 import { sound } from '../utils/sound';
 import { enlistSpecialStaff, evaluatePolicyBonuses } from './policyAndTech';
 import { evaluateTycoonModifiers } from './tycoonSystems';
+import { awardPlayerXpFromCash } from './playerProgression';
 import { applyIncidentChoiceEffects } from '../data/serviceIncidentsConfig';
 
 let extUid = 10000;
@@ -65,28 +66,47 @@ function pushAlert(
 }
 
 const EXPANDABLE_ZONE_TECH_NODE: Partial<Record<BuffetZoneId, string>> = {
+  steam_dimsum: 'tech_zone_dimsum',
   drinks_dessert: 'tech_zone_drinks',
   teppan_bbq: 'tech_zone_teppan',
   sashimi_sushi: 'tech_zone_sashimi',
+  raw_marinated: 'tech_zone_raw_marinated',
   live_seafood: 'tech_zone_live',
+  wagyu_carving: 'tech_zone_wagyu_carving',
 };
+
+export function isZoneBlueprintUnlocked(world: GameWorld, zoneId: BuffetZoneId): boolean {
+  const requiredTech = EXPANDABLE_ZONE_TECH_NODE[zoneId];
+  if (!requiredTech) return true;
+  return world.unlockedTechNodeIds.includes(requiredTech);
+}
 
 export function isBuffetZoneUnlocked(world: GameWorld, zoneId: BuffetZoneId): boolean {
   if (!world.unlockedZones.includes(zoneId)) return false;
-  const requiredTech = EXPANDABLE_ZONE_TECH_NODE[zoneId];
-  if (requiredTech && !world.unlockedTechNodeIds.includes(requiredTech)) {
-    return false;
-  }
-  return true;
+  return isZoneBlueprintUnlocked(world, zoneId);
+}
+
+export function isPadPurchased(world: GameWorld, padId: string): boolean {
+  const pad = FRONT_HALL_ZONE_PADS.find((p) => p.id === padId);
+  if (!pad) return false;
+  if (pad.purchaseCost <= 0) return true;
+  return Array.isArray(world.purchasedPadIds) && world.purchasedPadIds.includes(padId);
 }
 
 export function ensureZonePadAssignments(world: GameWorld): Record<string, BuffetZoneId | null> {
   if (!world.zonePadAssignments) {
     world.zonePadAssignments = createDefaultZonePadAssignments();
   }
+  if (!Array.isArray(world.purchasedPadIds)) {
+    world.purchasedPadIds = FRONT_HALL_ZONE_PADS.filter((p) => p.purchaseCost <= 0).map((p) => p.id);
+  }
   for (const pad of FRONT_HALL_ZONE_PADS) {
     if (!(pad.id in world.zonePadAssignments)) {
       world.zonePadAssignments[pad.id] = pad.defaultZone ?? null;
+    }
+    if (!isPadPurchased(world, pad.id)) {
+      world.zonePadAssignments[pad.id] = null;
+      continue;
     }
     const assigned = world.zonePadAssignments[pad.id];
     if (assigned && !isBuffetZoneUnlocked(world, assigned)) {
@@ -100,10 +120,94 @@ export function getUnlockedZonePads(
   world: GameWorld
 ): Array<{ pad: ZonePadDef; zoneId: BuffetZoneId | null }> {
   const assignments = ensureZonePadAssignments(world);
-  return FRONT_HALL_ZONE_PADS.filter((p) => p.minShopLevel <= world.shopLevel).map((pad) => ({
+  return FRONT_HALL_ZONE_PADS.filter(
+    (p) => p.minShopLevel <= world.shopLevel && isPadPurchased(world, p.id)
+  ).map((pad) => ({
     pad,
     zoneId: assignments[pad.id] ?? null,
   }));
+}
+
+export interface VisibleFrontHallPad {
+  pad: ZonePadDef;
+  purchased: boolean;
+  buildingDays: number | null;
+  zoneId: BuffetZoneId | null;
+}
+
+export function getVisibleFrontHallPads(world: GameWorld): VisibleFrontHallPad[] {
+  const assignments = ensureZonePadAssignments(world);
+  return FRONT_HALL_ZONE_PADS.filter((p) => p.minShopLevel <= world.shopLevel).map((pad) => {
+    const purchased = isPadPurchased(world, pad.id);
+    const pending = world.pendingOrders.find(
+      (o) => o.type === 'PURCHASE_ZONE_PAD' && o.targetId === pad.id
+    );
+    return {
+      pad,
+      purchased,
+      buildingDays: pending ? pending.daysRemaining : null,
+      zoneId: purchased ? assignments[pad.id] ?? null : null,
+    };
+  });
+}
+
+export function purchaseZonePad(world: GameWorld, padId: string): boolean {
+  if (world.phase !== 'PREP') {
+    pushAlert(world, '购置扩建前厅区域位仅限在「开店前准备」阶段下单施工！', 'warning');
+    return false;
+  }
+  const pad = FRONT_HALL_ZONE_PADS.find((p) => p.id === padId);
+  if (!pad) return false;
+  if (pad.minShopLevel > world.shopLevel) {
+    pushAlert(world, `购置「${pad.label}」需要店铺等级达到 Lv.${pad.minShopLevel}！`, 'warning');
+    return false;
+  }
+  if (isPadPurchased(world, padId)) {
+    return true;
+  }
+  if (world.pendingOrders.some((o) => o.type === 'PURCHASE_ZONE_PAD' && o.targetId === padId)) {
+    pushAlert(world, `「${pad.label}」正在扩建施工中，请耐心等待竣工！`, 'info');
+    return false;
+  }
+  if (world.cash < pad.purchaseCost) {
+    pushAlert(
+      world,
+      `资金不足！购置扩建「${pad.label}」需要 ¥${pad.purchaseCost}（当前余额 ¥${Math.floor(world.cash)}）。`,
+      'warning'
+    );
+    return false;
+  }
+
+  world.cash -= pad.purchaseCost;
+
+  if (pad.buildDays <= 0) {
+    if (!world.purchasedPadIds.includes(pad.id)) {
+      world.purchasedPadIds.push(pad.id);
+    }
+    ensureZonePadAssignments(world);
+    sound.playHireStamp();
+    pushAlert(world, `扩建区域位「${pad.label}」购置竣工，现可自由配置菜品分区！`, 'success');
+    return true;
+  }
+
+  world.pendingOrders.push({
+    id: nextExtUid('ord_pad'),
+    type: 'PURCHASE_ZONE_PAD',
+    title: `扩建区域位 · ${pad.label}`,
+    detail: `前厅扩建档口基座与水电冷链管路施工需 ${pad.buildDays} 天`,
+    daysRemaining: pad.buildDays,
+    totalDays: pad.buildDays,
+    cost: pad.purchaseCost,
+    targetId: pad.id,
+  });
+
+  sound.playHireStamp();
+  pushAlert(
+    world,
+    `已出资 ¥${pad.purchaseCost} 签约施工「${pad.label}」，预计 ${pad.buildDays} 天后开店前竣工可用！`,
+    'success'
+  );
+  return true;
 }
 
 export function getPadForBuffetZone(
@@ -121,11 +225,13 @@ export function autoPlaceNewlyUnlockedZone(
 ): ZonePadDef | null {
   if (!isBuffetZoneUnlocked(world, zoneId)) return null;
   const assignments = ensureZonePadAssignments(world);
-  const unlockedPads = FRONT_HALL_ZONE_PADS.filter((p) => p.minShopLevel <= world.shopLevel);
-  if (unlockedPads.some((p) => assignments[p.id] === zoneId)) {
-    return unlockedPads.find((p) => assignments[p.id] === zoneId) ?? null;
+  const purchasedPads = FRONT_HALL_ZONE_PADS.filter(
+    (p) => p.minShopLevel <= world.shopLevel && isPadPurchased(world, p.id)
+  );
+  if (purchasedPads.some((p) => assignments[p.id] === zoneId)) {
+    return purchasedPads.find((p) => assignments[p.id] === zoneId) ?? null;
   }
-  const emptyPad = unlockedPads.find((p) => !assignments[p.id]);
+  const emptyPad = purchasedPads.find((p) => !assignments[p.id]);
   if (!emptyPad) return null;
   assignments[emptyPad.id] = zoneId;
   rebuildActiveBuffetSlots(world);
@@ -137,13 +243,32 @@ export function assignZoneToPad(
   padId: string,
   zoneId: BuffetZoneId | null
 ): boolean {
+  if (world.phase !== 'PREP') {
+    pushAlert(world, '调整前厅区域档口配置仅限在「开店前准备」阶段进行！', 'warning');
+    return false;
+  }
   const pad = FRONT_HALL_ZONE_PADS.find((p) => p.id === padId);
   if (!pad || pad.minShopLevel > world.shopLevel) {
     pushAlert(world, '该区域位尚未随店铺等级扩建开放！', 'warning');
     return false;
   }
+  if (!isPadPurchased(world, padId)) {
+    pushAlert(
+      world,
+      `区域位「${pad.label}」尚未购置扩建！请先出资 ¥${pad.purchaseCost}（${pad.buildDays}天）完成施工后再配置档口。`,
+      'warning'
+    );
+    return false;
+  }
   if (zoneId !== null && !isBuffetZoneUnlocked(world, zoneId)) {
-    pushAlert(world, '该菜品区尚未在发展树中研发解锁！', 'warning');
+    const zDef = getBuffetZoneDef(zoneId);
+    pushAlert(
+      world,
+      isZoneBlueprintUnlocked(world, zoneId)
+        ? `「${zDef.name}」尚未出资施工建成，请先在上方购置建设（¥${zDef.unlockCost} · ${zDef.buildDays}天）！`
+        : `「${zDef.name}」蓝图尚未在天赋树中研发解锁！`,
+      'warning'
+    );
     return false;
   }
 
@@ -151,7 +276,9 @@ export function assignZoneToPad(
   const currentOnTarget = assignments[padId] ?? null;
   if (currentOnTarget === zoneId) return true;
 
-  const unlockedPads = FRONT_HALL_ZONE_PADS.filter((p) => p.minShopLevel <= world.shopLevel);
+  const purchasedPads = FRONT_HALL_ZONE_PADS.filter(
+    (p) => p.minShopLevel <= world.shopLevel && isPadPurchased(world, p.id)
+  );
 
   if (zoneId === null) {
     assignments[padId] = null;
@@ -161,13 +288,13 @@ export function assignZoneToPad(
     return true;
   }
 
-  // Check if zoneId is already placed on another unlocked pad
-  const existingPad = unlockedPads.find((p) => p.id !== padId && assignments[p.id] === zoneId);
+  // Check if zoneId is already placed on another purchased pad
+  const existingPad = purchasedPads.find((p) => p.id !== padId && assignments[p.id] === zoneId);
   const allUnlockedZoneIds = BUFFET_ZONES_CONFIG.map((z) => z.id).filter((id) =>
     isBuffetZoneUnlocked(world, id)
   );
   const allPlacedAlready = allUnlockedZoneIds.every((id) =>
-    unlockedPads.some((p) => assignments[p.id] === id)
+    purchasedPads.some((p) => assignments[p.id] === id)
   );
 
   if (existingPad && !(currentOnTarget === null && allPlacedAlready)) {
@@ -565,7 +692,7 @@ export function toggleActiveBroth(world: GameWorld, brothId: string): boolean {
 
 export function unlockBuffetZone(world: GameWorld, zoneId: BuffetZoneId): boolean {
   if (world.phase !== 'PREP') {
-    pushAlert(world, '扩建功能菜品分区仅限在「开店前准备」阶段排期施工。', 'warning');
+    pushAlert(world, '购置建设特色菜品分区仅限在「开店前准备」阶段排期施工！', 'warning');
     return false;
   }
   if (world.unlockedZones.includes(zoneId)) return false;
@@ -573,12 +700,12 @@ export function unlockBuffetZone(world: GameWorld, zoneId: BuffetZoneId): boolea
     return false;
   }
   const def = getBuffetZoneDef(zoneId);
-  if (world.shopLevel < def.minShopLevel) {
-    pushAlert(world, `扩建「${def.name}」需要店铺等级达到 Lv.${def.minShopLevel}。`, 'warning');
+  if (!isZoneBlueprintUnlocked(world, zoneId)) {
+    pushAlert(world, `建设「${def.name}」需先在「天赋树」研发解锁对应分区蓝图！`, 'warning');
     return false;
   }
   if (world.cash < def.unlockCost) {
-    pushAlert(world, `资金不足，扩建「${def.name}」需要 ¥${def.unlockCost}。`, 'warning');
+    pushAlert(world, `资金不足，购置建设「${def.name}」需要 ¥${def.unlockCost}。`, 'warning');
     return false;
   }
 
@@ -586,8 +713,8 @@ export function unlockBuffetZone(world: GameWorld, zoneId: BuffetZoneId): boolea
   world.pendingOrders.push({
     id: nextExtUid('ord'),
     type: 'UNLOCK_ZONE',
-    title: `扩建分区 · ${def.shortName}`,
-    detail: `${def.name}施工需 ${def.buildDays} 天，竣工后开放专属菜品与对应岗位`,
+    title: `分区建设 · ${def.shortName}`,
+    detail: `${def.name}明档设备施工需 ${def.buildDays} 天，竣工后可配置至前厅区域位并上架专属菜品`,
     daysRemaining: def.buildDays,
     totalDays: def.buildDays,
     cost: def.unlockCost,
@@ -596,7 +723,7 @@ export function unlockBuffetZone(world: GameWorld, zoneId: BuffetZoneId): boolea
   sound.playHireStamp();
   pushAlert(
     world,
-    `已签约施工「${def.name}」，预计 ${def.buildDays} 天后开店前竣工开放！`,
+    `已出资 ¥${def.unlockCost} 签约建设「${def.name}」，预计 ${def.buildDays} 天后开店前竣工开放！`,
     'success'
   );
   return true;
@@ -931,7 +1058,10 @@ export function resolveStoryChoice(world: GameWorld, choice: StoryChoiceOption) 
   }
   if (choice.cashDelta) {
     world.cash += choice.cashDelta;
-    if (choice.cashDelta > 0) world.totalCashEarned += choice.cashDelta;
+    if (choice.cashDelta > 0) {
+      world.totalCashEarned += choice.cashDelta;
+      awardPlayerXpFromCash(world, choice.cashDelta);
+    }
   }
   if (choice.reputationDelta) {
     world.reputation = Math.max(0, Math.min(100, world.reputation + choice.reputationDelta));

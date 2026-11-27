@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BookOpen,
-  Building2,
   CalendarClock,
+  ChevronDown,
+  LayoutGrid,
   Moon,
   ScrollText,
   ShieldAlert,
@@ -27,7 +28,12 @@ import { ConfigTab, StoreConfigModal } from './components/StoreConfigModal';
 import { StoryChronicleModal } from './components/StoryChronicleModal';
 import { StoryEventModal } from './components/StoryEventModal';
 import { TopHud } from './components/TopHud';
-import { generateCandidatePool, getFrontHallBounds, STATIONS } from './data/gameConfig';
+import {
+  generateCandidatePool,
+  getFrontHallBounds,
+  getFrontHallEntranceLayout,
+  STATIONS,
+} from './data/gameConfig';
 import { getBackstageRoomRect } from './data/policyAndTechConfig';
 import { getDaysUntilNextInspection, getNearFailureStatus } from './data/staffDialogueConfig';
 import { getWeatherDef } from './data/tycoonSystemsConfig';
@@ -46,6 +52,7 @@ import {
   exitBackstageToDiningHall,
   handleBackstageCanvasClick,
   moveBackstagePlayerByKeys,
+  purchaseDiningRegime,
   startTechNodeResearch,
   switchDiningRegime,
   tickBackstagePlayer,
@@ -86,10 +93,12 @@ import {
   placeClosingProcurementOrder,
   postPartTimeJob,
   procureRawIngredients,
+  purchaseZonePad,
   resolveStoryChoice,
   spendTimeWithPartner,
   triggerFacilitySceneStory,
   triggerSpecialStaffQuest,
+  unlockBuffetZone,
 } from './engine/storyAndFacilities';
 import {
   buyOrEquipDecorTheme,
@@ -206,6 +215,8 @@ export default function App() {
   const activeOverlayRef = useRef<ActiveOverlay>(null);
   const [configInitialTab, setConfigInitialTab] = useState<ConfigTab>('POLICY');
   const [showChronicleDrawer, setShowChronicleDrawer] = useState(false);
+  const [leftMenuOpen, setLeftMenuOpen] = useState(false);
+  const leftMenuOpenRef = useRef(false);
 
   const [bestRecord, setBestRecord] = useState(loadBestRecord);
   const [saveSlots, setSaveSlots] = useState(() => listSaveSlots());
@@ -263,6 +274,10 @@ export default function App() {
   useEffect(() => {
     showOnboardingIntroRef.current = showOnboardingIntro;
   }, [showOnboardingIntro]);
+
+  useEffect(() => {
+    leftMenuOpenRef.current = leftMenuOpen;
+  }, [leftMenuOpen]);
 
   const currentPhase = worldRef.current.phase;
   const isGameplayStage = currentPhase !== 'MAIN_MENU' && currentPhase !== 'CHARACTER_SELECT';
@@ -323,9 +338,11 @@ export default function App() {
       }
 
       switch (action) {
-        case 'WELCOME':
-          handleCanvasClick(w, STATIONS.RECEPTION.x, STATIONS.RECEPTION.y);
+        case 'WELCOME': {
+          const rec = getFrontHallEntranceLayout(w.shopLevel).reception;
+          handleCanvasClick(w, rec.x, rec.y);
           break;
+        }
         case 'RESTOCK':
           handleCanvasClick(w, STATIONS.COLD_PREP.x, STATIONS.COLD_PREP.y);
           break;
@@ -377,9 +394,27 @@ export default function App() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const key = e.key.toLowerCase();
 
-      if (key === 'escape' && activeOverlayRef.current) {
-        setActiveOverlay(null);
-        return;
+      if (key === 'escape') {
+        if (activeOverlayRef.current) {
+          setActiveOverlay(null);
+          return;
+        }
+        if (leftMenuOpenRef.current) {
+          sound.playClick();
+          setLeftMenuOpen(false);
+          setShowChronicleDrawer(false);
+          return;
+        }
+        if (
+          isActivePlayPhase(worldRef.current.phase) &&
+          !worldRef.current.pendingStoryModal &&
+          !showOnboardingIntroRef.current
+        ) {
+          sound.playClick();
+          keysPressedRef.current.clear();
+          setActiveOverlay('SYSTEM_MENU');
+          return;
+        }
       }
       if (activeOverlayRef.current || showOnboardingIntroRef.current) return;
 
@@ -712,6 +747,10 @@ export default function App() {
   };
 
   const onCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (leftMenuOpenRef.current) {
+      setLeftMenuOpen(false);
+      setShowChronicleDrawer(false);
+    }
     // Middle-mouse or right-mouse drag to pan across the unified isometric grand map
     if (e.button === 1 || e.button === 2) {
       e.preventDefault();
@@ -800,6 +839,7 @@ export default function App() {
   const handleEnterCharacterSelect = () => {
     sound.playClick();
     setActiveOverlay(null);
+    setLeftMenuOpen(false);
     setShowChronicleDrawer(false);
     setShowOnboardingIntro(false);
     setManualGuideOpen(false);
@@ -815,6 +855,7 @@ export default function App() {
       syncWorldToEncyclopedia(worldRef.current);
     }
     setActiveOverlay(null);
+    setLeftMenuOpen(false);
     setShowChronicleDrawer(false);
     setShowOnboardingIntro(false);
     setManualGuideOpen(false);
@@ -827,6 +868,7 @@ export default function App() {
   const handleConfirmCharacterAndPlay = (characterId: CharacterId) => {
     keysPressedRef.current.clear();
     setActiveOverlay(null);
+    setLeftMenuOpen(false);
     setShowChronicleDrawer(false);
     setManualGuideOpen(false);
     resetCameraZoom();
@@ -929,6 +971,8 @@ export default function App() {
   const handleOpenOverlay = (overlay: ActiveOverlay, tab?: ConfigTab) => {
     sound.playTabSwitch();
     keysPressedRef.current.clear();
+    setLeftMenuOpen(false);
+    setShowChronicleDrawer(false);
     if (tab) setConfigInitialTab(tab);
     if (overlay === 'CONFIG' && worldRef.current.onboardingStep < 2) {
       worldRef.current.onboardingStep = 2;
@@ -1162,45 +1206,28 @@ export default function App() {
       ? { width: '100%', height: '100%' }
       : { width: `${fittedWidth}px`, height: `${fittedHeight}px` };
 
-  return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#120a07] text-[#F7EFE2]">
-      {/* Top Brass & Lacquer Status Ribbon */}
-      <TopHud
-        world={world}
-        muted={settings.muted || settings.volume === 0}
-        bgmMuted={settings.bgmMuted || settings.bgmVolume === 0}
-        activeBgmTitle={BGM_TRACK_META[desiredBgmTrack].title}
-        onTogglePause={handleTogglePause}
-        onToggleSpeed={handleToggleSpeed}
-        onToggleMute={handleToggleMute}
-        onToggleBgm={handleToggleBgm}
-        onOpenGuide={() => {
-          sound.playClick();
-          const w = worldRef.current;
-          if (w.onboardingStep >= 9) {
-            w.onboardingStep =
-              w.phase === 'CLOSING' ? 7 : w.phase === 'PLAYING' ? 3 : 0;
-          }
-          setManualGuideOpen((v) => !v);
-          forceUiSync();
-        }}
-        onOpenSaveLoad={() => handleOpenOverlay('SAVE_LOAD')}
-        onOpenEncyclopedia={() => handleOpenOverlay('ENCYCLOPEDIA')}
-        onOpenSettings={() => handleOpenOverlay('SETTINGS')}
-        onOpenStory={() => handleOpenOverlay('STORY')}
-        onOpenSystemMenu={() => handleOpenOverlay('SYSTEM_MENU')}
-      />
+  const hasLeftMenuNotice =
+    spotlightConfigBtn ||
+    canClaimChapter ||
+    Boolean(world.activeRivalEvent) ||
+    world.upgradePoints > 0;
 
-      {/* Full-Viewport Unobstructed Unified 45° Isometric Stage + Perimeter HUD */}
-      <main className="flex-1 min-h-0 relative overflow-hidden bg-[#0c1718]">
-        {/* Full-Width Adaptive Canvas Container */}
+  return (
+    <div className="relative h-screen w-screen overflow-hidden bg-[#0c1718] text-[#F7EFE2]">
+      {/* 100% Full-Viewport Edge-to-Edge 45° Isometric Stage + Layered Floating HUD Islands */}
+      <main className="relative w-full h-full overflow-hidden bg-[#0c1718] isolate">
+        {/* Layer 0 (z-0): Edge-to-Edge Adaptive Scene Canvas Container */}
         <div
           ref={stageRef}
-          className="absolute inset-0 flex items-center justify-center overflow-hidden p-1.5"
+          className="absolute inset-0 z-0 isolate flex items-center justify-center overflow-hidden"
         >
           <div
             style={canvasBoxStyle}
-            className="relative rounded-lg overflow-hidden border border-[#6e5534] shadow-[0_14px_44px_rgba(0,0,0,0.82)] bg-[#0f1d1e]"
+            className={
+              settings.aspectRatio === 'auto'
+                ? 'relative w-full h-full bg-[#0f1d1e]'
+                : 'relative rounded-lg overflow-hidden border border-[#6e5534] shadow-[0_14px_44px_rgba(0,0,0,0.82)] bg-[#0f1d1e]'
+            }
           >
             <canvas
               ref={canvasRef}
@@ -1215,224 +1242,265 @@ export default function App() {
           </div>
         </div>
 
+        {/* Layer 40 (z-40): Top Floating Translucent Status & Utility Islands */}
+        <TopHud
+          world={world}
+          muted={settings.muted || settings.volume === 0}
+          bgmMuted={settings.bgmMuted || settings.bgmVolume === 0}
+          activeBgmTitle={BGM_TRACK_META[desiredBgmTrack].title}
+          onTogglePause={handleTogglePause}
+          onToggleSpeed={handleToggleSpeed}
+          onToggleMute={handleToggleMute}
+          onToggleBgm={handleToggleBgm}
+          onOpenGuide={() => {
+            sound.playClick();
+            const w = worldRef.current;
+            if (w.onboardingStep >= 9) {
+              w.onboardingStep =
+                w.phase === 'CLOSING' ? 7 : w.phase === 'PLAYING' ? 3 : 0;
+            }
+            setManualGuideOpen((v) => !v);
+            forceUiSync();
+          }}
+          onOpenSaveLoad={() => handleOpenOverlay('SAVE_LOAD')}
+          onOpenEncyclopedia={() => handleOpenOverlay('ENCYCLOPEDIA')}
+          onOpenSettings={() => handleOpenOverlay('SETTINGS')}
+          onOpenStory={() => handleOpenOverlay('STORY')}
+          onOpenTechTree={() => handleOpenOverlay('CONFIG', 'TECH_TREE')}
+          onOpenSystemMenu={() => handleOpenOverlay('SYSTEM_MENU')}
+        />
+
         {/* ============================================================
-            TOP-LEFT CIRCULAR CONFIGURATION & NAVIGATION MEDALLIONS
+            Layer 40 (z-40): TOP-LEFT CONSOLIDATED FLOATING MENU TRIGGER
             ============================================================ */}
-        <div className="absolute top-3 left-3.5 z-20 flex flex-col gap-2.5 pointer-events-none">
-          {/* 1. Unified Store Configuration Screen Trigger */}
-          <div className="flex items-center gap-2 pointer-events-auto relative">
-            <button
-              onClick={() => handleOpenOverlay('CONFIG', 'POLICY')}
-              title="打开门店配置中心：店面类型切换、菜单策略卡、5阶段发展树、雇员团队 (快捷键 C)"
-              className={`w-12 h-12 rounded-full flex items-center justify-center cursor-pointer shrink-0 ${
-                effectivePhase === 'PREP' ? 'civ-medallion-gold' : 'civ-medallion text-[#E8C97A]'
-              } ${spotlightConfigBtn ? 'ring-3 ring-[#FDE047] shadow-[0_0_20px_rgba(253,224,71,0.75)] animate-pulse' : ''}`}
-            >
-              <Store className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => handleOpenOverlay('CONFIG', 'POLICY')}
-              className={`px-3 py-1.5 rounded-r-lg rounded-l-sm border text-left cursor-pointer backdrop-blur-sm transition-colors ${
-                spotlightConfigBtn
-                  ? 'bg-[#3b2314]/95 border-[#FDE047] ring-2 ring-[#FDE047]/70 shadow-[0_0_18px_rgba(253,224,71,0.45)]'
-                  : effectivePhase === 'PREP'
-                    ? 'bg-[#2a1911]/92 border-[#d9b060] hover:bg-[#382217]'
-                    : 'bg-[#1f120c]/88 border-[#6b472b] hover:border-[#d9b060]'
-              }`}
-            >
-              <div className="flex items-center gap-2 whitespace-nowrap">
-                <span className="font-display font-bold text-xs text-[#FFF6E5]">门店配置</span>
-                <span className="font-mono-num text-[10px] text-[#C5AE92]">[C]</span>
-                {spotlightConfigBtn && (
-                  <span className="text-[10px] font-bold text-[#211208] bg-[#FDE047] px-1.5 py-0.5 rounded">
-                    指引 · 点此筹备
-                  </span>
-                )}
-              </div>
-              <div className="text-[11px] font-mono-num text-[#E8C97A] whitespace-nowrap">
-                {effectivePhase === 'PREP'
-                  ? world.pendingOrders.length > 0
-                    ? `店面·菜品·发展树 · 排期${world.pendingOrders.length}`
-                    : '店面类型 · 菜单卡 · 发展树'
-                  : world.pendingOrders.length > 0
-                    ? `在办排期 ${world.pendingOrders.length} 项`
-                    : '菜单配置 · 发展树查阅'}
-              </div>
-            </button>
-          </div>
-
-          {/* 2. Unified Grand Map Backstage / Front Hall Focus Medallion */}
-          <div className="flex items-center gap-2 pointer-events-auto">
-            <button
-              onClick={() => {
-                if (worldRef.current.activeScene === 'BACKSTAGE') {
-                  exitBackstageToDiningHall(worldRef.current);
-                  focusFrontHallCamera();
-                } else {
-                  enterBackstageScene(worldRef.current);
-                  focusBackstageCamera();
-                  if (worldRef.current.phase === 'CLOSING' && worldRef.current.onboardingStep === 7) {
-                    worldRef.current.onboardingStep = 8;
-                  }
-                }
-                forceUiSync();
-              }}
-              title="在大地图上快速聚焦「前厅大堂」或「后场7大房间」并切换操作栏 (快捷键 M)"
-              className={`w-12 h-12 rounded-full flex items-center justify-center cursor-pointer shrink-0 ${
-                world.activeScene === 'BACKSTAGE' || backstageUrgent
+        <div className="absolute top-[62px] left-3 z-40 flex flex-col items-start gap-2 pointer-events-none">
+          {/* Single Master Button that Expands All Top-Left Labels */}
+          <button
+            onClick={() => {
+              sound.playClick();
+              setLeftMenuOpen((prev) => {
+                if (prev) setShowChronicleDrawer(false);
+                return !prev;
+              });
+            }}
+            aria-expanded={leftMenuOpen}
+            title={leftMenuOpen ? '收起掌柜功能菜单' : '点击展开门店配置、主线见闻、商战经营与堂口记事'}
+            className={`pointer-events-auto hud-float backdrop-blur-md h-10 pl-1.5 pr-3 rounded-full inline-flex items-center gap-2 cursor-pointer transition-all ${
+              spotlightConfigBtn
+                ? 'border-[#FDE047] ring-2 ring-[#FDE047]/75 shadow-[0_0_20px_rgba(253,224,71,0.5)]'
+                : leftMenuOpen
+                  ? 'border-[#e8c97a] shadow-[0_10px_28px_rgba(0,0,0,0.65)]'
+                  : 'hover:border-[#e8c97a]/90'
+            }`}
+          >
+            <span
+              className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                leftMenuOpen || hasLeftMenuNotice
                   ? 'civ-medallion-gold'
-                  : 'civ-medallion text-[#81E6D9]'
-              } ${spotlightBackstageBtn ? 'ring-3 ring-[#FDE047] shadow-[0_0_20px_rgba(253,224,71,0.75)] animate-pulse' : ''}`}
-            >
-              <Building2 className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => {
-                if (worldRef.current.activeScene === 'BACKSTAGE') {
-                  exitBackstageToDiningHall(worldRef.current);
-                  focusFrontHallCamera();
-                } else {
-                  enterBackstageScene(worldRef.current);
-                  focusBackstageCamera();
-                  if (worldRef.current.phase === 'CLOSING' && worldRef.current.onboardingStep === 7) {
-                    worldRef.current.onboardingStep = 8;
-                  }
-                }
-                forceUiSync();
-              }}
-              className={`px-3 py-1.5 rounded-r-lg rounded-l-sm border text-left cursor-pointer backdrop-blur-sm transition-colors ${
-                spotlightBackstageBtn
-                  ? 'bg-[#3b2314]/95 border-[#FDE047] ring-2 ring-[#FDE047]/70 shadow-[0_0_18px_rgba(253,224,71,0.45)]'
-                  : world.activeScene === 'BACKSTAGE' || backstageUrgent
-                    ? 'bg-[#2a1911]/92 border-[#e8c97a] hover:bg-[#382217]'
-                    : 'bg-[#1f120c]/88 border-[#6b472b] hover:border-[#d9b060]'
+                  : 'civ-medallion text-[#E8C97A]'
               }`}
             >
-              <div className="flex items-center gap-2 whitespace-nowrap">
-                <span className="font-display font-bold text-xs text-[#FFF6E5]">
-                  {world.activeScene === 'BACKSTAGE' ? '聚焦前厅' : '聚焦后场'}
+              {leftMenuOpen ? (
+                <X className="w-3.5 h-3.5" />
+              ) : (
+                <LayoutGrid className="w-3.5 h-3.5" />
+              )}
+            </span>
+            <span className="font-display font-bold text-xs text-[#FFF6E5] whitespace-nowrap">
+              掌柜菜单
+            </span>
+            {spotlightConfigBtn && !leftMenuOpen && (
+              <span className="text-[10px] font-bold text-[#211208] bg-[#FDE047] px-1.5 py-0.5 rounded whitespace-nowrap">
+                指引
+              </span>
+            )}
+            {!spotlightConfigBtn &&
+              (canClaimChapter || world.activeRivalEvent || world.upgradePoints > 0) &&
+              !leftMenuOpen && (
+                <span className="text-[10px] font-bold text-[#F6DA8D] font-mono-num whitespace-nowrap">
+                  {world.activeRivalEvent
+                    ? '挑衅'
+                    : world.upgradePoints > 0
+                      ? `天赋+${world.upgradePoints}点`
+                      : '可领'}
                 </span>
-                <span className="font-mono-num text-[10px] text-[#C5AE92]">[M]</span>
-                {spotlightBackstageBtn && (
-                  <span className="text-[10px] font-bold text-[#211208] bg-[#FDE047] px-1.5 py-0.5 rounded">
-                    指引 · 去冷库补货
+              )}
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-[#D6C3A8] transition-transform duration-150 ${
+                leftMenuOpen ? 'rotate-180 text-[#F6DA8D]' : ''
+              }`}
+            />
+          </button>
+
+          {/* Expandable Frosted Floating Panel Containing All Top-Left Labels */}
+          {leftMenuOpen && (
+            <div className="pointer-events-auto flex items-start gap-2.5">
+              <div className="hud-float backdrop-blur-md rounded-xl p-2 w-[276px] flex flex-col gap-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.68)]">
+                {/* 1. Store Configuration */}
+                <button
+                  onClick={() =>
+                    handleOpenOverlay(
+                      'CONFIG',
+                      effectivePhase !== 'PREP' && world.upgradePoints > 0 ? 'TECH_TREE' : 'POLICY'
+                    )
+                  }
+                  title="打开门店配置中心：店面类型切换、菜单策略卡、天赋发展树、雇员团队 (快捷键 C)"
+                  className={`w-full px-2.5 py-2 rounded-lg border flex items-center gap-2.5 text-left cursor-pointer transition-colors ${
+                    spotlightConfigBtn
+                      ? 'bg-[#3b2314]/88 border-[#FDE047] ring-1 ring-[#FDE047]/70'
+                      : effectivePhase === 'PREP' || world.upgradePoints > 0
+                        ? 'bg-[#2a1911]/72 border-[#d9b060]/65 hover:bg-[#382217]/90 hover:border-[#f0cf80]'
+                        : 'bg-[#1f130d]/65 border-[#6b472b]/65 hover:bg-[#2d1c13]/85 hover:border-[#d9b060]/80'
+                  }`}
+                >
+                  <span
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      effectivePhase === 'PREP' || world.upgradePoints > 0
+                        ? 'civ-medallion-gold'
+                        : 'civ-medallion text-[#E8C97A]'
+                    }`}
+                  >
+                    <Store className="w-4 h-4" />
                   </span>
-                )}
-              </div>
-              <div className="text-[11px] font-mono-num text-[#F6DA8D] whitespace-nowrap">
-                {world.activeScene === 'BACKSTAGE'
-                  ? '后场控制中 · 点前厅随时切回'
-                  : effectivePhase === 'CLOSING' && lowWarehouseDishesCount > 0
-                    ? `✦ 闭店冷链补货 (${lowWarehouseDishesCount}菜缺库)`
-                    : availableStaffQuests.length > 0
-                      ? `✦ 特殊店员剧情 (${availableStaffQuests.length})`
-                      : world.restroomCleanliness < 50
-                        ? '卫生间待保洁!'
-                        : world.equipmentHealth < 50
-                          ? '设备间待检修!'
-                          : '前场后场同图 · 点房间直达'}
-              </div>
-            </button>
-          </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <span className="font-display font-bold text-xs text-[#FFF6E5]">门店配置</span>
+                      <span className="font-mono-num text-[10px] text-[#C5AE92]">[C]</span>
+                      {spotlightConfigBtn ? (
+                        <span className="text-[10px] font-bold text-[#211208] bg-[#FDE047] px-1.5 py-0.5 rounded">
+                          指引 · 点此筹备
+                        </span>
+                      ) : world.upgradePoints > 0 ? (
+                        <span className="text-[10px] font-bold font-mono-num text-[#211208] bg-[#E8C97A] px-1.5 py-0.5 rounded">
+                          {world.upgradePoints}点可用
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="text-[11px] font-mono-num text-[#E8C97A] truncate mt-0.5">
+                      {world.upgradePoints > 0
+                        ? `天赋树待加点 (${world.upgradePoints}点) · 店面与菜单`
+                        : effectivePhase === 'PREP'
+                          ? world.pendingOrders.length > 0
+                            ? `店面·菜品·天赋树 · 排期${world.pendingOrders.length}`
+                            : '店面类型 · 菜单卡 · 天赋树'
+                          : world.pendingOrders.length > 0
+                            ? `在办排期 ${world.pendingOrders.length} 项`
+                            : '菜单配置 · 天赋树加点'}
+                    </div>
+                  </div>
+                </button>
 
-          {/* 3. Main Story & Discovered Encounters Medallion */}
-          <div className="flex items-center gap-2 pointer-events-auto">
-            <button
-              onClick={() => handleOpenOverlay('STORY')}
-              title="查看创业主线、特殊店员个人线与已发现奇遇"
-              className={`w-12 h-12 rounded-full flex items-center justify-center cursor-pointer shrink-0 ${
-                canClaimChapter ? 'civ-medallion-gold' : 'civ-medallion text-[#F6DA8D]'
-              }`}
-            >
-              <BookOpen className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => handleOpenOverlay('STORY')}
-              className={`px-3 py-1.5 rounded-r-lg rounded-l-sm border text-left cursor-pointer backdrop-blur-sm transition-colors ${
-                canClaimChapter
-                  ? 'bg-[#2a1911]/92 border-[#e8c97a] hover:bg-[#382217]'
-                  : 'bg-[#1f120c]/88 border-[#6b472b] hover:border-[#d9b060]'
-              }`}
-            >
-              <div className="font-display font-bold text-xs text-[#FFF6E5] whitespace-nowrap">
-                主线见闻
-              </div>
-              <div className="text-[11px] text-[#D6C3A8] whitespace-nowrap">
-                {world.mainStoryCompleted ? '无尽传奇 · 可重温结局' : `第${world.mainChapter}章 · ${chapterDef.title}`}
-              </div>
-            </button>
-          </div>
+                {/* 2. Main Story & Discovered Encounters */}
+                <button
+                  onClick={() => handleOpenOverlay('STORY')}
+                  title="查看创业主线、特殊店员个人线与已发现奇遇"
+                  className={`w-full px-2.5 py-2 rounded-lg border flex items-center gap-2.5 text-left cursor-pointer transition-colors ${
+                    canClaimChapter
+                      ? 'bg-[#2a1911]/78 border-[#e8c97a]/75 hover:bg-[#382217]/90'
+                      : 'bg-[#1f130d]/65 border-[#6b472b]/65 hover:bg-[#2d1c13]/85 hover:border-[#d9b060]/80'
+                  }`}
+                >
+                  <span
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      canClaimChapter ? 'civ-medallion-gold' : 'civ-medallion text-[#F6DA8D]'
+                    }`}
+                  >
+                    <BookOpen className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="font-display font-bold text-xs text-[#FFF6E5] whitespace-nowrap">
+                        主线见闻
+                      </span>
+                      {canClaimChapter && (
+                        <span className="text-[10px] font-bold text-[#211208] bg-[#E8C97A] px-1.5 py-0.5 rounded whitespace-nowrap">
+                          可领赏
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-[#D6C3A8] truncate mt-0.5">
+                      {world.mainStoryCompleted
+                        ? '无尽传奇 · 可重温结局'
+                        : `第${world.mainChapter}章 · ${chapterDef.title}`}
+                    </div>
+                  </div>
+                </button>
 
-          {/* 4. Business Hub: Marketing, Loans, Decor, City Ranking & Analytics Medallion */}
-          <div className="flex items-center gap-2 pointer-events-auto">
-            <button
-              onClick={() => handleOpenOverlay('BUSINESS')}
-              title="打开商战经营总台：营销推广、小微贷款、前厅装潢定制、全城榜单与7日复盘报表 (快捷键 B)"
-              className={`w-12 h-12 rounded-full flex items-center justify-center cursor-pointer shrink-0 ${
-                world.activeRivalEvent || world.holiday !== 'NONE'
-                  ? 'civ-medallion-gold'
-                  : 'civ-medallion text-[#6EE7B7]'
-              }`}
-            >
-              <TrendingUp className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => handleOpenOverlay('BUSINESS')}
-              className={`px-3 py-1.5 rounded-r-lg rounded-l-sm border text-left cursor-pointer backdrop-blur-sm transition-colors ${
-                world.activeRivalEvent
-                  ? 'bg-[#2c1313]/92 border-[#f87171] hover:bg-[#3a1818]'
-                  : 'bg-[#1f120c]/88 border-[#6b472b] hover:border-[#d9b060]'
-              }`}
-            >
-              <div className="flex items-center gap-2 whitespace-nowrap">
-                <span className="font-display font-bold text-xs text-[#FFF6E5]">商战经营</span>
-                <span className="font-mono-num text-[10px] text-[#C5AE92]">[B]</span>
-              </div>
-              <div className="text-[11px] font-mono-num text-[#86EFAC] whitespace-nowrap">
-                {world.activeRivalEvent
-                  ? `⚔ 对手挑衅 · 全城#${cityRanking.playerRank}`
-                  : world.activeMarketing
-                    ? `📣 推广中 · 全城#${cityRanking.playerRank}`
-                    : `全城#${cityRanking.playerRank} · ${todayWeatherDef.shortName} · 装潢/报表`}
-              </div>
-            </button>
-          </div>
+                {/* 3. Business Hub */}
+                <button
+                  onClick={() => handleOpenOverlay('BUSINESS')}
+                  title="打开商战经营总台：营销推广、小微贷款、前厅装潢定制、全城榜单与7日复盘报表 (快捷键 B)"
+                  className={`w-full px-2.5 py-2 rounded-lg border flex items-center gap-2.5 text-left cursor-pointer transition-colors ${
+                    world.activeRivalEvent
+                      ? 'bg-[#2f1414]/82 border-[#f87171]/80 hover:bg-[#3d1919]/92'
+                      : 'bg-[#1f130d]/65 border-[#6b472b]/65 hover:bg-[#2d1c13]/85 hover:border-[#d9b060]/80'
+                  }`}
+                >
+                  <span
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      world.activeRivalEvent || world.holiday !== 'NONE'
+                        ? 'civ-medallion-gold'
+                        : 'civ-medallion text-[#6EE7B7]'
+                    }`}
+                  >
+                    <TrendingUp className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <span className="font-display font-bold text-xs text-[#FFF6E5]">商战经营</span>
+                      <span className="font-mono-num text-[10px] text-[#C5AE92]">[B]</span>
+                    </div>
+                    <div className="text-[11px] font-mono-num text-[#86EFAC] truncate mt-0.5">
+                      {world.activeRivalEvent
+                        ? `⚔ 对手挑衅 · 全城#${cityRanking.playerRank}`
+                        : world.activeMarketing
+                          ? `推广中 · 全城#${cityRanking.playerRank}`
+                          : `全城#${cityRanking.playerRank} · ${todayWeatherDef.shortName} · 装潢/报表`}
+                    </div>
+                  </div>
+                </button>
 
-          {/* 5. Chronicle / Alerts / Penalty Redline Toggle Medallion */}
-          <div className="flex items-center gap-2 pointer-events-auto">
-            <button
-              onClick={() => {
-                sound.playClick();
-                setShowChronicleDrawer((v) => !v);
-              }}
-              title="展开/收起堂口记事、排期与惩罚红线"
-              className={`w-12 h-12 rounded-full flex items-center justify-center cursor-pointer shrink-0 ${
-                showChronicleDrawer
-                  ? 'civ-medallion border-[#f4d689] text-[#FFF6E5]'
-                  : 'civ-medallion text-[#E5C9A8]'
-              }`}
-            >
-              <ScrollText className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => {
-                sound.playClick();
-                setShowChronicleDrawer((v) => !v);
-              }}
-              className="px-3 py-1.5 rounded-r-lg rounded-l-sm border bg-[#1f120c]/88 border-[#6b472b] hover:border-[#d9b060] text-left cursor-pointer backdrop-blur-sm transition-colors"
-            >
-              <div className="font-display font-bold text-xs text-[#FFF6E5] whitespace-nowrap">
-                堂口记事
+                {/* 4. Chronicle / Alerts / Penalty Redline */}
+                <button
+                  onClick={() => {
+                    sound.playClick();
+                    setShowChronicleDrawer((v) => !v);
+                  }}
+                  title="展开/收起堂口记事、排期与惩罚红线"
+                  className={`w-full px-2.5 py-2 rounded-lg border flex items-center gap-2.5 text-left cursor-pointer transition-colors ${
+                    showChronicleDrawer
+                      ? 'bg-[#2e1c13]/88 border-[#f4d689]/85'
+                      : 'bg-[#1f130d]/65 border-[#6b472b]/65 hover:bg-[#2d1c13]/85 hover:border-[#d9b060]/80'
+                  }`}
+                >
+                  <span
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      showChronicleDrawer
+                        ? 'civ-medallion border-[#f4d689] text-[#FFF6E5]'
+                        : 'civ-medallion text-[#E5C9A8]'
+                    }`}
+                  >
+                    <ScrollText className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="font-display font-bold text-xs text-[#FFF6E5] whitespace-nowrap">
+                        堂口记事
+                      </span>
+                      <span className="text-[10px] text-[#C5AE92] whitespace-nowrap">
+                        {showChronicleDrawer ? '收起' : '查看'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono-num text-[#D6C3A8] truncate mt-0.5">
+                      今日已迎 {world.todayStats.guestsServed} 桌 · 违规 {world.penaltyStrikes}/{world.maxPenaltyStrikes}
+                    </div>
+                  </div>
+                </button>
               </div>
-              <div className="text-[11px] font-mono-num text-[#D6C3A8] whitespace-nowrap">
-                今日已迎 {world.todayStats.guestsServed} 桌
-              </div>
-            </button>
-          </div>
 
-          {/* Compact Collapsible World Tracker / Chronicle Drawer */}
-          {showChronicleDrawer && (
-            <div className="pointer-events-auto mt-1 w-[340px] max-h-[52vh] game-panel rounded-xl overflow-hidden flex flex-col">
+              {/* Compact Collapsible World Tracker / Chronicle Drawer Beside Menu */}
+              {showChronicleDrawer && (
+                <div className="w-[332px] max-w-[calc(100vw-310px)] max-h-[54vh] hud-float backdrop-blur-md rounded-xl overflow-hidden flex flex-col">
               <div className="px-3.5 py-2.5 bg-[#24150e] border-b border-[#6b472b] flex items-center justify-between">
                 <span className="font-display text-xs font-bold text-[#E8C97A]">
                   堂口动态 · 排期与红线
@@ -1514,6 +1582,8 @@ export default function App() {
               </div>
             </div>
           )}
+            </div>
+          )}
         </div>
 
         {/* DAY-1 FULL 3-STAGE INTERACTIVE ONBOARDING GUIDE */}
@@ -1560,13 +1630,13 @@ export default function App() {
         {nearFailure.level !== 'NONE' && (
           <>
             <div
-              className={`pointer-events-none fixed inset-0 z-30 ${
+              className={`pointer-events-none fixed inset-0 z-20 ${
                 nearFailure.level === 'CRITICAL'
                   ? 'danger-vignette-critical'
                   : 'danger-vignette-warning'
               }`}
             />
-            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-30 max-w-[620px] w-[92vw] sm:w-max">
+            <div className="pointer-events-none absolute top-[62px] left-1/2 -translate-x-1/2 z-40 max-w-[620px] w-[92vw] sm:w-max">
               <div
                 className={`rounded-xl px-4 py-2 border-2 shadow-2xl backdrop-blur-md flex items-center gap-2.5 ${
                   nearFailure.level === 'CRITICAL'
@@ -1604,7 +1674,7 @@ export default function App() {
             BOTTOM HUD: DINING HALL HOTBAR OR WALKABLE BACKSTAGE DOCK
             ============================================================ */}
         {world.activeScene === 'DINING_HALL' ? (
-          <div className="absolute bottom-3 left-3.5 z-20 max-w-[calc(100vw-240px)] pointer-events-none">
+          <div className="absolute bottom-3 left-3.5 z-30 max-w-[calc(100vw-240px)] pointer-events-none">
             {spotlightHotbar && (
               <div className="mb-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#FDE047] text-[#211208] text-[11px] font-black shadow-lg">
                 <span>
@@ -1617,7 +1687,7 @@ export default function App() {
               </div>
             )}
             <div
-              className={`pointer-events-auto game-panel rounded-xl px-3 py-2 flex flex-col gap-1.5 ${
+              className={`pointer-events-auto hud-float backdrop-blur-md rounded-xl px-3 py-2 flex flex-col gap-1.5 ${
                 spotlightHotbar
                   ? 'border-2 border-[#FDE047] shadow-[0_0_24px_rgba(253,224,71,0.4)]'
                   : ''
@@ -1731,26 +1801,30 @@ export default function App() {
         {/* ============================================================
             BOTTOM-RIGHT ICONIC CIRCULAR PHASE & ACTION ORB
             ============================================================ */}
-        <div className="absolute bottom-3.5 right-4 z-20 flex items-end gap-2.5 pointer-events-none">
+        <div className="absolute bottom-3.5 right-4 z-30 flex items-end gap-2.5 pointer-events-none">
           {/* Quick Open Config Dock beside the Turn Orb during PREP */}
           {effectivePhase === 'PREP' && world.activeScene === 'DINING_HALL' && (
             <button
               onClick={() => handleOpenOverlay('CONFIG', 'POLICY')}
-              className="pointer-events-auto mb-3 game-btn-wood px-4 py-2.5 rounded-lg border-[#b6924d] text-left cursor-pointer shadow-xl hidden sm:block"
+              className="pointer-events-auto mb-3 hud-float backdrop-blur-md hover:border-[#e8c97a] px-4 py-2 rounded-lg text-left cursor-pointer hidden sm:block transition-colors"
             >
               <div className="flex items-center gap-1.5 font-display font-bold text-xs text-[#E8C97A] whitespace-nowrap">
                 <Store className="w-3.5 h-3.5" />
                 门店配置中心
               </div>
               <div className="text-[11px] text-[#DFCDB6] mt-0.5 whitespace-nowrap">
-                店面类型 · 菜单卡 · 发展树
-                {world.pendingOrders.length > 0 ? ` (${world.pendingOrders.length}排期)` : ''}
+                店面类型 · 菜单卡 · 天赋树
+                {world.upgradePoints > 0
+                  ? ` (${world.upgradePoints}点待用)`
+                  : world.pendingOrders.length > 0
+                    ? ` (${world.pendingOrders.length}排期)`
+                    : ''}
               </div>
             </button>
           )}
 
           {/* Unified Grand Map Camera Preset & Zoom Controls */}
-          <div className="pointer-events-auto mb-3 flex items-center gap-1 bg-[#18100c]/92 border border-[#7c5d37] rounded-lg p-1 shadow-xl">
+          <div className="pointer-events-auto mb-3 flex items-center gap-1 hud-float backdrop-blur-md rounded-lg p-1">
             <button
               onClick={() => {
                 sound.playClick();
@@ -1785,13 +1859,23 @@ export default function App() {
                 if (worldRef.current.activeScene !== 'BACKSTAGE') {
                   enterBackstageScene(worldRef.current);
                 }
+                if (worldRef.current.phase === 'CLOSING' && worldRef.current.onboardingStep === 7) {
+                  worldRef.current.onboardingStep = 8;
+                }
                 focusBackstageCamera();
                 forceUiSync();
               }}
-              title="推进镜头聚焦后场 7 大功能区"
-              className="px-2 py-1 rounded text-[11px] font-semibold text-[#99F6E4] hover:text-[#CCFBF1] hover:bg-[#192c2d] cursor-pointer whitespace-nowrap"
+              title="推进镜头聚焦后场 7 大功能区 (快捷键 M)"
+              className={`px-2 py-1 rounded text-[11px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${
+                spotlightBackstageBtn
+                  ? 'bg-[#FDE047] text-[#211208] font-bold shadow-[0_0_14px_rgba(253,224,71,0.75)]'
+                  : backstageUrgent
+                    ? 'text-[#F6DA8D] bg-[#362214] border border-[#d9b060]/80 hover:bg-[#442b1a]'
+                    : 'text-[#99F6E4] hover:text-[#CCFBF1] hover:bg-[#192c2d]'
+              }`}
             >
               后场
+              {effectivePhase === 'CLOSING' && lowWarehouseDishesCount > 0 ? `(${lowWarehouseDishesCount}缺)` : ''}
             </button>
           </div>
 
@@ -1922,9 +2006,23 @@ export default function App() {
 
         {/* SYSTEM MENU MODAL (triggered by top-right Home icon button or Escape) */}
         {activeOverlay === 'SYSTEM_MENU' && (
-          <div className="absolute inset-0 z-30 bg-[#0d0604]/76 backdrop-blur-[2px] flex items-center justify-center p-4">
-            <div className="game-panel rounded-xl px-8 py-7 text-center space-y-4 max-w-sm w-full border border-[#b6924d]">
-              <h2 className="font-display text-2xl font-bold text-[#FFF6E5]">系统菜单</h2>
+          <div
+            onClick={() => {
+              sound.playClick();
+              setActiveOverlay(null);
+            }}
+            className="absolute inset-0 z-50 bg-[#0c0604]/76 backdrop-blur-[4px] flex items-center justify-center p-4"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="game-panel rounded-xl px-7 py-6 text-center space-y-4 max-w-sm w-full border border-[#c9a45c]/75"
+            >
+              <div>
+                <h2 className="font-display text-2xl font-bold text-[#FFF6E5]">系统菜单</h2>
+                <p className="text-[11px] text-[#C5AE92] mt-1 font-mono-num">
+                  第 {world.day} 天 · {charDef.name} · 资金 ¥{Math.round(world.cash).toLocaleString()}
+                </p>
+              </div>
               <div className="flex flex-col gap-2.5 pt-1">
                 <button
                   onClick={() => {
@@ -1933,13 +2031,13 @@ export default function App() {
                   }}
                   className="game-btn-primary w-full py-2.5 rounded-lg font-display font-bold text-sm cursor-pointer"
                 >
-                  继续经营
+                  继续经营 [Esc]
                 </button>
                 <button
                   onClick={() => handleOpenOverlay('CONFIG', 'POLICY')}
                   className="game-btn-wood w-full py-2.5 rounded-lg font-semibold text-xs text-[#E8C97A] cursor-pointer"
                 >
-                  门店配置中心
+                  门店配置中心 [C]
                 </button>
                 <button
                   onClick={() => handleOpenOverlay('SAVE_LOAD')}
@@ -1951,7 +2049,7 @@ export default function App() {
                   onClick={() => handleOpenOverlay('SETTINGS')}
                   className="game-btn-wood w-full py-2.5 rounded-lg font-semibold text-xs cursor-pointer"
                 >
-                  游戏设置
+                  画面与音效设置
                 </button>
                 <button
                   onClick={handleBackToMainMenu}
@@ -1959,6 +2057,9 @@ export default function App() {
                 >
                   返回主菜单
                 </button>
+              </div>
+              <div className="pt-2 border-t border-[#5a3b24]/65 text-[10px] text-[#B89E82] leading-relaxed">
+                WASD 移动 · 1–7 快捷调度 · M 切后场 · B 商战 · P 暂停 · 滚轮缩放 · 右键拖拽视角
               </div>
             </div>
           </div>
@@ -1991,6 +2092,18 @@ export default function App() {
           }}
           onAssignZonePad={(padId, zoneId) => {
             assignZoneToPad(worldRef.current, padId, zoneId);
+            forceUiSync();
+          }}
+          onPurchaseZonePad={(padId) => {
+            purchaseZonePad(worldRef.current, padId);
+            forceUiSync();
+          }}
+          onBuildBuffetZone={(zoneId) => {
+            unlockBuffetZone(worldRef.current, zoneId);
+            forceUiSync();
+          }}
+          onPurchaseRegime={(regimeId) => {
+            purchaseDiningRegime(worldRef.current, regimeId);
             forceUiSync();
           }}
           onSwitchRegime={(regimeId) => {

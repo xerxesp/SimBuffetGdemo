@@ -1,4 +1,5 @@
 import {
+  applyAdaptiveFrontHallLayout,
   BROTH_CATALOG,
   FRONT_HALL_ZONE_PADS,
   getBuffetZoneDef,
@@ -355,7 +356,7 @@ export function isCardUnlockedAndAvailable(
     if (!isBuffetZoneUnlocked(world, def.zone)) {
       return {
         ok: false,
-        reason: `需先在门店发展树扩建「${getBuffetZoneDef(def.zone).name}」后方可上架`,
+        reason: `需先在天赋树解锁并于开店前在「前厅区域布局」建成「${getBuffetZoneDef(def.zone).name}」后方可上架`,
       };
     }
     if (!isAvailableInSeason(def.seasons, world.season)) {
@@ -484,27 +485,7 @@ export function autoSlotPolicyCard(world: GameWorld, cardId: string): boolean {
   return false;
 }
 
-export function switchDiningRegime(world: GameWorld, targetRegimeId: RegimeId): boolean {
-  if (world.phase !== 'PREP') {
-    pushPolicyAlert(world, '切换店面类型仅限在「开店前准备」阶段执行！', 'warning');
-    return false;
-  }
-  if (!world.unlockedRegimeIds.includes(targetRegimeId)) {
-    pushPolicyAlert(world, '该店面类型尚未在「门店发展树」中研发解锁！', 'warning');
-    return false;
-  }
-  if (world.activeRegimeId === targetRegimeId) {
-    return false;
-  }
-  if (world.regimeSwitchCooldown > 0) {
-    pushPolicyAlert(
-      world,
-      `店面类型切换冷却中！还需等待 ${world.regimeSwitchCooldown} 天才可再次切换。`,
-      'warning'
-    );
-    return false;
-  }
-
+function applyRegimeSlotMigration(world: GameWorld, targetRegimeId: RegimeId) {
   const prevCards = world.policySlots
     .map((s) => s.cardId)
     .filter((id): id is string => Boolean(id));
@@ -537,9 +518,110 @@ export function switchDiningRegime(world: GameWorld, targetRegimeId: RegimeId): 
 
   world.activeRegimeId = targetRegimeId;
   world.policySlots = nextSlots;
+  syncActiveMenuFromPolicySlots(world, true);
+}
+
+export function purchaseDiningRegime(world: GameWorld, targetRegimeId: RegimeId): boolean {
+  if (world.phase !== 'PREP') {
+    pushPolicyAlert(world, '购置装潢新店面类型仅限在「开店前准备」阶段下单！', 'warning');
+    return false;
+  }
+  if (!world.unlockedRegimeIds.includes(targetRegimeId)) {
+    pushPolicyAlert(world, '该店面类型蓝图尚未在「天赋树」中研发解锁！', 'warning');
+    return false;
+  }
+  if (world.purchasedRegimeIds.includes(targetRegimeId)) {
+    return switchDiningRegime(world, targetRegimeId);
+  }
+  if (world.pendingOrders.some((o) => o.type === 'PURCHASE_REGIME' && o.targetId === targetRegimeId)) {
+    pushPolicyAlert(world, '该店面类型正在装潢施工中，请耐心等待竣工！', 'info');
+    return false;
+  }
+
+  const def = getRegimeDef(targetRegimeId);
+  if (world.cash < def.purchaseCost) {
+    pushPolicyAlert(
+      world,
+      `资金不足！购置装潢「${def.name}」需要 ¥${def.purchaseCost}（当前余额 ¥${Math.floor(world.cash)}）。`,
+      'warning'
+    );
+    return false;
+  }
+
+  world.cash -= def.purchaseCost;
+
+  if (def.setupDays <= 0) {
+    const msg = applyCompletedRegimePurchase(world, targetRegimeId);
+    sound.playStoryFanfare();
+    if (msg) pushPolicyAlert(world, msg, 'success');
+    return true;
+  }
+
+  world.pendingOrders.push({
+    id: nextPolicyUid('ord_reg'),
+    type: 'PURCHASE_REGIME',
+    title: `店面装潢 · ${def.name}`,
+    detail: `升级配置「${def.name}（基价 ¥${def.baseTicketPrice} · ${def.slots.length}配置位）」施工需 ${def.setupDays} 天`,
+    daysRemaining: def.setupDays,
+    totalDays: def.setupDays,
+    cost: def.purchaseCost,
+    targetId: targetRegimeId,
+  });
+
+  sound.playHireStamp();
+  pushPolicyAlert(
+    world,
+    `已出资 ¥${def.purchaseCost} 启动「${def.name}」店面装潢工程，预计 ${def.setupDays} 天后开店前竣工启用！`,
+    'success'
+  );
+  return true;
+}
+
+export function applyCompletedRegimePurchase(
+  world: GameWorld,
+  targetRegimeId: RegimeId
+): string | null {
+  const def = getRegimeDef(targetRegimeId);
+  if (!world.purchasedRegimeIds.includes(targetRegimeId)) {
+    world.purchasedRegimeIds.push(targetRegimeId);
+  }
+  applyRegimeSlotMigration(world, targetRegimeId);
+  return `店面类型「${def.name}（基价 ¥${def.baseTicketPrice} · ${def.slots.length} 配置位）」装潢竣工并已自动启用！可在开店前调整菜单配置位。`;
+}
+
+export function switchDiningRegime(world: GameWorld, targetRegimeId: RegimeId): boolean {
+  if (world.phase !== 'PREP') {
+    pushPolicyAlert(world, '切换店面类型仅限在「开店前准备」阶段执行！', 'warning');
+    return false;
+  }
+  if (!world.unlockedRegimeIds.includes(targetRegimeId)) {
+    pushPolicyAlert(world, '该店面类型尚未在「天赋树」中研发解锁！', 'warning');
+    return false;
+  }
+  const nextRegime = getRegimeDef(targetRegimeId);
+  if (!world.purchasedRegimeIds.includes(targetRegimeId)) {
+    pushPolicyAlert(
+      world,
+      `店面类型「${nextRegime.name}」已解锁蓝图，但还需在开店前出资 ¥${nextRegime.purchaseCost}（${nextRegime.setupDays}天）购置装潢后才可启用！`,
+      'warning'
+    );
+    return false;
+  }
+  if (world.activeRegimeId === targetRegimeId) {
+    return false;
+  }
+  if (world.regimeSwitchCooldown > 0) {
+    pushPolicyAlert(
+      world,
+      `店面类型切换冷却中！还需等待 ${world.regimeSwitchCooldown} 天才可再次切换。`,
+      'warning'
+    );
+    return false;
+  }
+
+  applyRegimeSlotMigration(world, targetRegimeId);
   world.regimeSwitchCooldown = REGIME_SWITCH_COOLDOWN_DAYS;
 
-  syncActiveMenuFromPolicySlots(world, true);
   sound.playStoryFanfare();
   pushPolicyAlert(
     world,
@@ -590,7 +672,7 @@ export function getTechNodeStatus(
 
 export function startTechNodeResearch(world: GameWorld, nodeId: string): boolean {
   if (world.phase !== 'PREP') {
-    pushPolicyAlert(world, '研发解锁发展树节点仅限在「开店前准备」阶段排期！', 'warning');
+    pushPolicyAlert(world, '天赋树研发与扩建筹备仅限在「开店前准备」阶段启动！', 'warning');
     return false;
   }
   const node = getTechNodeDef(nodeId);
@@ -602,24 +684,46 @@ export function startTechNodeResearch(world: GameWorld, nodeId: string): boolean
     return false;
   }
 
-  if (world.cash < node.cost) {
+  const ptCost = Math.max(0, node.pointCost ?? 1);
+  if (world.upgradePoints < ptCost) {
     pushPolicyAlert(
       world,
-      `资金不足！筹建「${node.title}」需要投入 ¥${node.cost}。`,
+      `升级点不足！研发「${node.title}」需要消耗 ${ptCost} 升级点（当前可用 ${world.upgradePoints} 点，继续营业赚取营收即可升级获得）。`,
       'warning'
     );
     return false;
   }
 
+  if (world.cash < node.cost) {
+    pushPolicyAlert(
+      world,
+      `资金不足！研发「${node.title}」除 ${ptCost} 升级点外，还需投入资金 ¥${node.cost}（当前余额 ¥${Math.floor(world.cash)}）。`,
+      'warning'
+    );
+    return false;
+  }
+
+  world.upgradePoints -= ptCost;
   world.cash -= node.cost;
-  const days = Math.max(1, node.researchDays);
+
+  if (node.researchDays <= 0) {
+    const summary = applyCompletedTechNode(world, node.id);
+    sound.playHireStamp();
+    pushPolicyAlert(
+      world,
+      `已投入 ${ptCost} 升级点与 ¥${node.cost} 解锁天赋「${node.title}」！${summary ?? ''}`,
+      'success'
+    );
+    return true;
+  }
+
   world.pendingOrders.push({
-    id: nextPolicyUid('tech_ord'),
+    id: nextPolicyUid('ord_tech'),
     type: 'UNLOCK_TECH_NODE',
-    title: `门店研发 · ${node.title}`,
-    detail: `${node.shortDesc} · 需等待 ${days} 天后开店前生效`,
-    daysRemaining: days,
-    totalDays: days,
+    title: `天赋研发 · ${node.title}`,
+    detail: `${node.shortDesc}（筹建耗时 ${node.researchDays} 天）`,
+    daysRemaining: node.researchDays,
+    totalDays: node.researchDays,
     cost: node.cost,
     targetId: node.id,
   });
@@ -627,16 +731,16 @@ export function startTechNodeResearch(world: GameWorld, nodeId: string): boolean
   sound.playHireStamp();
   pushPolicyAlert(
     world,
-    `已投入 ¥${node.cost} 启动「${node.title}」筹建研发，预计 ${days} 天后开店前完成解锁！`,
+    `已消耗 ${ptCost} 升级点 + ¥${node.cost} 启动「${node.title}」研发筹建，预计 ${node.researchDays} 天后开店前竣工生效！`,
     'success'
   );
   return true;
 }
 
-function unlockTablesTo(world: GameWorld, targetCount: number) {
+function unlockTablesTo(world: GameWorld, targetCount: number, extraDishes = 4) {
   if (targetCount <= world.tableLimit) return;
   const prevLimit = world.tableLimit;
-  world.tableLimit = targetCount;
+  world.tableLimit = Math.min(world.tables.length, targetCount);
   const newlyUnlocked = TABLE_UNLOCK_ORDER.slice(prevLimit, world.tableLimit);
   for (const idx of newlyUnlocked) {
     const table = world.tables[idx];
@@ -644,8 +748,11 @@ function unlockTablesTo(world: GameWorld, targetCount: number) {
       table.status = 'NEEDS_TABLEWARE';
     }
   }
-  world.dishwareMax += 2;
-  world.cleanDishes += 2;
+  applyAdaptiveFrontHallLayout(world);
+  if (extraDishes > 0) {
+    world.dishwareMax += extraDishes;
+    world.cleanDishes += extraDishes;
+  }
 }
 
 function upgradeShopLevelTo(world: GameWorld, targetLv: number) {
@@ -653,14 +760,11 @@ function upgradeShopLevelTo(world: GameWorld, targetLv: number) {
   const prevLv = world.shopLevel;
   const diff = targetLv - prevLv;
   world.shopLevel = Math.min(5, targetLv);
-  world.rawIngredientsMax += 15 * diff;
-  world.cookedMaxStock += 2 * diff;
+  world.rawIngredientsMax += 18 * diff;
+  world.cookedMaxStock += 3 * diff;
   ensureZonePadAssignments(world);
+  applyAdaptiveFrontHallLayout(world);
 
-  // Auto-place any previously unlocked but unplaced buffet zone onto the newly expanded pads
-  for (const zId of world.unlockedZones) {
-    autoPlaceNewlyUnlockedZone(world, zId);
-  }
   const exp = getFrontHallBounds(world.shopLevel);
   const newPads = FRONT_HALL_ZONE_PADS.filter(
     (p) => p.minShopLevel > prevLv && p.minShopLevel <= world.shopLevel
@@ -669,7 +773,7 @@ function upgradeShopLevelTo(world: GameWorld, targetLv: number) {
     const names = newPads.map((p) => `【${p.label}】`).join('、');
     pushPolicyAlert(
       world,
-      `【地图自动扩建 · ${exp.wingTitle}】店铺升至 Lv.${world.shopLevel}，前厅面积扩大并新开放区域位 ${names}！可在「门店配置 → 区域布局」或点击空区域位自由指定菜品区。`,
+      `【地图扩建 · ${exp.wingTitle}】店铺升至 Lv.${world.shopLevel}，前厅版图扩大并解锁扩建区位 ${names} 的购置资格！请于开店前前往「前厅区域布局」出资购置施工。`,
       'success'
     );
   }
@@ -696,11 +800,8 @@ export function applyCompletedTechNode(world: GameWorld, nodeId: string): string
   const addRegime = (id: RegimeId) => {
     if (!world.unlockedRegimeIds.includes(id)) world.unlockedRegimeIds.push(id);
   };
-  const addZone = (z: GameWorld['unlockedZones'][number]) => {
-    if (!world.unlockedZones.includes(z)) world.unlockedZones.push(z);
-  };
 
-  let summary = `门店研发「${node.title}」竣工解锁！`;
+  let summary = `天赋研发「${node.title}」竣工解锁！`;
 
   switch (node.id) {
     case 'tech_dish_oysters':
@@ -714,28 +815,29 @@ export function applyCompletedTechNode(world: GameWorld, nodeId: string): string
       summary = '「春笋椰青清锅」解锁！已加入锅底配置卡库。';
       break;
     case 'tech_hw_tables6':
-      unlockTablesTo(world, 6);
-      summary = '大厅扩建竣工！现开放至 6 张雅座（附赠 2 套净盘）。';
+      unlockTablesTo(world, 12, 6);
+      summary = '大厅扩建竣工！现开放至 12 张雅座（附赠 6 套高温消毒净盘）。';
       break;
-    case 'tech_regime_bistro':
+    case 'tech_zone_dimsum':
+      addDish('dimsum_shrimp_dumpling');
+      addDish('steamed_turbot');
+      world.reputation = Math.min(100, world.reputation + 3);
+      summary = '「广式蒸笼点心区」蓝图与虾饺皇/清蒸多宝鱼菜品卡已解锁！请于开店前前往「前厅区域布局」购置建设该分区并配置落位。';
+      break;
+    case 'tech_regime_bistro': {
       addRegime('harbor_bistro');
       upgradeShopLevelTo(world, 2);
       addOps('ops_fresh_qc');
       world.reputation = Math.min(100, world.reputation + 4);
-      summary = '店面类型「海港鲜味坊（¥198 · 5配置位）」解锁！店铺升至 Lv.2（编制5人）并获「码头严选品控」策略卡！';
-      break;
-    case 'tech_zone_drinks': {
-      addZone('drinks_dessert');
-      addDish('durian_craft');
-      const placed = autoPlaceNewlyUnlockedZone(world, 'drinks_dessert');
-      world.reputation = Math.min(100, world.reputation + 3);
-      summary = `前场「酒水饮料/甜品水果区」研发完成！${
-        placed
-          ? `已自动落位至【${placed.label}】，可在「区域布局」自由调整。`
-          : '请升级店铺扩建更多区域位或在「区域布局」中替换位置。'
-      }`;
+      const rDef = getRegimeDef('harbor_bistro');
+      summary = `店面蓝图「${rDef.name}（¥${rDef.baseTicketPrice} · 5配置位）」解锁并升至 Lv.2（编制10人）！请于开店前在「门店配置」出资 ¥${rDef.purchaseCost}（${rDef.setupDays}天）购置装潢启用。`;
       break;
     }
+    case 'tech_zone_drinks':
+      addDish('durian_craft');
+      world.reputation = Math.min(100, world.reputation + 3);
+      summary = '「酒水甜品水果区」蓝图与金枕榴莲甜品台卡已解锁！请于开店前前往「前厅区域布局」出资购置建设该分区。';
+      break;
     case 'tech_broth_maw':
       addBroth('golden_maw');
       addOps('ops_iron_flame');
@@ -743,78 +845,71 @@ export function applyCompletedTechNode(world: GameWorld, nodeId: string): string
       summary = '「金汤花胶鸡锅」与经营策略卡「明档铁板烟火」研发完成，已收入卡库！';
       break;
     case 'tech_hw_dish_buffet1': {
-      const diff = Math.max(0, 18 - world.dishwareMax);
-      world.dishwareMax = Math.max(world.dishwareMax, 18);
+      const diff = Math.max(0, 28 - world.dishwareMax);
+      world.dishwareMax = Math.max(world.dishwareMax, 28);
       world.cleanDishes += diff;
-      world.buffetCapacityBonus += 2;
-      summary = '商用高温消毒柜（18套）与深冷冰台（每格+2份）安装竣工！';
+      world.buffetCapacityBonus += 3;
+      summary = '商用高温消毒柜（28套）与深冷冰台（每格+3份）安装竣工！';
       break;
     }
-    case 'tech_zone_teppan': {
-      addZone('teppan_bbq');
+    case 'tech_zone_teppan':
       addDish('bbq_garlic_oyster');
       addDish('teppan_lamb');
       addDish('teppan_foie_gras');
-      const placed = autoPlaceNewlyUnlockedZone(world, 'teppan_bbq');
       world.reputation = Math.min(100, world.reputation + 4);
-      summary = `前场「铁板烧烤区」扩建完工！已解锁炭烤海鲜串、铁板羊排与铁板鹅肝三张烧烤卡；${
-        placed
-          ? `已自动布置至【${placed.label}】，可在「前厅区域布局」自由调整。`
-          : '请前往「前厅区域布局」选择区域位安放。'
-      }`;
+      summary = '「铁板烧烤区」蓝图与三张烧烤卡已解锁！请于开店前前往「前厅区域布局」购置施工并配置至区域位。';
       break;
-    }
-    case 'tech_regime_hall':
+    case 'tech_regime_hall': {
       addRegime('seafood_hall');
       upgradeShopLevelTo(world, 3);
       addOps('ops_speed_turn');
       world.reputation = Math.min(100, world.reputation + 5);
-      summary = '店面类型「潮鲜臻品堂（¥298 · 6配置位）」解锁！店铺升至 Lv.3（编制7人）并扩建南庭水景厅！';
-      break;
-    case 'tech_zone_sashimi': {
-      addZone('sashimi_sushi');
-      addDish('salmon');
-      addDish('sweet_shrimp_sushi');
-      const placed = autoPlaceNewlyUnlockedZone(world, 'sashimi_sushi');
-      world.reputation = Math.min(100, world.reputation + 4);
-      summary = `前场「刺身与日料区」解锁！${
-        placed
-          ? `已自动布置至【${placed.label}】，可在「区域布局」中自由调整位置。`
-          : '可在「区域布局」中替换或待扩建新区域位后配置。'
-      }`;
+      const rDef = getRegimeDef('seafood_hall');
+      summary = `店面蓝图「${rDef.name}（¥${rDef.baseTicketPrice} · 6配置位）」解锁并升至 Lv.3（编制14人 · 南庭扩建）！请于开店前出资 ¥${rDef.purchaseCost}（${rDef.setupDays}天）购置装潢启用。`;
       break;
     }
+    case 'tech_zone_sashimi':
+      addDish('salmon');
+      addDish('sweet_shrimp_sushi');
+      world.reputation = Math.min(100, world.reputation + 4);
+      summary = '「刺身与日料区」蓝图与三文鱼/甜虾手卷卡已解锁！请于开店前前往「前厅区域布局」购置建设该分区。';
+      break;
     case 'tech_dish_typhoon':
       addDish('typhoon_crab');
       addBroth('tomyum_royal');
       world.reputation = Math.min(100, world.reputation + 3);
       summary = '热菜卡「避风塘铁板炒蟹」与锅底卡「冬阴功海鲜皇锅」研发成功！';
       break;
-    case 'tech_hw_tables8':
-      unlockTablesTo(world, 8);
+    case 'tech_hw_tables8': {
+      unlockTablesTo(world, 24, 0);
+      const diff = Math.max(0, 42 - world.dishwareMax);
+      world.dishwareMax = Math.max(world.dishwareMax, 42);
+      world.cleanDishes += diff;
       addOps('ops_hygiene_shield');
-      summary = '大厅扩建至 8 张豪华席！同步解锁经营策略卡「无菌冷链标杆」。';
+      summary = '东翼大厅扩建至 24 张豪华席（餐具扩至 42 套）！同步解锁「无菌冷链标杆」策略卡。';
       break;
-    case 'tech_regime_imperial':
+    }
+    case 'tech_zone_raw_marinated':
+      addDish('marinated_crab');
+      addDish('drunken_prawns');
+      world.reputation = Math.min(100, world.reputation + 4);
+      summary = '「潮汕生腌熟醉区」蓝图与生腌膏蟹/花雕熟醉虾卡已解锁！请于开店前前往「前厅区域布局」购置建设该分区。';
+      break;
+    case 'tech_regime_imperial': {
       addRegime('imperial_feast');
       upgradeShopLevelTo(world, 4);
       addOps('ops_vip_concierge');
       world.reputation = Math.min(100, world.reputation + 6);
-      summary = '店面类型「御海尊享殿（¥418 · 7配置位）」解锁！店铺升至 Lv.4（编制9人）并扩建东阁御宴廊！';
-      break;
-    case 'tech_zone_live': {
-      addZone('live_seafood');
-      addDish('abalone_live');
-      addDish('lobster');
-      const placed = autoPlaceNewlyUnlockedZone(world, 'live_seafood');
-      world.reputation = Math.min(100, world.reputation + 5);
-      summary = `前场「活捞海鲜暂养区」解锁！${
-        placed
-          ? `已自动布置至【${placed.label}】，可在「区域布局」中自由更换区域位。`
-          : '可在「区域布局」中替换或待扩建新区域位后配置。'
-      }`;
+      const rDef = getRegimeDef('imperial_feast');
+      summary = `店面蓝图「${rDef.name}（¥${rDef.baseTicketPrice} · 7配置位）」解锁并升至 Lv.4（编制18人 · 东阁扩建）！请于开店前出资 ¥${rDef.purchaseCost}（${rDef.setupDays}天）购置装潢启用。`;
       break;
     }
+    case 'tech_zone_live':
+      addDish('abalone_live');
+      addDish('lobster');
+      world.reputation = Math.min(100, world.reputation + 5);
+      summary = '「活捞海鲜暂养区」蓝图与活鲍/波士顿龙虾卡已解锁！请于开店前前往「前厅区域布局」购置施工并安放。';
+      break;
     case 'tech_dish_wagyu_mutton':
       addDish('wagyu');
       addBroth('winter_mutton');
@@ -822,39 +917,47 @@ export function applyCompletedTechNode(world: GameWorld, nodeId: string): string
       summary = '顶奢菜品卡「雪花M9和牛」与秋冬名锅「古法海参滋补老汤锅」解锁！';
       break;
     case 'tech_hw_tables10': {
-      unlockTablesTo(world, 10);
-      const diff = Math.max(0, 24 - world.dishwareMax);
-      world.dishwareMax = Math.max(world.dishwareMax, 24);
+      unlockTablesTo(world, 36, 0);
+      const diff = Math.max(0, 60 - world.dishwareMax);
+      world.dishwareMax = Math.max(world.dishwareMax, 60);
       world.cleanDishes += diff;
-      world.buffetCapacityBonus += 3;
-      summary = '大厅扩建至 10 张雅座、24 套餐具与超深碎冰槽竣工！';
+      world.buffetCapacityBonus += 4;
+      summary = '南庭大厅扩建至 36 张雅座、60 套餐具与超深碎冰槽竣工！';
       break;
     }
-    case 'tech_regime_legendary':
+    case 'tech_zone_wagyu_carving':
+      addDish('carved_wagyu_ribeye');
+      addDish('tomahawk_roast');
+      world.reputation = Math.min(100, world.reputation + 5);
+      summary = '「现切和牛炙烤档」蓝图与雪花和牛眼肉/慢烤战斧牛排卡已解锁！请于开店前前往「前厅区域布局」购置建设。';
+      break;
+    case 'tech_regime_legendary': {
       addRegime('legendary_citadel');
       upgradeShopLevelTo(world, 5);
       addOps('ops_harbor_feast');
       world.reputation = Math.min(100, world.reputation + 8);
-      summary = '终极店面「传奇沸鼎城（¥528 · 8配置位）」解锁！店铺登顶 Lv.5（编制12人）并获「港湾御膳排场」卡！';
+      const rDef = getRegimeDef('legendary_citadel');
+      summary = `终极店面蓝图「${rDef.name}（¥${rDef.baseTicketPrice} · 8配置位）」解锁并登顶 Lv.5（编制24人 · 10区全开放）！请于开店前出资 ¥${rDef.purchaseCost}（${rDef.setupDays}天）购置装潢启用。`;
       break;
+    }
     case 'tech_dish_kingcrab':
       addDish('king_crab');
       world.reputation = Math.min(100, world.reputation + 5);
       summary = '镇店王者「深海帝王蟹腿」菜品卡解锁！已纳入冷链卡库（首批 +18 份）。';
       break;
     case 'tech_hw_tables12': {
-      unlockTablesTo(world, 12);
-      const diff = Math.max(0, 32 - world.dishwareMax);
-      world.dishwareMax = Math.max(world.dishwareMax, 32);
+      unlockTablesTo(world, 48, 0);
+      const diff = Math.max(0, 84 - world.dishwareMax);
+      world.dishwareMax = Math.max(world.dishwareMax, 84);
       world.cleanDishes += diff;
-      world.buffetCapacityBonus += 3;
-      summary = '全厅 12 张满编雅座与 32 套顶级冷链消毒库全部竣工！';
+      world.buffetCapacityBonus += 5;
+      summary = '全厅 48 张满编大宴雅座与 84 套顶级冷链消毒库全部竣工！';
       break;
     }
     default: {
       if (node.kind === 'ZONE' && node.targetId) {
-        addZone(node.targetId as GameWorld['unlockedZones'][number]);
-        summary = `扩建分区「${getBuffetZoneDef(node.targetId as GameWorld['unlockedZones'][number]).name}」竣工！`;
+        const zName = getBuffetZoneDef(node.targetId as GameWorld['unlockedZones'][number]).name;
+        summary = `扩建分区「${zName}」蓝图解锁！请于开店前在「前厅区域布局」购置建设。`;
       }
       break;
     }
@@ -1024,7 +1127,7 @@ export function moveBackstagePlayerByKeys(
     }
   }
 
-  if (dx !== 0) bp.facing = dx > 0 ? 1 : -1;
+  if (dx !== 0 || dy !== 0) bp.facing = Math.atan2(dy, dx);
   bp.walkCycle += dt * 11;
 
   // Walking straight SOUTH through any of the 3 connecting archways seamlessly steps into Front Hall!
@@ -1216,7 +1319,7 @@ export function tickBackstagePlayer(
     const step = Math.min(dist, speed * dt);
     bp.x += (dx / dist) * step;
     bp.y += (dy / dist) * step;
-    if (Math.abs(dx) > 1) bp.facing = dx > 0 ? 1 : -1;
+    if (dist > 1) bp.facing = Math.atan2(dy, dx);
     bp.walkCycle += dt * 11;
     return null;
   }

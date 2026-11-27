@@ -5,6 +5,7 @@ import {
   STAFF_ROLE_META,
 } from './gameConfig';
 import { getCharacterDef, getSpecialStaffDef } from './storyConfig';
+import { awardPlayerXpFromCash } from '../engine/playerProgression';
 import {
   CustomerParty,
   DialogueLine,
@@ -1300,6 +1301,7 @@ export function runHalfMonthInspection(world: GameWorld): StoryModalEvent {
   world.cash += cashDelta;
   if (cashDelta > 0) {
     world.totalCashEarned += cashDelta;
+    awardPlayerXpFromCash(world, cashDelta);
   } else if (cashDelta < 0) {
     const fineAmt = Math.abs(cashDelta);
     world.todayStats.penaltyFines += fineAmt;

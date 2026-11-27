@@ -1,6 +1,13 @@
-import { getShopConfig } from '../data/gameConfig';
-import { createDefaultZonePadAssignments, FRONT_HALL_ZONE_PADS, TABLE_POSITIONS } from '../data/gameConfig';
-import { getRegimeDef } from '../data/policyAndTechConfig';
+import {
+  applyAdaptiveFrontHallLayout,
+  createDefaultZonePadAssignments,
+  FRONT_HALL_ZONE_PADS,
+  getShopConfig,
+  STARTER_PURCHASED_PAD_IDS,
+  TABLE_POSITIONS,
+} from '../data/gameConfig';
+import { getRegimeDef, TECH_TREE_NODES } from '../data/policyAndTechConfig';
+import { awardPlayerXpFromCash, syncLegacyPlayerProgression } from './playerProgression';
 import {
   ACHIEVEMENTS_CATALOG,
   CITY_RIVALS,
@@ -262,7 +269,9 @@ export function launchMarketingCampaign(
 
   world.cash -= def.cost; // negative cost adds cash immediately (prepaid membership)
   if (def.cost < 0) {
-    world.totalCashEarned += Math.abs(def.cost);
+    const earned = Math.abs(def.cost);
+    world.totalCashEarned += earned;
+    awardPlayerXpFromCash(world, earned);
   }
   if (def.reputationInstant > 0) {
     world.reputation = Math.min(100, world.reputation + def.reputationInstant);
@@ -446,8 +455,23 @@ export function loadGameFromSlot(slotId: SaveSlotId): GameWorld | null {
     w.incidentCooldown = typeof w.incidentCooldown === 'number' ? w.incidentCooldown : 26;
     w.incidentsTriggeredToday = typeof w.incidentsTriggeredToday === 'number' ? w.incidentsTriggeredToday : 0;
     w.recentIncidentIds = w.recentIncidentIds ?? [];
+    if (!Array.isArray(w.purchasedRegimeIds)) {
+      const legacyRegimes = new Set(w.unlockedRegimeIds ?? ['street_stall']);
+      legacyRegimes.add('street_stall');
+      if (w.activeRegimeId) legacyRegimes.add(w.activeRegimeId);
+      w.purchasedRegimeIds = Array.from(legacyRegimes);
+    }
     if (!w.zonePadAssignments) {
       w.zonePadAssignments = createDefaultZonePadAssignments();
+    }
+    if (!Array.isArray(w.purchasedPadIds)) {
+      const legacyPads = new Set<string>(STARTER_PURCHASED_PAD_IDS);
+      for (const pad of FRONT_HALL_ZONE_PADS) {
+        if (pad.purchaseCost <= 0 || w.zonePadAssignments[pad.id]) {
+          legacyPads.add(pad.id);
+        }
+      }
+      w.purchasedPadIds = Array.from(legacyPads);
     }
     for (const pad of FRONT_HALL_ZONE_PADS) {
       if (!(pad.id in w.zonePadAssignments)) {
@@ -455,17 +479,38 @@ export function loadGameFromSlot(slotId: SaveSlotId): GameWorld | null {
       }
     }
     if (Array.isArray(w.tables)) {
-      w.tables.forEach((t, idx) => {
+      // Expand older 12-table saves up to 48 tables cleanly before applying adaptive layout
+      for (let idx = w.tables.length; idx < TABLE_POSITIONS.length; idx++) {
         const pos = TABLE_POSITIONS[idx];
-        if (pos) {
-          t.x = pos.x;
-          t.y = pos.y;
-        }
-      });
+        w.tables.push({
+          id: idx,
+          x: pos.x,
+          y: pos.y,
+          status: 'LOCKED',
+          customer: null,
+          dirtyTime: 0,
+          reservedByStaffId: null,
+          setterBonus: 0,
+          brothBonus: 0,
+          boilPhase: Math.random() * Math.PI * 2,
+        });
+      }
+      applyAdaptiveFrontHallLayout(w);
     }
     w.particles = [];
     w.floatingTexts = [];
     w.pendingStoryModal = null;
+
+    // Migrate older saves to the player-level & upgrade-point talent tree system
+    const pendingTechIds = (w.pendingOrders ?? [])
+      .filter((o) => o.type === 'UNLOCK_TECH_NODE' && o.targetId)
+      .map((o) => o.targetId!);
+    const spentNodeIds = new Set([...(w.unlockedTechNodeIds ?? []), ...pendingTechIds]);
+    const spentPts = Array.from(spentNodeIds).reduce((sum, nodeId) => {
+      const node = TECH_TREE_NODES.find((n) => n.id === nodeId);
+      return sum + (node && !node.starterUnlocked ? node.pointCost : 0);
+    }, 0);
+    syncLegacyPlayerProgression(w, spentPts);
 
     return w;
   } catch {

@@ -260,3 +260,77 @@
   animation: dangerVignettePulse 1.05s ease-in-out infinite;
 }
 
+/* ============================================================================
+   Phase 3: Floating Full-Bleed Translucent HUD & Classical VN Dialogue Frame
+   ============================================================================ */
+
+/* Frosted dark lacquer floating HUD islands hovering cleanly over the 100% full-bleed map */
+.hud-float {
+  background: linear-gradient(180deg, rgba(26, 17, 12, 0.78) 0%, rgba(16, 10, 7, 0.86) 100%);
+  backdrop-filter: blur(12px) saturate(135%);
+  -webkit-backdrop-filter: blur(12px) saturate(135%);
+  border: 1px solid rgba(206, 162, 86, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 178, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 10px 28px rgba(0, 0, 0, 0.54);
+}
+
+/* Classical Chinese Lacquer & Double-Gold Visual Novel Dialogue Box */
+.vn-dialogue-box {
+  background: linear-gradient(180deg, rgba(31, 19, 13, 0.94) 0%, rgba(19, 11, 8, 0.96) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid #cfa356;
+  box-shadow:
+    inset 0 0 0 4px rgba(18, 10, 7, 0.86),
+    inset 0 0 0 5px rgba(207, 163, 86, 0.42),
+    0 20px 54px rgba(0, 0, 0, 0.78);
+}
+
+.vn-nameplate {
+  background: linear-gradient(180deg, #331e13 0%, #1d100a 100%);
+  border: 1.5px solid #d9b060;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 196, 0.28),
+    0 6px 18px rgba(0, 0, 0, 0.6);
+}
+
+.vn-choice-plaque {
+  background: linear-gradient(180deg, rgba(78, 28, 19, 0.92) 0%, rgba(46, 16, 11, 0.95) 100%);
+  border: 1.5px solid #c99a4a;
+  box-shadow:
+    inset 0 1px 0 rgba(252, 224, 158, 0.24),
+    0 4px 14px rgba(0, 0, 0, 0.46);
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1), border-color 150ms ease, filter 150ms ease;
+}
+
+.vn-choice-plaque:hover {
+  border-color: #fae09b;
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+.vn-choice-plaque:active {
+  transform: translateY(0);
+}
+
+/* Accessible gold focus ring for keyboard navigation */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid #f4d689;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+

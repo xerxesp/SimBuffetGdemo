@@ -3,6 +3,7 @@ import {
   BuffetZoneDef,
   BuffetZoneId,
   FacilitySceneDef,
+  GameWorld,
   PartTimeJobDef,
   SeafoodItemDef,
   SeasonDef,
@@ -79,7 +80,7 @@ export const STATIONS = {
   CLEAN_RACK: { x: 312, y: 68, w: 152, h: 86, label: '消毒餐具柜' },
   BROTH_KITCHEN: { x: 542, y: 68, w: 238, h: 86, label: '熬汤锅底灶' },
   COLD_PREP: { x: 814, y: 68, w: 224, h: 86, label: '生鲜备菜台' },
-  RECEPTION: { x: 86, y: 214, w: 120, h: 88, label: '迎宾接待台' },
+  RECEPTION: { x: 100, y: 586, w: 92, h: 48, label: '迎宾接待台' },
   BUFFET_BAR: { x: 462, y: 222, w: 570, h: 68, label: '海鲜冰台自助区' },
   COOKED_COUNTER: { x: 852, y: 222, w: 178, h: 68, label: '熟食热菜铁板区' },
 } as const;
@@ -162,13 +163,43 @@ export const FRONT_HALL_ZONES: Record<
   },
   teppan_bbq: {
     id: 'teppan_bbq',
-    x: 992,
-    y: 158,
-    w: 112,
-    h: 186,
+    x: 948,
+    y: 148,
+    w: 210,
+    h: 66,
     row: 'UPPER',
     shortLabel: '铁板烧烤区',
     accentColor: '#EF4444',
+  },
+  steam_dimsum: {
+    id: 'steam_dimsum',
+    x: 1184,
+    y: 276,
+    w: 96,
+    h: 162,
+    row: 'UPPER',
+    shortLabel: '广式蒸笼点心区',
+    accentColor: '#F59E0B',
+  },
+  raw_marinated: {
+    id: 'raw_marinated',
+    x: 1184,
+    y: 482,
+    w: 96,
+    h: 162,
+    row: 'UPPER',
+    shortLabel: '潮汕生腌熟醉区',
+    accentColor: '#06B6D4',
+  },
+  wagyu_carving: {
+    id: 'wagyu_carving',
+    x: 660,
+    y: 926,
+    w: 280,
+    h: 68,
+    row: 'UPPER',
+    shortLabel: '现切和牛炙烤档',
+    accentColor: '#E11D48',
   },
 };
 
@@ -186,35 +217,35 @@ export const FRONT_HALL_EXPANSION_BY_LEVEL: Record<number, FrontHallExpansionSpe
     width: 960,
     height: 640,
     wingTitle: '初兴海港前厅',
-    expansionNote: '基础大厅，开放 3 个分散区域位',
+    expansionNote: '基础大厅，自带 3 个北厅岛台位，最高可纳 12 张餐桌',
   },
   2: {
     level: 2,
-    width: 1140,
+    width: 1320,
     height: 640,
     wingTitle: '东翼雅廊扩建',
-    expansionNote: '前厅向东扩建 +180px，新增第 4 区域位',
+    expansionNote: '前厅向东扩建 +360px，解锁第 4、5 号扩建区位购置资格，可纳 24 桌',
   },
   3: {
     level: 3,
-    width: 1140,
-    height: 770,
+    width: 1320,
+    height: 820,
     wingTitle: '南庭水景厅扩建',
-    expansionNote: '前厅向南扩建 +130px，新增第 5 区域位',
+    expansionNote: '前厅向南扩建 +180px，解锁第 6、7 号扩建区位购置资格，可纳 36 桌',
   },
   4: {
     level: 4,
-    width: 1280,
-    height: 770,
+    width: 1320,
+    height: 1030,
     wingTitle: '东阁御宴廊扩建',
-    expansionNote: '东侧再扩 +140px，新增第 6 区域位',
+    expansionNote: '南殿与东阁全面贯通，解锁第 8、9 号扩建区位购置资格，可纳 48 桌',
   },
   5: {
     level: 5,
-    width: 1280,
-    height: 880,
-    wingTitle: '传奇沸鼎南殿扩建',
-    expansionNote: '南殿再扩 +110px，新增第 7 旗舰主岛位',
+    width: 1360,
+    height: 1040,
+    wingTitle: '传奇沸鼎总殿',
+    expansionNote: '终极旗舰满配格局！解锁第 10 号南殿主岛位，10 大区域 + 48 桌全开',
   },
 };
 
@@ -223,89 +254,238 @@ export function getFrontHallBounds(shopLevel: number): FrontHallExpansionSpec {
   return FRONT_HALL_EXPANSION_BY_LEVEL[lv] ?? FRONT_HALL_EXPANSION_BY_LEVEL[1];
 }
 
-// 7 Well-Spaced Customizable Front-Hall Zone Pads distributed across Shop Levels Lv.1..Lv.5
+export interface FrontHallEntranceLayout {
+  frontW: number;
+  frontH: number;
+  gateLeftX: number;
+  gateSpan: number;
+  gateCenterX: number;
+  gateY: number;
+  reception: { x: number; y: number; w: number; h: number };
+  receptionStand: { x: number; y: number };
+  hostHome: { x: number; y: number };
+  carpet: { x: number; y: number; w: number; h: number };
+  veranda: { x: number; y: number; w: number; h: number };
+  getQueueSlotPos: (idx: number) => { x: number; y: number };
+}
+
+/**
+ * Adaptively positions the Front-Hall Entrance Gate, Reception Desk (right inside the front door),
+ * Welcome Carpet, Exterior Harbor-Stone Waiting Veranda, and Outdoor Customer Queue
+ * according to the current shop expansion level (Lv.1..Lv.5).
+ */
+export function getFrontHallEntranceLayout(shopLevel: number): FrontHallEntranceLayout {
+  const bounds = getFrontHallBounds(shopLevel);
+  const frontW = bounds.width;
+  const frontH = bounds.height;
+  const gateSpan = 104;
+  const gateLeftX = shopLevel >= 4 ? 66 : 48;
+  const gateCenterX = gateLeftX + gateSpan * 0.5;
+  const gateY = frontH - 6;
+
+  const reception = {
+    x: gateCenterX,
+    y: frontH - 54,
+    w: 88,
+    h: 46,
+  };
+  const receptionStand = {
+    x: gateCenterX,
+    y: frontH - 96,
+  };
+  const hostHome = {
+    x: gateCenterX,
+    y: frontH - 92,
+  };
+
+  // Continuous crimson welcome runner from exterior veranda through the timber gate up behind reception
+  const carpet = {
+    x: gateLeftX + 2,
+    y: frontH - 130,
+    w: gateSpan - 4,
+    h: 196,
+  };
+
+  // Extended exterior harbor-stone waiting veranda directly outside the south entrance gate
+  const verandaX = Math.max(16, gateLeftX - 28);
+  const verandaW = Math.min(frontW - verandaX - 48, shopLevel >= 2 ? 700 : 540);
+  const veranda = {
+    x: verandaX,
+    y: frontH + 6,
+    w: verandaW,
+    h: 102,
+  };
+
+  const queueStartX = gateCenterX;
+  const slotStepX = 40;
+  const slotsPerRow = Math.max(8, Math.floor((veranda.x + veranda.w - 30 - queueStartX) / slotStepX) + 1);
+
+  const getQueueSlotPos = (idx: number) => {
+    const row = Math.floor(idx / slotsPerRow);
+    const col = idx % slotsPerRow;
+    return {
+      x: queueStartX + col * slotStepX,
+      y: frontH + 34 + row * 38,
+    };
+  };
+
+  return {
+    frontW,
+    frontH,
+    gateLeftX,
+    gateSpan,
+    gateCenterX,
+    gateY,
+    reception,
+    receptionStand,
+    hostHome,
+    carpet,
+    veranda,
+    getQueueSlotPos,
+  };
+}
+
+// 10 Well-Spaced Customizable Front-Hall Zone Pads distributed across Shop Levels Lv.1..Lv.5
+// Placed strictly outside the 8x6 (48-table) dining grid [182..1118] x [273..877] with >= 42px walking aisles!
 export const FRONT_HALL_ZONE_PADS: ZonePadDef[] = [
   {
     id: 'pad_nw',
-    label: '北厅西岛位',
-    wingLabel: 'Lv.1 基础前厅',
+    label: '1号 · 北厅西岛位',
+    wingLabel: 'Lv.1 基础前厅（初始自带）',
     minShopLevel: 1,
-    x: 186,
-    y: 158,
-    w: 204,
+    purchaseCost: 0,
+    buildDays: 0,
+    x: 184,
+    y: 148,
+    w: 210,
     h: 66,
     orientation: 'HORIZONTAL',
     defaultZone: 'ice_seafood',
   },
   {
-    id: 'pad_ne',
-    label: '北厅东岛位',
-    wingLabel: 'Lv.1 基础前厅',
+    id: 'pad_nc',
+    label: '2号 · 北厅中岛位',
+    wingLabel: 'Lv.1 基础前厅（初始自带）',
     minShopLevel: 1,
-    x: 562,
-    y: 158,
-    w: 204,
+    purchaseCost: 0,
+    buildDays: 0,
+    x: 438,
+    y: 148,
+    w: 210,
     h: 66,
     orientation: 'HORIZONTAL',
     defaultZone: 'hotpot_sides',
   },
   {
-    id: 'pad_east_mid',
-    label: '东侧明档位',
-    wingLabel: 'Lv.1 基础前厅',
+    id: 'pad_ne',
+    label: '3号 · 北厅东岛位',
+    wingLabel: 'Lv.1 基础前厅（初始自带）',
     minShopLevel: 1,
-    x: 846,
-    y: 292,
-    w: 86,
-    h: 176,
-    orientation: 'VERTICAL',
+    purchaseCost: 0,
+    buildDays: 0,
+    x: 692,
+    y: 148,
+    w: 210,
+    h: 66,
+    orientation: 'HORIZONTAL',
     defaultZone: 'cooked_hot',
   },
   {
-    id: 'pad_east_wing_n',
-    label: '东翼雅廊位',
+    id: 'pad_east_north',
+    label: '4号 · 东翼北廊位',
     wingLabel: 'Lv.2 东翼扩建',
     minShopLevel: 2,
-    x: 992,
-    y: 158,
-    w: 112,
-    h: 186,
+    purchaseCost: 420,
+    buildDays: 1,
+    x: 948,
+    y: 148,
+    w: 210,
+    h: 66,
+    orientation: 'HORIZONTAL',
+  },
+  {
+    id: 'pad_east_upper',
+    label: '5号 · 东翼上明档',
+    wingLabel: 'Lv.2 东翼扩建',
+    minShopLevel: 2,
+    purchaseCost: 480,
+    buildDays: 1,
+    x: 1184,
+    y: 276,
+    w: 96,
+    h: 162,
+    orientation: 'VERTICAL',
+  },
+  {
+    id: 'pad_east_mid',
+    label: '6号 · 东翼中明档',
+    wingLabel: 'Lv.3 南庭扩建',
+    minShopLevel: 3,
+    purchaseCost: 680,
+    buildDays: 1,
+    x: 1184,
+    y: 482,
+    w: 96,
+    h: 162,
+    orientation: 'VERTICAL',
+  },
+  {
+    id: 'pad_west_south',
+    label: '7号 · 西廊水景位',
+    wingLabel: 'Lv.3 南庭扩建',
+    minShopLevel: 3,
+    purchaseCost: 760,
+    buildDays: 2,
+    x: 26,
+    y: 268,
+    w: 96,
+    h: 168,
+    orientation: 'VERTICAL',
+  },
+  {
+    id: 'pad_east_lower',
+    label: '8号 · 东阁御宴位',
+    wingLabel: 'Lv.4 东阁扩建',
+    minShopLevel: 4,
+    purchaseCost: 980,
+    buildDays: 2,
+    x: 1184,
+    y: 688,
+    w: 96,
+    h: 162,
     orientation: 'VERTICAL',
   },
   {
     id: 'pad_south_west',
-    label: '南庭水景位',
-    wingLabel: 'Lv.3 南庭扩建',
-    minShopLevel: 3,
-    x: 214,
-    y: 654,
-    w: 234,
-    h: 74,
-    orientation: 'HORIZONTAL',
-  },
-  {
-    id: 'pad_east_pavilion',
-    label: '东阁御宴位',
+    label: '9号 · 南庭西岛位',
     wingLabel: 'Lv.4 东阁扩建',
     minShopLevel: 4,
-    x: 1138,
-    y: 392,
-    w: 108,
-    h: 198,
-    orientation: 'VERTICAL',
+    purchaseCost: 1150,
+    buildDays: 2,
+    x: 260,
+    y: 928,
+    w: 240,
+    h: 68,
+    orientation: 'HORIZONTAL',
   },
   {
     id: 'pad_south_grand',
-    label: '南殿主岛位',
-    wingLabel: 'Lv.5 传奇南殿',
+    label: '10号 · 南殿旗舰主岛位',
+    wingLabel: 'Lv.5 传奇总殿',
     minShopLevel: 5,
-    x: 604,
-    y: 748,
-    w: 264,
-    h: 80,
+    purchaseCost: 1580,
+    buildDays: 2,
+    x: 660,
+    y: 926,
+    w: 280,
+    h: 68,
     orientation: 'HORIZONTAL',
   },
 ];
+
+export const STARTER_PURCHASED_PAD_IDS = FRONT_HALL_ZONE_PADS.filter(
+  (p) => p.purchaseCost === 0
+).map((p) => p.id);
 
 export function createDefaultZonePadAssignments(): Record<string, BuffetZoneId | null> {
   const map: Record<string, BuffetZoneId | null> = {};
@@ -323,33 +503,326 @@ export function getPadStandPoint(
   const cx = refX ?? pad.x + pad.w * 0.5;
   const cy = refY ?? pad.y + pad.h * 0.5;
   if (pad.orientation === 'VERTICAL') {
+    const standX = pad.x < 160 ? pad.x + pad.w + 16 : pad.x - 16;
     return {
-      x: pad.x - 18,
+      x: standX,
       y: Math.max(pad.y + 18, Math.min(pad.y + pad.h - 18, cy)),
     };
   }
+  const standY = pad.y > 860 ? pad.y - 16 : pad.y + pad.h + 16;
   return {
     x: Math.max(pad.x + 20, Math.min(pad.x + pad.w - 20, cx)),
-    y: pad.y + pad.h + 18,
+    y: standY,
   };
 }
 
-export const TABLE_POSITIONS: Array<{ x: number; y: number }> = [
-  { x: 236, y: 326 },
-  { x: 404, y: 326 },
-  { x: 572, y: 326 },
-  { x: 740, y: 326 },
-  { x: 236, y: 446 },
-  { x: 404, y: 446 },
-  { x: 572, y: 446 },
-  { x: 740, y: 446 },
-  { x: 236, y: 566 },
-  { x: 404, y: 566 },
-  { x: 572, y: 566 },
-  { x: 740, y: 566 },
+export interface AdaptiveFrontHallLayout {
+  shopLevel: number;
+  bounds: FrontHallExpansionSpec;
+  entrance: FrontHallEntranceLayout;
+  /** Safe unobstructed rectangular region reserved for dining table centers */
+  diningZone: { minX: number; maxX: number; minY: number; maxY: number };
+  /** Reserved unobstructed manager & staff walking corridors */
+  walkways: {
+    northTrunkY: number;
+    westSpineX: number;
+    eastServiceX: number;
+    southServiceY: number;
+  };
+  cols: number;
+  rows: number;
+  stepX: number;
+  stepY: number;
+  /** Exact adaptive world coordinate for every table slot (indexed by table.id 0..47) */
+  tablePositionsById: Array<{ x: number; y: number }>;
+}
+
+// Unlock order strictly maps 0..47 across shop expansion tiers (6 -> 12 -> 24 -> 36 -> 48 tables)
+export const TABLE_UNLOCK_ORDER: number[] = [
+  // First 6 starter tables (Lv.1 core)
+  0, 1, 2, 8, 9, 10,
+  // Next 6 tables -> 12 tables (Lv.1 expanded)
+  3, 11, 16, 17, 18, 19,
+  // Next 12 tables -> 24 tables (Lv.2 East Wing)
+  4, 12, 20, 5, 13, 21, 6, 14, 22, 7, 15, 23,
+  // Next 12 tables -> 36 tables (Lv.3 South Wing)
+  24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+  // Final 12 tables -> 48 tables (Lv.4/Lv.5 Grand Hall)
+  36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
 ];
 
-export const TABLE_UNLOCK_ORDER = [0, 1, 4, 5, 2, 6, 3, 7, 8, 9, 10, 11];
+// Architectural clearance constants for table + 4 slatted chairs + manager walking corridors (r=11)
+const TABLE_VISUAL_HALF_X = 42;
+const TABLE_VISUAL_HALF_Y = 42;
+const MIN_TABLE_PITCH_X = 114;
+const MIN_TABLE_PITCH_Y = 104;
+const MANAGER_AISLE_BUFFER = 36;
+
+/**
+ * Computes the dynamic adaptive Front-Hall Layout for a given shopLevel (Lv.1..Lv.5)
+ * and unlockedTableCount (6..48):
+ * 1. Fixes the Reception Desk & Welcome Carpet right inside the south front entrance gate.
+ * 2. Carves out mandatory unobstructed manager & staff walking corridors along:
+ *    - North kitchen / buffet service trunk
+ *    - West entrance-to-kitchen spine (clear of Reception Desk, Reception Stand & West Pads)
+ *    - East vertical buffet service corridor (Lv.2+)
+ *    - South horizontal buffet service corridor (Lv.4+)
+ * 3. Automatically chooses the optimal balanced (cols x rows) grid and evenly distributes
+ *    all unlocked dining tables across the remaining space with zero path/chair overlap.
+ */
+export function computeAdaptiveFrontHallLayout(
+  shopLevel: number,
+  unlockedTableCount: number
+): AdaptiveFrontHallLayout {
+  const lv = Math.max(1, Math.min(5, Math.floor(shopLevel || 1)));
+  const activeCount = Math.max(1, Math.min(TABLE_UNLOCK_ORDER.length, Math.floor(unlockedTableCount || 6)));
+  const bounds = getFrontHallBounds(lv);
+  const entrance = getFrontHallEntranceLayout(lv);
+
+  const activePads = FRONT_HALL_ZONE_PADS.filter((p) => p.minShopLevel <= lv);
+
+  // 1. North corridor boundary: below top stations & all north horizontal buffet pads
+  let maxNorthPadBottom = 214;
+  for (const pad of activePads) {
+    if (pad.orientation === 'HORIZONTAL' && pad.y < 260) {
+      maxNorthPadBottom = Math.max(maxNorthPadBottom, pad.y + pad.h);
+    }
+  }
+  const northTrunkY = maxNorthPadBottom + 22;
+  const diningMinY = maxNorthPadBottom + MANAGER_AISLE_BUFFER + TABLE_VISUAL_HALF_Y;
+
+  // 2. West spine boundary: strictly right of the Reception Desk, Reception Stand, Carpet & West Pads
+  const receptionRight = Math.max(
+    entrance.reception.x + entrance.reception.w * 0.5,
+    entrance.carpet.x + entrance.carpet.w
+  );
+  let maxWestPadRight = 0;
+  for (const pad of activePads) {
+    if (pad.orientation === 'VERTICAL' && pad.x < 160) {
+      maxWestPadRight = Math.max(maxWestPadRight, pad.x + pad.w);
+    }
+  }
+  const westObstacleRight = Math.max(receptionRight, maxWestPadRight + 16);
+  const westSpineX = westObstacleRight + 18;
+  const diningMinX = Math.max(216, Math.round(westObstacleRight + 30 + TABLE_VISUAL_HALF_X));
+
+  // 3. East corridor boundary: left of East vertical buffet pads (Lv.2+) or East hall wall (Lv.1)
+  let minEastPadLeft = bounds.width;
+  let hasEastVerticalPad = false;
+  for (const pad of activePads) {
+    if (pad.orientation === 'VERTICAL' && pad.x > 900) {
+      hasEastVerticalPad = true;
+      minEastPadLeft = Math.min(minEastPadLeft, pad.x);
+    }
+  }
+  const eastServiceX = hasEastVerticalPad ? minEastPadLeft - 20 : bounds.width - 24;
+  const diningMaxX = hasEastVerticalPad
+    ? Math.round(minEastPadLeft - MANAGER_AISLE_BUFFER - TABLE_VISUAL_HALF_X)
+    : bounds.width - 28 - TABLE_VISUAL_HALF_X;
+
+  // 4. South corridor boundary: above South horizontal buffet pads (Lv.4+) or South hall wall (Lv.1..3)
+  let minSouthPadTop = bounds.height;
+  let hasSouthHorizontalPad = false;
+  for (const pad of activePads) {
+    if (pad.orientation === 'HORIZONTAL' && pad.y > 800) {
+      hasSouthHorizontalPad = true;
+      minSouthPadTop = Math.min(minSouthPadTop, pad.y);
+    }
+  }
+  const southServiceY = hasSouthHorizontalPad ? minSouthPadTop - 18 : bounds.height - 24;
+  const diningMaxY = hasSouthHorizontalPad
+    ? Math.round(minSouthPadTop - 32 - TABLE_VISUAL_HALF_Y)
+    : bounds.height - 28 - TABLE_VISUAL_HALF_Y;
+
+  const usableSpanX = Math.max(120, diningMaxX - diningMinX + TABLE_VISUAL_HALF_X * 2);
+  const usableSpanY = Math.max(110, diningMaxY - diningMinY + TABLE_VISUAL_HALF_Y * 2);
+
+  // Maximum columns/rows that still preserve crisp inter-table walkways for the manager
+  const maxSafeCols = Math.max(1, Math.min(8, Math.floor(usableSpanX / MIN_TABLE_PITCH_X)));
+  const maxSafeRows = Math.max(1, Math.min(6, Math.floor(usableSpanY / MIN_TABLE_PITCH_Y)));
+
+  // Pick the most balanced (cols x rows) grid covering activeCount inside the available dining space
+  let bestCols = Math.min(maxSafeCols, activeCount);
+  let bestRows = Math.ceil(activeCount / Math.max(1, bestCols));
+  let bestScore = Infinity;
+
+  const targetAspect = usableSpanX / Math.max(1, usableSpanY);
+  for (let c = 1; c <= maxSafeCols; c++) {
+    const r = Math.ceil(activeCount / c);
+    if (r > maxSafeRows) continue;
+    const cellW = usableSpanX / c;
+    const cellH = usableSpanY / r;
+    const emptyCells = c * r - activeCount;
+    // Prefer grids whose cell pitch is generous, nearly rectangularly balanced, and minimizes sparse leftover cells
+    const pitchRatioErr = Math.abs(cellW / Math.max(1, cellH) - 1.16);
+    const aspectErr = Math.abs((c / Math.max(1, r)) / Math.max(0.2, targetAspect) - 1);
+    const score = emptyCells * 0.45 + pitchRatioErr * 1.4 + aspectErr * 0.65;
+    if (score < bestScore) {
+      bestScore = score;
+      bestCols = c;
+      bestRows = r;
+    }
+  }
+
+  // Fallback if a player somehow has more unlocked tables than current shop level's safe capacity
+  if (bestCols * bestRows < activeCount) {
+    bestCols = Math.max(maxSafeCols, Math.ceil(Math.sqrt(activeCount * targetAspect)));
+    bestRows = Math.ceil(activeCount / Math.max(1, bestCols));
+  }
+
+  const cellW = usableSpanX / Math.max(1, bestCols);
+  const cellH = usableSpanY / Math.max(1, bestRows);
+  const originX = diningMinX - TABLE_VISUAL_HALF_X;
+  const originY = diningMinY - TABLE_VISUAL_HALF_Y;
+
+  const colXs: number[] = [];
+  for (let c = 0; c < bestCols; c++) {
+    const rawX = originX + (c + 0.5) * cellW;
+    colXs.push(Math.round(Math.max(diningMinX, Math.min(diningMaxX, rawX))));
+  }
+
+  const rowYs: number[] = [];
+  for (let r = 0; r < bestRows; r++) {
+    const rawY = originY + (r + 0.5) * cellH;
+    rowYs.push(Math.round(Math.max(diningMinY, Math.min(diningMaxY, rawY))));
+  }
+
+  // Generate evenly distributed active coordinates (partial final row centered onto interior columns to keep straight aisles!)
+  const activeCoords: Array<{ x: number; y: number }> = [];
+  for (let r = 0; r < bestRows; r++) {
+    const remaining = activeCount - activeCoords.length;
+    if (remaining <= 0) break;
+    const rowCount = Math.min(bestCols, remaining);
+    const startCol = Math.floor((bestCols - rowCount) / 2);
+    for (let k = 0; k < rowCount; k++) {
+      const colIdx = startCol + k;
+      activeCoords.push({ x: colXs[colIdx], y: rowYs[r] });
+    }
+  }
+
+  // Populate full 48-slot tablePositionsById: unlocked slots get the adaptive layout, locked slots sit on clean full-hall grid
+  const fallbackCols = 8;
+  const fallbackRows = 6;
+  const lv5Bounds = getFrontHallBounds(5);
+  const fullMinX = 246;
+  const fullMaxX = 1086;
+  const fullMinY = 306;
+  const fullMaxY = Math.min(846, lv5Bounds.height - 190);
+  const tablePositionsById: Array<{ x: number; y: number }> = Array.from(
+    { length: TABLE_UNLOCK_ORDER.length },
+    (_, id) => {
+      const r = Math.floor(id / fallbackCols);
+      const c = id % fallbackCols;
+      return {
+        x: Math.round(fullMinX + (c / (fallbackCols - 1)) * (fullMaxX - fullMinX)),
+        y: Math.round(fullMinY + (r / (fallbackRows - 1)) * (fullMaxY - fullMinY)),
+      };
+    }
+  );
+
+  for (let i = 0; i < activeCount; i++) {
+    const tableId = TABLE_UNLOCK_ORDER[i];
+    const pt = activeCoords[i];
+    if (tableId !== undefined && pt) {
+      tablePositionsById[tableId] = pt;
+    }
+  }
+
+  return {
+    shopLevel: lv,
+    bounds,
+    entrance,
+    diningZone: { minX: diningMinX, maxX: diningMaxX, minY: diningMinY, maxY: diningMaxY },
+    walkways: {
+      northTrunkY,
+      westSpineX,
+      eastServiceX,
+      southServiceY,
+    },
+    cols: bestCols,
+    rows: bestRows,
+    stepX: Math.round(cellW),
+    stepY: Math.round(cellH),
+    tablePositionsById,
+  };
+}
+
+/** Convenience helper returning all 48 table coordinates adapted to (shopLevel, unlockedTableCount) */
+export function getAdaptiveTablePositions(
+  shopLevel: number,
+  unlockedTableCount: number
+): Array<{ x: number; y: number }> {
+  return computeAdaptiveFrontHallLayout(shopLevel, unlockedTableCount).tablePositionsById;
+}
+
+// Baseline 48-table full-hall coordinate array (derived from Lv.5 adaptive layout for backwards compatibility)
+export const TABLE_POSITIONS: Array<{ x: number; y: number }> = getAdaptiveTablePositions(5, 48);
+
+/**
+ * Applies the dynamic shop-level adaptive Front-Hall Layout directly to a GameWorld:
+ * - Reflows all dining tables evenly across the remaining free dining space for (shopLevel, tableLimit).
+ * - Keeps the Reception Desk & HOST staff home anchored fixed at the south front entrance gate.
+ * - Ensures neither the manager nor staff end up overlapping moved tables/chairs after expansion.
+ */
+export function applyAdaptiveFrontHallLayout(world: GameWorld): AdaptiveFrontHallLayout {
+  const layout = computeAdaptiveFrontHallLayout(world.shopLevel, world.tableLimit);
+
+  if (Array.isArray(world.tables)) {
+    for (const table of world.tables) {
+      const pos = layout.tablePositionsById[table.id];
+      if (pos) {
+        table.x = pos.x;
+        table.y = pos.y;
+      }
+    }
+  }
+
+  // Keep every HOST anchored cleanly behind the entrance reception desk as frontH grows
+  const hostHome = layout.entrance.hostHome;
+  if (Array.isArray(world.staff)) {
+    for (const s of world.staff) {
+      if (s.role === 'HOST') {
+        s.homeX = hostHome.x;
+        s.homeY = hostHome.y;
+        if (world.phase === 'PREP' && s.taskQueue.length === 0) {
+          s.x = hostHome.x;
+          s.y = hostHome.y;
+        }
+      }
+    }
+  }
+
+  // Ensure manager & idle staff never overlap a newly placed dining table or chair footprint
+  const nudgeClearOfTables = (entity: { x: number; y: number }) => {
+    for (const t of world.tables ?? []) {
+      if (t.status === 'LOCKED') continue;
+      if (Math.abs(entity.x - t.x) < 46 && Math.abs(entity.y - t.y) < 39) {
+        const dLeft = Math.abs(entity.x - (t.x - 48));
+        const dRight = Math.abs(t.x + 48 - entity.x);
+        const dTop = Math.abs(entity.y - (t.y - 42));
+        const dBottom = Math.abs(t.y + 42 - entity.y);
+        const minD = Math.min(dLeft, dRight, dTop, dBottom);
+        if (minD === dLeft) entity.x = t.x - 48;
+        else if (minD === dRight) entity.x = t.x + 48;
+        else if (minD === dTop) entity.y = t.y - 42;
+        else entity.y = t.y + 42;
+      }
+    }
+    entity.x = Math.max(26, Math.min(layout.bounds.width - 24, entity.x));
+    entity.y = Math.max(114, Math.min(layout.bounds.height - 24, entity.y));
+  };
+
+  if (world.player) {
+    nudgeClearOfTables(world.player);
+  }
+  if (Array.isArray(world.staff)) {
+    for (const s of world.staff) {
+      nudgeClearOfTables(s);
+    }
+  }
+
+  return layout;
+}
 
 export const BUFFET_ZONES_CONFIG: BuffetZoneDef[] = [
   {
@@ -442,6 +915,45 @@ export const BUFFET_ZONES_CONFIG: BuffetZoneDef[] = [
     accentColor: '#2DD4BF',
     description: '打造透明循环海水暂养池与海鲜缸，波士顿龙虾、鲜活鲍鱼、帝王蟹现捞现杀直下沸锅，镇店顶级名片！',
     itemsPreview: '波士顿活龙虾 · 现捞大鲍鱼 · 深海帝王蟹',
+  },
+  {
+    id: 'steam_dimsum',
+    name: '广式蒸笼海鲜点心区',
+    shortName: '广式蒸笼区',
+    unlockCost: 360,
+    buildDays: 1,
+    minShopLevel: 1,
+    ticketBonus: 28,
+    vipBonus: 0.06,
+    accentColor: '#F59E0B',
+    description: '竹笼蒸汽袅袅升腾！现蒸水晶鲜虾饺皇与清蒸海捕多宝鱼鲜甜原味，老少皆宜极受好评。',
+    itemsPreview: '鲜虾饺皇蒸笼 · 清蒸海捕多宝鱼',
+  },
+  {
+    id: 'raw_marinated',
+    name: '潮汕生腌与花雕熟醉区',
+    shortName: '潮汕生腌区',
+    unlockCost: 720,
+    buildDays: 1,
+    minShopLevel: 2,
+    ticketBonus: 48,
+    vipBonus: 0.14,
+    accentColor: '#06B6D4',
+    description: '“潮汕毒药”秘制冰浸明档！冰镇生腌膏蟹与陈年花雕熟醉罗氏虾入口如冰淇淋般绵密，回头客爆棚。',
+    itemsPreview: '潮汕生腌膏蟹 · 花雕熟醉罗氏虾',
+  },
+  {
+    id: 'wagyu_carving',
+    name: '现切和牛炙烤明档区',
+    shortName: '现切和牛档',
+    unlockCost: 1280,
+    buildDays: 2,
+    minShopLevel: 4,
+    ticketBonus: 72,
+    vipBonus: 0.2,
+    accentColor: '#E11D48',
+    description: '主厨现场原切大理石雪花和牛眼肉与低温慢烤战斧牛排，高客单豪客与肉食饕客的不二之选！',
+    itemsPreview: '现切雪花和牛眼肉 · 低温慢烤战斧牛排',
   },
 ];
 
@@ -697,6 +1209,93 @@ export const SEAFOOD_CATALOG: SeafoodItemDef[] = [
     description: '【食评家剧情限定】远洋直供极品大腹，四季尊享，超高餐位溢价与口碑加成！',
     isSpecialReward: true,
   },
+  {
+    id: 'dimsum_shrimp_dumpling',
+    name: '水晶鲜虾饺皇蒸笼',
+    shortName: '鲜虾饺皇',
+    zone: 'steam_dimsum',
+    color: '#F59E0B',
+    accentColor: '#FEF3C7',
+    unlockCost: 260,
+    minShopLevel: 1,
+    ticketBonus: 30,
+    restockCost: 18,
+    maxStock: 7,
+    description: '【广式蒸笼区】皮薄晶莹包裹整颗弹牙虾仁，四季常驻，深受家庭与食客喜爱。',
+  },
+  {
+    id: 'steamed_turbot',
+    name: '清蒸海捕多宝鱼',
+    shortName: '清蒸多宝鱼',
+    zone: 'steam_dimsum',
+    color: '#D97706',
+    accentColor: '#FDE68A',
+    unlockCost: 420,
+    minShopLevel: 1,
+    ticketBonus: 42,
+    restockCost: 26,
+    maxStock: 6,
+    seasons: ['SPRING', 'AUTUMN', 'WINTER'],
+    description: '【广式蒸笼区 · 春秋冬限定】淋热油豉汁现蒸多宝鱼，肉质蒜瓣雪白鲜甜。',
+  },
+  {
+    id: 'marinated_crab',
+    name: '潮汕秘制生腌膏蟹',
+    shortName: '生腌膏蟹',
+    zone: 'raw_marinated',
+    color: '#06B6D4',
+    accentColor: '#CFFAFE',
+    unlockCost: 620,
+    minShopLevel: 2,
+    ticketBonus: 54,
+    restockCost: 34,
+    maxStock: 6,
+    seasons: ['SPRING', 'SUMMER', 'AUTUMN'],
+    description: '【潮汕生腌区 · 春夏秋限定】蒜蓉小米辣与古法鱼露浸润满膏梭子蟹，入口即化回味无穷！',
+  },
+  {
+    id: 'drunken_prawns',
+    name: '十年花雕熟醉罗氏虾',
+    shortName: '熟醉罗氏虾',
+    zone: 'raw_marinated',
+    color: '#0EA5E9',
+    accentColor: '#E0F2FE',
+    unlockCost: 560,
+    minShopLevel: 2,
+    ticketBonus: 48,
+    restockCost: 30,
+    maxStock: 6,
+    description: '【潮汕生腌区】酒香馥郁、虾膏饱满的熟醉大虾，四季热销，显著提升贵宾好感。',
+  },
+  {
+    id: 'carved_wagyu_ribeye',
+    name: '现切雪花和牛眼肉',
+    shortName: '现切和牛',
+    zone: 'wagyu_carving',
+    color: '#E11D48',
+    accentColor: '#FFE4E6',
+    unlockCost: 1120,
+    minShopLevel: 4,
+    ticketBonus: 72,
+    restockCost: 48,
+    maxStock: 6,
+    description: '【现切和牛档】明档现场薄切澳洲顶级和牛眼肉，脂香四溢，大幅拉升高端餐位价。',
+  },
+  {
+    id: 'tomahawk_roast',
+    name: '低温慢烤战斧牛排',
+    shortName: '战斧牛排',
+    zone: 'wagyu_carving',
+    color: '#BE123C',
+    accentColor: '#FECDD3',
+    unlockCost: 1450,
+    minShopLevel: 4,
+    ticketBonus: 84,
+    restockCost: 56,
+    maxStock: 5,
+    seasons: ['SPRING', 'AUTUMN', 'WINTER'],
+    description: '【现切和牛档 · 春秋冬限定】明档主厨现切焦香战斧牛排佐黑松露海盐，镇场硬菜！',
+  },
 ];
 
 export const BROTH_CATALOG: BrothDef[] = [
@@ -785,8 +1384,8 @@ export const SHOP_LEVEL_CONFIG = [
     customerRate: 1.0,
     vipChance: 0.08,
     baseTicket: 24,
-    maxStaffCount: 5,
-    perk: '可招募1星学徒（含热厨主厨），开启海鲜自助与熟食档经营',
+    maxStaffCount: 6,
+    perk: '可招募1星学徒（含热厨主厨），基础大厅可扩至 12 桌与 3 个初始岛台',
   },
   {
     level: 2,
@@ -794,11 +1393,11 @@ export const SHOP_LEVEL_CONFIG = [
     upgradeCost: 480,
     baseRent: 160,
     maxStaffTier: 2 as StaffTier,
-    customerRate: 1.32,
+    customerRate: 1.38,
     vipChance: 0.16,
     baseTicket: 38,
-    maxStaffCount: 7,
-    perk: '解锁2星熟练骨干、刺身日料区与金汤/冬阴功锅，客流+32%',
+    maxStaffCount: 10,
+    perk: '解锁2星骨干、东翼扩建（可购第4-5区位，扩至24桌），客流+38%',
   },
   {
     level: 3,
@@ -806,11 +1405,11 @@ export const SHOP_LEVEL_CONFIG = [
     upgradeCost: 1100,
     baseRent: 260,
     maxStaffTier: 3 as StaffTier,
-    customerRate: 1.65,
+    customerRate: 1.85,
     vipChance: 0.25,
     baseTicket: 60,
-    maxStaffCount: 9,
-    perk: '解锁3星金牌大师、活捞海鲜区与M9和牛，VIP比例大幅提升',
+    maxStaffCount: 14,
+    perk: '解锁3星金牌大师、南庭水景厅（可购第6-7区位，扩至36桌），VIP大增',
   },
   {
     level: 4,
@@ -818,11 +1417,11 @@ export const SHOP_LEVEL_CONFIG = [
     upgradeCost: 2200,
     baseRent: 400,
     maxStaffTier: 4 as StaffTier,
-    customerRate: 2.0,
+    customerRate: 2.35,
     vipChance: 0.34,
     baseTicket: 88,
-    maxStaffCount: 11,
-    perk: '解锁4星传奇名匠与波士顿活龙虾，高净值食客云集',
+    maxStaffCount: 18,
+    perk: '解锁4星名匠与东阁御宴廊（可购第8-9区位，满开48桌），高净值云集',
   },
   {
     level: 5,
@@ -830,27 +1429,27 @@ export const SHOP_LEVEL_CONFIG = [
     upgradeCost: 3800,
     baseRent: 580,
     maxStaffTier: 4 as StaffTier,
-    customerRate: 2.35,
+    customerRate: 2.85,
     vipChance: 0.45,
     baseTicket: 128,
-    maxStaffCount: 14,
-    perk: '解锁帝王蟹顶级品类，顶级客单价与满座人气',
+    maxStaffCount: 24,
+    perk: '开放第10号旗舰主岛位与帝王蟹珍馐，10大分区 + 48桌满座盛况',
   },
 ];
 
 export const TABLE_EXPANSION_TIERS = [
-  { tables: 4, cost: 0, minShopLevel: 1, label: '4桌 基础大厅' },
-  { tables: 6, cost: 280, minShopLevel: 1, label: '6桌 扩建卡座' },
-  { tables: 8, cost: 640, minShopLevel: 2, label: '8桌 开放东翼' },
-  { tables: 10, cost: 1180, minShopLevel: 3, label: '10桌 雅座升级' },
-  { tables: 12, cost: 1950, minShopLevel: 4, label: '12桌 全厅满配' },
+  { tables: 6, cost: 0, minShopLevel: 1, label: '6桌 初始大厅' },
+  { tables: 12, cost: 320, minShopLevel: 1, label: '12桌 基础满厅' },
+  { tables: 24, cost: 720, minShopLevel: 2, label: '24桌 东翼雅廊' },
+  { tables: 36, cost: 1380, minShopLevel: 3, label: '36桌 南庭大厅' },
+  { tables: 48, cost: 2200, minShopLevel: 4, label: '48桌 全厅满编' },
 ];
 
 export const DISHWARE_UPGRADE_TIERS = [
-  { maxDishes: 8, cost: 0, label: '8套 标准餐具' },
-  { maxDishes: 14, cost: 180, label: '14套 瓷釉加厚餐具' },
-  { maxDishes: 22, cost: 420, label: '22套 高温消毒餐具库' },
-  { maxDishes: 32, cost: 820, label: '32套 旗舰级餐具周转' },
+  { maxDishes: 14, cost: 0, label: '14套 标准餐具' },
+  { maxDishes: 28, cost: 240, label: '28套 瓷釉加厚餐具' },
+  { maxDishes: 52, cost: 520, label: '52套 高温消毒餐具库' },
+  { maxDishes: 84, cost: 980, label: '84套 48桌旗舰周转库' },
 ];
 
 export const BUFFET_CAPACITY_TIERS = [
@@ -878,8 +1477,8 @@ export const STAFF_ROLE_META: Record<
     shortTitle: '迎宾',
     color: '#E5A93B',
     badgeBg: '#5C4212',
-    homeX: 116,
-    homeY: 226,
+    homeX: 100,
+    homeY: 548,
     responsibility: '迎接排队顾客并引导至已摆台餐桌',
   },
   CHEF: {

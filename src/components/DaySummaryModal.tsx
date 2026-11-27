@@ -1,5 +1,6 @@
-import { ArrowRight, CalendarClock, Sparkles, Truck } from 'lucide-react';
+import { ArrowRight, Award, CalendarClock, Sparkles, Truck } from 'lucide-react';
 import { getSeasonDef } from '../data/gameConfig';
+import { getPlayerLevelTitle, getXpRequiredForNextLevel } from '../engine/playerProgression';
 import { GameWorld } from '../types/game';
 
 interface DaySummaryModalProps {
@@ -16,6 +17,11 @@ export function DaySummaryModal({ world, onNextDay }: DaySummaryModalProps) {
 
   const tomorrowArrivals = world.pendingOrders.filter((o) => o.daysRemaining <= 1);
   const laterOrders = world.pendingOrders.filter((o) => o.daysRemaining > 1);
+  const xpEarnedToday = s.xpEarned ?? 0;
+  const levelsGainedToday = s.levelsGained ?? 0;
+  const xpRequired = getXpRequiredForNextLevel(world.playerLevel);
+  const xpPercent = Math.min(100, Math.round((world.playerXp / Math.max(1, xpRequired)) * 100));
+  const playerLevelTitle = getPlayerLevelTitle(world.playerLevel);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-4">
@@ -65,6 +71,43 @@ export function DaySummaryModal({ world, onNextDay }: DaySummaryModalProps) {
                 {s.reputationChange >= 0 ? '+' : ''}
                 {s.reputationChange.toFixed(1)}
               </div>
+            </div>
+          </div>
+
+          <div
+            className={`game-inset px-3.5 py-2.5 rounded-lg border space-y-1.5 ${
+              levelsGainedToday > 0 ? 'border-[#E8C97A]/80' : 'border-[#593b25]'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 font-display font-bold text-[#FFF6E5]">
+                <Award className="w-4 h-4 text-[#F6DA8D] shrink-0" />
+                <span>
+                  店长 Lv.{world.playerLevel} · {playerLevelTitle}
+                </span>
+                {levelsGainedToday > 0 && (
+                  <span className="font-mono-num text-[10px] font-bold text-[#211208] bg-[#FDE047] px-1.5 py-0.5 rounded">
+                    今日连升 +{levelsGainedToday} 级
+                  </span>
+                )}
+              </div>
+              <span className="font-mono-num text-[#F6DA8D] font-bold whitespace-nowrap">
+                可用升级点 {world.upgradePoints} 点
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-[#120a07] border border-[#5a3b25] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#d49a3a] via-[#f0cb72] to-[#fde68a]"
+                style={{ width: `${xpPercent}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] font-mono-num text-[#C5AE92]">
+              <span>
+                本日营收经验 <strong className="text-[#86EFAC]">+{xpEarnedToday.toLocaleString()} EXP</strong>
+              </span>
+              <span>
+                {world.playerXp.toLocaleString()} / {xpRequired.toLocaleString()} EXP
+              </span>
             </div>
           </div>
 

@@ -18,10 +18,10 @@ interface SettingsModalProps {
 }
 
 const ASPECT_OPTIONS: Array<{ value: AspectRatioMode; label: string; desc: string }> = [
-  { value: 'auto', label: '自适应铺满', desc: '贴合窗口无黑边' },
-  { value: '16:9', label: '16:9 宽屏', desc: '标准宽屏视野' },
-  { value: '21:9', label: '21:9 超宽屏', desc: '宽阔沉浸厅堂' },
-  { value: '3:2', label: '3:2 经典', desc: '紧凑均衡比例' },
+  { value: 'auto', label: '100% 全屏铺满', desc: '推荐 · 贴合屏幕无黑边' },
+  { value: '16:9', label: '16:9 宽屏', desc: '固定宽屏视野' },
+  { value: '21:9', label: '21:9 超宽屏', desc: '固定超宽视野' },
+  { value: '3:2', label: '3:2 经典', desc: '固定经典比例' },
 ];
 
 const RESOLUTION_OPTIONS: Array<{ value: ResolutionPreset; label: string; desc: string }> = [

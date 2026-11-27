@@ -314,10 +314,10 @@ export function OnboardingGuide({
 
   if (collapsed) {
     return (
-      <div className="absolute top-3 right-3.5 z-20 pointer-events-auto">
+      <div className="absolute top-[62px] right-3 z-30 pointer-events-auto">
         <button
           onClick={() => setCollapsed(false)}
-          className="game-panel px-3.5 py-2 rounded-lg border border-[#E8C97A] shadow-xl flex items-center gap-2 cursor-pointer hover:bg-[#2a1911]"
+          className="hud-float backdrop-blur-md px-3.5 py-2 rounded-lg border-[#E8C97A]/80 flex items-center gap-2 cursor-pointer hover:border-[#F6DA8D] transition-colors"
         >
           <Compass className="w-4 h-4 text-[#E8C97A]" />
           <span className="font-display font-bold text-xs text-[#F6DA8D]">
@@ -330,8 +330,8 @@ export function OnboardingGuide({
   }
 
   return (
-    <div className="absolute top-3 right-3.5 z-20 w-[336px] max-w-[92vw] pointer-events-auto">
-      <div className="game-panel rounded-xl p-3.5 border border-[#E8C97A] shadow-[0_14px_34px_rgba(0,0,0,0.82)]">
+    <div className="absolute top-[62px] right-3 z-30 w-[336px] max-w-[92vw] pointer-events-auto">
+      <div className="hud-float backdrop-blur-md rounded-xl p-3.5 border-[#E8C97A]/85">
         {/* Header */}
         <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#593b25]">
           <div className="flex items-center gap-1.5 min-w-0">

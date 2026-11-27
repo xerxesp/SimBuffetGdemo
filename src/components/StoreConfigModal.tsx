@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ArrowUpCircle,
+  Award,
   Building2,
   CalendarClock,
   Check,
@@ -53,7 +54,13 @@ import {
   ensureZonePadAssignments,
   getTicketFilterPreview,
   isBuffetZoneUnlocked,
+  isPadPurchased,
+  isZoneBlueprintUnlocked,
 } from '../engine/storyAndFacilities';
+import {
+  getPlayerLevelTitle,
+  getXpRequiredForNextLevel,
+} from '../engine/playerProgression';
 import {
   BuffetZoneId,
   GameWorld,
@@ -75,6 +82,9 @@ interface StoreConfigModalProps {
   onUnequipPolicySlot: (slotId: string) => void;
   onAutoSlotPolicyCard: (cardId: string) => void;
   onAssignZonePad: (padId: string, zoneId: BuffetZoneId | null) => void;
+  onPurchaseZonePad: (padId: string) => void;
+  onBuildBuffetZone: (zoneId: BuffetZoneId) => void;
+  onPurchaseRegime: (regimeId: RegimeId) => void;
   onSwitchRegime: (regimeId: RegimeId) => void;
   onStartTechResearch: (nodeId: string) => void;
   onHire: (candidateId: string) => void;
@@ -140,6 +150,9 @@ export function StoreConfigModal({
   onUnequipPolicySlot,
   onAutoSlotPolicyCard,
   onAssignZonePad,
+  onPurchaseZonePad,
+  onBuildBuffetZone,
+  onPurchaseRegime,
   onSwitchRegime,
   onStartTechResearch,
   onHire,
@@ -159,7 +172,8 @@ export function StoreConfigModal({
   const frontBounds = getFrontHallBounds(world.shopLevel);
   const padAssignments = ensureZonePadAssignments(world);
   const unlockedPadsList = FRONT_HALL_ZONE_PADS.filter((p) => p.minShopLevel <= world.shopLevel);
-  const occupiedPadCount = unlockedPadsList.filter((p) => Boolean(padAssignments[p.id])).length;
+  const purchasedPadsList = unlockedPadsList.filter((p) => isPadPurchased(world, p.id));
+  const occupiedPadCount = purchasedPadsList.filter((p) => Boolean(padAssignments[p.id])).length;
   const seasonDef = getSeasonDef(world.season);
   const activeRegime = getRegimeDef(world.activeRegimeId);
   const policyBonuses = evaluatePolicyBonuses(world);
@@ -250,6 +264,9 @@ export function StoreConfigModal({
 
   const selectedTechNode = getTechNodeDef(selectedTechId) ?? TECH_TREE_NODES[0];
   const selectedTechStatus = getTechNodeStatus(world, selectedTechNode.id);
+  const xpRequired = getXpRequiredForNextLevel(world.playerLevel);
+  const xpPercent = Math.min(100, Math.round((world.playerXp / Math.max(1, xpRequired)) * 100));
+  const playerLevelTitle = getPlayerLevelTitle(world.playerLevel);
 
   // Layout geometry for horizontal 5-stage Development Tree SVG connectors
   const COL_W = 216;
@@ -288,14 +305,14 @@ export function StoreConfigModal({
                   门店配置中心
                 </h2>
                 <span className="text-xs font-mono-num text-[#E8C97A]">
-                  Lv.{world.shopLevel} · 第{world.year}年{seasonDef.shortName}季 · 现金 ¥
+                  门店 Lv.{world.shopLevel} · 店长 Lv.{world.playerLevel}（升级点 {world.upgradePoints}）· 现金 ¥
                   {Math.round(world.cash).toLocaleString()}
                 </span>
               </div>
               <p className="text-[11px] text-[#C5AE92] truncate">
                 {isPrep
-                  ? '开店前筹备期：自由切换店面类型、配置当季菜品与经营卡、研学门店发展树与招募团队'
-                  : '营业/闭店阶段仅可查阅，变动店面类型、菜单卡位与研发排期请待明日开店前'}
+                  ? '开店前筹备期：消耗升级点与资金启动天赋研发、购置装潢新店面类型、扩建 10 大区域位与特色分区、配置菜单与团队'
+                  : '营业/闭店阶段：当前仅供查看进度；天赋研发、店面装潢、区域扩建与菜单配置均需在每日「开店前准备」阶段执行'}
               </p>
             </div>
           </div>
@@ -332,13 +349,13 @@ export function StoreConfigModal({
             {
               id: 'ZONES' as const,
               label: '前厅区域布局',
-              sub: `已布置 ${occupiedPadCount}/${unlockedPadsList.length}位`,
+              sub: `已建 ${purchasedPadsList.length}/${FRONT_HALL_ZONE_PADS.length}位 · 已配 ${occupiedPadCount}`,
               icon: <LayoutGrid className="w-4 h-4" />,
             },
             {
               id: 'TECH_TREE' as const,
-              label: '门店发展树',
-              sub: `已解锁 ${world.unlockedTechNodeIds.length}/${TECH_TREE_NODES.length}`,
+              label: '天赋发展树',
+              sub: `可用 ${world.upgradePoints} 点 · ${world.unlockedTechNodeIds.length}/${TECH_TREE_NODES.length}`,
               icon: <GitBranch className="w-4 h-4" />,
             },
             {
@@ -442,18 +459,34 @@ export function StoreConfigModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                   {DINING_REGIMES.map((reg) => {
                     const unlocked = world.unlockedRegimeIds.includes(reg.id);
+                    const purchased = world.purchasedRegimeIds.includes(reg.id);
+                    const pendingBuild = world.pendingOrders.find(
+                      (o) => o.type === 'PURCHASE_REGIME' && o.targetId === reg.id
+                    );
                     const isCurrent = world.activeRegimeId === reg.id;
+                    const canPurchase =
+                      isPrep &&
+                      unlocked &&
+                      !purchased &&
+                      !pendingBuild &&
+                      world.cash >= reg.purchaseCost;
                     const canSwitch =
-                      isPrep && unlocked && !isCurrent && world.regimeSwitchCooldown === 0;
+                      isPrep &&
+                      unlocked &&
+                      purchased &&
+                      !isCurrent &&
+                      world.regimeSwitchCooldown === 0;
                     return (
                       <div
                         key={reg.id}
                         className={`p-3 rounded-lg border flex flex-col justify-between gap-2 ${
                           isCurrent
                             ? 'bg-[#382317] border-[#e8c97a]'
-                            : unlocked
-                              ? 'bg-[#261710] border-[#6b472b]'
-                              : 'bg-[#1a100b] border-[#3d271a] opacity-65'
+                            : pendingBuild
+                              ? 'bg-[#192b2d] border-[#38B2AC]'
+                              : unlocked
+                                ? 'bg-[#261710] border-[#6b472b]'
+                                : 'bg-[#1a100b] border-[#3d271a] opacity-65'
                         }`}
                       >
                         <div>
@@ -487,6 +520,11 @@ export function StoreConfigModal({
                           <p className="text-[10px] text-[#D6C3A8] mt-1.5 leading-snug">
                             {reg.description}
                           </p>
+                          {reg.purchaseCost > 0 && !purchased && (
+                            <div className="mt-1.5 text-[10px] font-mono-num text-[#F6DA8D]">
+                              装潢配置：¥{reg.purchaseCost.toLocaleString()} · 工期 {reg.setupDays} 天
+                            </div>
+                          )}
                         </div>
 
                         {isCurrent ? (
@@ -498,7 +536,25 @@ export function StoreConfigModal({
                             onClick={() => handleSwitchTab('TECH_TREE')}
                             className="w-full py-1 rounded text-[11px] font-semibold bg-[#281810] text-[#C5AE92] border border-[#593b25] hover:text-[#FFF6E5] cursor-pointer"
                           >
-                            需在发展树解锁 →
+                            需在天赋树解锁 →
+                          </button>
+                        ) : pendingBuild ? (
+                          <div className="w-full py-1 rounded text-center text-[11px] font-bold font-mono-num bg-[#172f2e] border border-[#38B2AC] text-[#81E6D9]">
+                            装潢施工中 · 余 {pendingBuild.daysRemaining} 天
+                          </div>
+                        ) : !purchased ? (
+                          <button
+                            disabled={!canPurchase}
+                            onClick={() => onPurchaseRegime(reg.id)}
+                            className={`w-full py-1 rounded text-[11px] font-bold font-mono-num ${
+                              canPurchase ? 'game-btn-gold cursor-pointer' : 'game-btn-disabled'
+                            }`}
+                          >
+                            {!isPrep
+                              ? '仅开店前可购置'
+                              : world.cash < reg.purchaseCost
+                                ? `资金不足（需 ¥${reg.purchaseCost}）`
+                                : `购置装潢 ¥${reg.purchaseCost}（${reg.setupDays}天）`}
                           </button>
                         ) : (
                           <button
@@ -768,27 +824,30 @@ export function StoreConfigModal({
         )}
 
         {/* ======================================================
-            TAB 2: FRONT HALL ZONE LAYOUT & MAP EXPANSION (前厅区域布局)
+            TAB 2: FRONT HALL 10-AREA LAYOUT & SPECIALTY ZONE CONSTRUCTION
             ====================================================== */}
         {tab === 'ZONES' && (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-gradient-to-b from-[#1e120c] to-[#140b07]">
             {/* Top Map Expansion Overview Ribbon */}
-            <div className="px-5 py-3.5 bg-[#24150e]/90 border-b border-[#593b25] shrink-0 space-y-2.5">
+            <div className="px-5 py-3 bg-[#24150e]/90 border-b border-[#593b25] shrink-0 space-y-2.5">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 flex-wrap">
                     <span className="font-display text-sm font-bold text-[#FFF6E5]">
                       当前前厅规模：Lv.{world.shopLevel} · {frontBounds.wingTitle}
                     </span>
                     <span className="font-mono-num text-[11px] px-2 py-0.5 rounded bg-[#140b07] border border-[#8c6843] text-[#E8C97A]">
-                      地图尺寸 {frontBounds.width} × {frontBounds.height}
+                      桌位 {world.tableLimit}/48 桌
                     </span>
                     <span className="font-mono-num text-[11px] px-2 py-0.5 rounded bg-[#140b07] border border-[#4EAFA2]/60 text-[#81E6D9]">
-                      已开放 {unlockedPadsList.length} / {FRONT_HALL_ZONE_PADS.length} 区域位
+                      已建 {purchasedPadsList.length}/{FRONT_HALL_ZONE_PADS.length} 区域位
+                    </span>
+                    <span className="font-mono-num text-[11px] px-2 py-0.5 rounded bg-[#140b07] border border-[#b58942]/60 text-[#FCD34D]">
+                      已建成 {world.unlockedZones.length}/{BUFFET_ZONES_CONFIG.length} 特色分区
                     </span>
                   </div>
                   <p className="text-[11px] text-[#C5AE92] mt-1">
-                    {frontBounds.expansionNote}。每次在「门店发展树」中提升店铺等级，大堂地图将自动向外扩建并解锁新的分散区域位；您可自由指定每个区域位摆放哪种菜品区（支持互换位置）。
+                    {frontBounds.expansionNote}。在天赋树解锁店铺等级与分区蓝图后，需于每日「开店前准备」阶段出资并等待工期购置扩建区域位与特色分区，竣工后即可自由配置落位。
                   </p>
                 </div>
                 <button
@@ -796,11 +855,11 @@ export function StoreConfigModal({
                   className="game-btn-wood inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#E8C97A] cursor-pointer whitespace-nowrap"
                 >
                   <GitBranch className="w-3.5 h-3.5" />
-                  前往发展树升星/解锁新区
+                  前往天赋树解锁蓝图
                 </button>
               </div>
 
-              {/* 5-Level Automatic Expansion Track */}
+              {/* 5-Level Expansion Track */}
               <div className="grid grid-cols-5 gap-2">
                 {[1, 2, 3, 4, 5].map((lv) => {
                   const spec = FRONT_HALL_EXPANSION_BY_LEVEL[lv];
@@ -812,7 +871,7 @@ export function StoreConfigModal({
                   return (
                     <div
                       key={lv}
-                      className={`px-2.5 py-2 rounded-lg border text-left transition-colors ${
+                      className={`px-2.5 py-1.5 rounded-lg border text-left transition-colors ${
                         isCurrent
                           ? 'bg-[#362014] border-[#E8C97A] text-[#FFF6E5]'
                           : reached
@@ -822,13 +881,10 @@ export function StoreConfigModal({
                     >
                       <div className="flex items-center justify-between text-[11px] font-bold">
                         <span>Lv.{lv}</span>
-                        <span className="font-mono-num text-[10px]">{padCountAtLv}位</span>
+                        <span className="font-mono-num text-[10px]">可扩至 {padCountAtLv} 区</span>
                       </div>
                       <div className="text-[11px] font-semibold truncate mt-0.5">
                         {spec.wingTitle}
-                      </div>
-                      <div className="text-[10px] font-mono-num opacity-80">
-                        {spec.width}×{spec.height}
                       </div>
                     </div>
                   );
@@ -836,132 +892,344 @@ export function StoreConfigModal({
               </div>
             </div>
 
-            {/* 7 Spaced Customizable Zone Pads Grid */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                {FRONT_HALL_ZONE_PADS.map((pad) => {
-                  const unlocked = pad.minShopLevel <= world.shopLevel;
-                  const assignedId = padAssignments[pad.id] ?? null;
-                  const assignedDef = assignedId
-                    ? BUFFET_ZONES_CONFIG.find((z) => z.id === assignedId) ?? null
-                    : null;
+            {/* Scrollable Body: Specialty Zones Construction + 10 Customizable Zone Pads */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
+              {/* Section A: 10 Specialty Buffet Zones (Blueprint -> Purchase & Build -> Ready) */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="font-display text-sm font-bold text-[#E8C97A]">
+                    特色菜品分区建设（共 {BUFFET_ZONES_CONFIG.length} 大分区 · 天赋解锁蓝图后开店前出资建成）
+                  </h3>
+                  {!isPrep && (
+                    <span className="text-[11px] text-[#FBBF24]">
+                      当前非开店前阶段，仅支持查看建设状态
+                    </span>
+                  )}
+                </div>
 
-                  return (
-                    <div
-                      key={pad.id}
-                      className={`rounded-xl border p-3.5 flex flex-col gap-2.5 transition-colors ${
-                        unlocked
-                          ? 'bg-[#24160f] border-[#785130]'
-                          : 'bg-[#170e0a]/80 border-[#3c2719] opacity-75'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-display text-sm font-bold text-[#FFF6E5] truncate">
-                              {pad.label}
-                            </h3>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#140b07] border border-[#593b25] text-[#C5AE92] whitespace-nowrap">
-                              {pad.orientation === 'VERTICAL' ? '纵向廊台' : '横向岛台'}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-[#B59876] mt-0.5">{pad.wingLabel}</div>
-                        </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                  {BUFFET_ZONES_CONFIG.map((z) => {
+                    const built = isBuffetZoneUnlocked(world, z.id);
+                    const blueprintUnlocked = isZoneBlueprintUnlocked(world, z.id);
+                    const pendingZone = world.pendingOrders.find(
+                      (o) => o.type === 'UNLOCK_ZONE' && o.targetId === z.id
+                    );
+                    const canBuild =
+                      isPrep &&
+                      blueprintUnlocked &&
+                      !built &&
+                      !pendingZone &&
+                      world.cash >= z.unlockCost;
 
-                        {unlocked ? (
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded border whitespace-nowrap ${
-                              assignedDef
-                                ? 'bg-[#1a2c26] border-[#4EAFA2]/70 text-[#81E6D9]'
-                                : 'bg-[#2d1e12] border-[#b58942]/70 text-[#FCD34D]'
-                            }`}
-                          >
-                            {assignedDef ? assignedDef.shortName : '空位待配置'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-[#140b07] border border-[#4a3120] text-[#9c8269] whitespace-nowrap">
-                            <Lock className="w-3 h-3" />
-                            Lv.{pad.minShopLevel} 扩建解锁
-                          </span>
-                        )}
-                      </div>
-
-                      {unlocked ? (
-                        <>
-                          <div className="text-[11px] text-[#D8C5AD] min-h-[28px]">
-                            {assignedDef
-                              ? assignedDef.description
-                              : '当前为空区域位，顾客与店长可自由通行；点击下方按钮即可在此建设对应菜品自助区。'}
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-[#422b1c]">
-                            {BUFFET_ZONES_CONFIG.map((z) => {
-                              const zUnlocked = isBuffetZoneUnlocked(world, z.id);
-                              const isHere = assignedId === z.id;
-                              const placedOtherPad = !isHere
-                                ? unlockedPadsList.find(
-                                    (other) => other.id !== pad.id && padAssignments[other.id] === z.id
-                                  )
-                                : undefined;
-
-                              return (
-                                <button
-                                  key={z.id}
-                                  disabled={!zUnlocked || isHere}
-                                  onClick={() => onAssignZonePad(pad.id, z.id)}
-                                  className={`px-2 py-1.5 rounded-lg border text-left text-[11px] transition-all flex items-center justify-between gap-1 ${
-                                    isHere
-                                      ? 'bg-[#382315] border-[#E8C97A] text-[#FEF08A] font-bold cursor-default'
-                                      : zUnlocked
-                                        ? 'bg-[#1a100b] border-[#5b3d26] text-[#F0E3CF] hover:border-[#E8C97A] hover:bg-[#2a1a11] cursor-pointer'
-                                        : 'bg-[#130b08] border-[#332116] text-[#786350] cursor-not-allowed'
-                                  }`}
-                                >
-                                  <span className="truncate">{z.shortName}</span>
-                                  {isHere ? (
-                                    <Check className="w-3 h-3 text-[#E8C97A] shrink-0" />
-                                  ) : !zUnlocked ? (
-                                    <Lock className="w-3 h-3 shrink-0 opacity-70" />
-                                  ) : placedOtherPad ? (
-                                    <span className="text-[9px] text-[#C5AE92] shrink-0">互换</span>
-                                  ) : (
-                                    <span className="text-[9px] text-[#4ADE80] shrink-0">配置</span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {assignedId && (
-                            <button
-                              onClick={() => onAssignZonePad(pad.id, null)}
-                              className="mt-0.5 text-[11px] py-1 rounded-lg border border-[#593b25] bg-[#180e0a] hover:border-[#f87171]/60 hover:text-[#FCA5A5] text-[#B59876] transition-colors cursor-pointer"
+                    return (
+                      <div
+                        key={z.id}
+                        className={`rounded-lg border p-2.5 flex flex-col justify-between gap-2 ${
+                          built
+                            ? 'bg-[#172820] border-[#3d7a5b]'
+                            : pendingZone
+                              ? 'bg-[#172a2e] border-[#38B2AC]'
+                              : blueprintUnlocked
+                                ? 'bg-[#2b1a11] border-[#b58942]'
+                                : 'bg-[#160d09] border-[#3c2719] opacity-70'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-1">
+                            <span
+                              className="font-display text-xs font-bold truncate"
+                              style={{ color: built || blueprintUnlocked ? z.accentColor : '#9E856B' }}
                             >
-                              清空该区域位
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <div className="flex-1 flex flex-col justify-center py-4 text-center text-xs text-[#9c8269] border-t border-[#332116]">
-                          <p>
-                            将门店升级至 <strong className="text-[#E8C97A]">Lv.{pad.minShopLevel}</strong>{' '}
-                            后，前厅地图将自动向外扩建并开放此区域位。
+                              {z.shortName}
+                            </span>
+                            {built && <Check className="w-3.5 h-3.5 text-[#4ADE80] shrink-0" />}
+                            {!blueprintUnlocked && <Lock className="w-3 h-3 text-[#8C7058] shrink-0" />}
+                          </div>
+                          <p className="text-[10px] text-[#C5AE92] mt-1 leading-snug line-clamp-2">
+                            {z.description}
                           </p>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+
+                        {built ? (
+                          <div className="text-[10px] font-bold text-[#6EE7B7]">
+                            已建成 · 可配置至区域位
+                          </div>
+                        ) : pendingZone ? (
+                          <div className="text-[10px] font-bold font-mono-num text-[#81E6D9]">
+                            分区施工中 · 余 {pendingZone.daysRemaining} 天
+                          </div>
+                        ) : !blueprintUnlocked ? (
+                          <button
+                            onClick={() => handleSwitchTab('TECH_TREE')}
+                            className="w-full py-1 rounded text-[10px] font-semibold bg-[#24150e] text-[#C5AE92] border border-[#593b25] hover:text-[#FFF6E5] cursor-pointer"
+                          >
+                            需天赋树解锁蓝图 →
+                          </button>
+                        ) : (
+                          <button
+                            disabled={!canBuild}
+                            onClick={() => onBuildBuffetZone(z.id)}
+                            className={`w-full py-1 rounded text-[10px] font-bold font-mono-num ${
+                              canBuild ? 'game-btn-gold cursor-pointer' : 'game-btn-disabled'
+                            }`}
+                          >
+                            {!isPrep
+                              ? `开店前可建 ¥${z.unlockCost}`
+                              : world.cash < z.unlockCost
+                                ? `资金不足 ¥${z.unlockCost}`
+                                : `购置建设 ¥${z.unlockCost}（${z.buildDays}天）`}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section B: 10 Spaced Customizable Front-Hall Zone Pads */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="font-display text-sm font-bold text-[#FFF6E5]">
+                    前厅 10 大扩建区域位（开店前购置扩建基座并自由指定菜品区）
+                  </h3>
+                  <span className="text-[11px] font-mono-num text-[#C5AE92]">
+                    已开放资格 {unlockedPadsList.length}/10 · 已竣工 {purchasedPadsList.length}/10
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {FRONT_HALL_ZONE_PADS.map((pad) => {
+                    const levelUnlocked = pad.minShopLevel <= world.shopLevel;
+                    const purchased = levelUnlocked && isPadPurchased(world, pad.id);
+                    const pendingPad = world.pendingOrders.find(
+                      (o) => o.type === 'PURCHASE_ZONE_PAD' && o.targetId === pad.id
+                    );
+                    const canBuyPad =
+                      isPrep &&
+                      levelUnlocked &&
+                      !purchased &&
+                      !pendingPad &&
+                      world.cash >= pad.purchaseCost;
+                    const assignedId = purchased ? padAssignments[pad.id] ?? null : null;
+                    const assignedDef = assignedId
+                      ? BUFFET_ZONES_CONFIG.find((z) => z.id === assignedId) ?? null
+                      : null;
+
+                    return (
+                      <div
+                        key={pad.id}
+                        className={`rounded-xl border p-3.5 flex flex-col gap-2.5 transition-colors ${
+                          purchased
+                            ? 'bg-[#24160f] border-[#785130]'
+                            : pendingPad
+                              ? 'bg-[#17282c] border-[#38B2AC]'
+                              : levelUnlocked
+                                ? 'bg-[#1e1a24] border-[#5b7db3]'
+                                : 'bg-[#170e0a]/80 border-[#3c2719] opacity-75'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-display text-sm font-bold text-[#FFF6E5] truncate">
+                                {pad.label}
+                              </h3>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#140b07] border border-[#593b25] text-[#C5AE92] whitespace-nowrap">
+                                {pad.orientation === 'VERTICAL' ? '纵向廊台' : '横向岛台'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-[#B59876] mt-0.5">{pad.wingLabel}</div>
+                          </div>
+
+                          {purchased ? (
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded border whitespace-nowrap ${
+                                assignedDef
+                                  ? 'bg-[#1a2c26] border-[#4EAFA2]/70 text-[#81E6D9]'
+                                  : 'bg-[#2d1e12] border-[#b58942]/70 text-[#FCD34D]'
+                              }`}
+                            >
+                              {assignedDef ? assignedDef.shortName : '空位待配置'}
+                            </span>
+                          ) : pendingPad ? (
+                            <span className="text-[10px] font-bold font-mono-num px-2 py-0.5 rounded bg-[#142c30] border border-[#38B2AC] text-[#81E6D9] whitespace-nowrap">
+                              施工余 {pendingPad.daysRemaining} 天
+                            </span>
+                          ) : levelUnlocked ? (
+                            <span className="text-[10px] font-bold font-mono-num px-2 py-0.5 rounded bg-[#182438] border border-[#60A5FA]/70 text-[#93C5FD] whitespace-nowrap">
+                              待购置 ¥{pad.purchaseCost}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-[#140b07] border border-[#4a3120] text-[#9c8269] whitespace-nowrap">
+                              <Lock className="w-3 h-3" />
+                              Lv.{pad.minShopLevel} 扩建解锁
+                            </span>
+                          )}
+                        </div>
+
+                        {purchased ? (
+                          <>
+                            <div className="text-[11px] text-[#D8C5AD] min-h-[28px]">
+                              {assignedDef
+                                ? assignedDef.description
+                                : '已竣工的空区域位，开店前点击下方任意已建成特色分区即可配置落位。'}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-[#422b1c]">
+                              {BUFFET_ZONES_CONFIG.map((z) => {
+                                const zBuilt = isBuffetZoneUnlocked(world, z.id);
+                                const isHere = assignedId === z.id;
+                                const placedOtherPad = !isHere
+                                  ? purchasedPadsList.find(
+                                      (other) => other.id !== pad.id && padAssignments[other.id] === z.id
+                                    )
+                                  : undefined;
+                                const clickable = isPrep && zBuilt && !isHere;
+
+                                return (
+                                  <button
+                                    key={z.id}
+                                    disabled={!clickable}
+                                    onClick={() => onAssignZonePad(pad.id, z.id)}
+                                    className={`px-2 py-1.5 rounded-lg border text-left text-[11px] transition-all flex items-center justify-between gap-1 ${
+                                      isHere
+                                        ? 'bg-[#382315] border-[#E8C97A] text-[#FEF08A] font-bold cursor-default'
+                                        : clickable
+                                          ? 'bg-[#1a100b] border-[#5b3d26] text-[#F0E3CF] hover:border-[#E8C97A] hover:bg-[#2a1a11] cursor-pointer'
+                                          : 'bg-[#130b08] border-[#332116] text-[#786350] cursor-not-allowed'
+                                    }`}
+                                  >
+                                    <span className="truncate">{z.shortName}</span>
+                                    {isHere ? (
+                                      <Check className="w-3 h-3 text-[#E8C97A] shrink-0" />
+                                    ) : !zBuilt ? (
+                                      <Lock className="w-3 h-3 shrink-0 opacity-70" />
+                                    ) : !isPrep ? (
+                                      <span className="text-[9px] text-[#9c8269] shrink-0">开店前</span>
+                                    ) : placedOtherPad ? (
+                                      <span className="text-[9px] text-[#C5AE92] shrink-0">互换</span>
+                                    ) : (
+                                      <span className="text-[9px] text-[#4ADE80] shrink-0">配置</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {assignedId && (
+                              <button
+                                disabled={!isPrep}
+                                onClick={() => onAssignZonePad(pad.id, null)}
+                                className={`mt-0.5 text-[11px] py-1 rounded-lg border border-[#593b25] bg-[#180e0a] text-[#B59876] transition-colors ${
+                                  isPrep
+                                    ? 'hover:border-[#f87171]/60 hover:text-[#FCA5A5] cursor-pointer'
+                                    : 'opacity-45 cursor-not-allowed'
+                                }`}
+                              >
+                                {isPrep ? '清空该区域位' : '仅开店前可调整区域位'}
+                              </button>
+                            )}
+                          </>
+                        ) : pendingPad ? (
+                          <div className="flex-1 flex flex-col justify-center py-4 text-center text-xs text-[#81E6D9] border-t border-[#295358] space-y-1">
+                            <div className="font-bold inline-flex items-center justify-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5" />
+                              区域扩建施工中（预计余 {pendingPad.daysRemaining} 天）
+                            </div>
+                            <p className="text-[11px] text-[#A8C9CE]">
+                              竣工后将自动开放档口水电冷链位，可自由配置任意已建成特色分区。
+                            </p>
+                          </div>
+                        ) : levelUnlocked ? (
+                          <div className="flex-1 flex flex-col justify-between py-2 gap-3 border-t border-[#3b4e6e]">
+                            <p className="text-[11px] text-[#CBD5E1] leading-relaxed">
+                              该扩建区域已随 Lv.{pad.minShopLevel} 开放施工资格！需于开店前出资铺设冷链与排烟基座，完工后即可布置特色菜品区。
+                            </p>
+                            <button
+                              disabled={!canBuyPad}
+                              onClick={() => onPurchaseZonePad(pad.id)}
+                              className={`w-full py-2 rounded-lg text-xs font-bold font-mono-num ${
+                                canBuyPad ? 'game-btn-gold cursor-pointer' : 'game-btn-disabled'
+                              }`}
+                            >
+                              {!isPrep
+                                ? `仅开店前可购置（¥${pad.purchaseCost} · ${pad.buildDays}天）`
+                                : world.cash < pad.purchaseCost
+                                  ? `资金不足（需 ¥${pad.purchaseCost}）`
+                                  : `购置扩建区域位 · ¥${pad.purchaseCost}（${pad.buildDays}天）`}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex flex-col justify-center py-4 text-center text-xs text-[#9c8269] border-t border-[#332116]">
+                            <p>
+                              将门店升级至 <strong className="text-[#E8C97A]">Lv.{pad.minShopLevel}</strong>{' '}
+                              后，即可解锁此区域位的购置扩建资格（¥{pad.purchaseCost} · {pad.buildDays}天）。
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* ======================================================
-            TAB 3: 5-STAGE HORIZONTAL STORE DEVELOPMENT TREE (门店发展树)
+            TAB 3: 5-STAGE HORIZONTAL TALENT & STORE TREE (天赋发展树)
             ====================================================== */}
         {tab === 'TECH_TREE' && (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-gradient-to-b from-[#1c100b] to-[#120a07]">
+            {/* Player Level, Revenue-to-XP Bar & Upgrade Points Banner */}
+            <div className="px-5 py-2.5 bg-[#23140d] border-b border-[#6b472b] flex flex-wrap items-center justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-9 h-9 rounded-full border border-[#e8c97a] bg-[#311d11] flex items-center justify-center text-[#F6DA8D] shrink-0">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1 max-w-[440px]">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-display font-bold text-[#FFF6E5] whitespace-nowrap">
+                      店长 Lv.{world.playerLevel} · {playerLevelTitle}
+                    </span>
+                    <span className="font-mono-num text-[11px] text-[#DFCDB6] whitespace-nowrap">
+                      {world.playerXp.toLocaleString()} / {xpRequired.toLocaleString()} EXP
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 w-full rounded-full bg-[#120a07] border border-[#5a3b25] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#d49a3a] via-[#f0cb72] to-[#fde68a] transition-all duration-300"
+                      style={{ width: `${xpPercent}%` }}
+                    />
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-[#B59876]">
+                    累计创收 ¥{Math.round(world.totalCashEarned).toLocaleString()} · 每赚取 ¥1 获得 1 经验，升级即获天赋升级点
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 shrink-0">
+                <div className="text-right">
+                  <div className="text-[10px] text-[#C5AE92]">当前可用升级点</div>
+                  <div className="flex items-baseline justify-end gap-1">
+                    <span
+                      className={`font-mono-num text-2xl font-bold leading-none ${
+                        world.upgradePoints > 0 ? 'text-[#FDE047]' : 'text-[#9E856B]'
+                      }`}
+                    >
+                      {world.upgradePoints}
+                    </span>
+                    <span className="text-xs font-bold text-[#E8C97A]">点</span>
+                  </div>
+                </div>
+                <div className="h-7 w-px bg-[#5a3b25]" aria-hidden="true" />
+                <div className="text-[11px] text-[#C5AE92] leading-snug">
+                  <div>常规升级 +1 点 · 逢 5 级 +2 点</div>
+                  <div className="text-[#F6DA8D]">需同时投入升级点与研发资金并等待工期（开店前启动）</div>
+                </div>
+              </div>
+            </div>
+
             {/* Scrollable Horizontal Tree Canvas */}
             <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto p-5">
               <div
@@ -1030,6 +1298,8 @@ export function StoreConfigModal({
                   const pos = getNodeXY(node.stage, node.row);
                   const st = getTechNodeStatus(world, node.id);
                   const selected = selectedTechId === node.id;
+                  const canAffordBoth =
+                    world.upgradePoints >= node.pointCost && world.cash >= node.cost;
 
                   return (
                     <button
@@ -1084,9 +1354,19 @@ export function StoreConfigModal({
                           <span className="text-[#81E6D9] font-bold">
                             筹建中 · 余{st.daysRemaining}天
                           </span>
+                        ) : node.pointCost === 0 && node.cost === 0 ? (
+                          <span className="text-[#6EE7B7]">初始天赋</span>
                         ) : (
                           <>
-                            <span className="text-[#F6DA8D]">¥{node.cost}</span>
+                            <span
+                              className={
+                                st.status === 'AVAILABLE' && canAffordBoth
+                                  ? 'text-[#FDE047] font-bold'
+                                  : 'text-[#F6DA8D]'
+                              }
+                            >
+                              {node.pointCost}点 + ¥{node.cost}
+                            </span>
                             <span className="text-[#C5AE92]">{node.researchDays}天</span>
                           </>
                         )}
@@ -1115,7 +1395,7 @@ export function StoreConfigModal({
                     {selectedTechNode.title}
                   </h4>
                   <span className="text-xs font-mono-num text-[#F6DA8D]">
-                    投入 ¥{selectedTechNode.cost} · 需等待 {selectedTechNode.researchDays} 天
+                    消耗 {selectedTechNode.pointCost} 升级点 + ¥{selectedTechNode.cost.toLocaleString()} · 工期 {selectedTechNode.researchDays} 天
                   </span>
                 </div>
                 <p className="text-xs text-[#DFCDB6]">{selectedTechNode.detail}</p>
@@ -1128,7 +1408,7 @@ export function StoreConfigModal({
                 {selectedTechStatus.status === 'UNLOCKED' ? (
                   <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-[#6EE7B7] bg-[#162d20] border border-[#3a7c58]">
                     <ShieldCheck className="w-4 h-4" />
-                    已完成解锁
+                    已完成研发
                   </span>
                 ) : selectedTechStatus.status === 'RESEARCHING' ? (
                   <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-[#81E6D9] bg-[#172f2e] border border-[#38B2AC]">
@@ -1136,29 +1416,31 @@ export function StoreConfigModal({
                     筹建研发中（余 {selectedTechStatus.daysRemaining} 天）
                   </span>
                 ) : (
-                  <button
-                    disabled={
-                      !isPrep ||
-                      selectedTechStatus.status !== 'AVAILABLE' ||
-                      world.cash < selectedTechNode.cost
-                    }
-                    onClick={() => onStartTechResearch(selectedTechNode.id)}
-                    className={`px-5 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap ${
-                      isPrep &&
-                      selectedTechStatus.status === 'AVAILABLE' &&
-                      world.cash >= selectedTechNode.cost
-                        ? 'game-btn-gold cursor-pointer'
-                        : 'game-btn-disabled'
-                    }`}
-                  >
-                    {!isPrep
-                      ? '仅开店前可启动筹建'
-                      : selectedTechStatus.status !== 'AVAILABLE'
-                        ? '未满足前置条件'
-                        : world.cash < selectedTechNode.cost
-                          ? `资金不足 (需¥${selectedTechNode.cost})`
-                          : `投入 ¥${selectedTechNode.cost} 启动筹建（${selectedTechNode.researchDays}天）`}
-                  </button>
+                  (() => {
+                    const hasPts = world.upgradePoints >= selectedTechNode.pointCost;
+                    const hasCash = world.cash >= selectedTechNode.cost;
+                    const canResearch =
+                      isPrep && selectedTechStatus.status === 'AVAILABLE' && hasPts && hasCash;
+                    return (
+                      <button
+                        disabled={!canResearch}
+                        onClick={() => onStartTechResearch(selectedTechNode.id)}
+                        className={`px-5 py-2.5 rounded-lg text-xs font-bold font-mono-num whitespace-nowrap ${
+                          canResearch ? 'game-btn-gold cursor-pointer' : 'game-btn-disabled'
+                        }`}
+                      >
+                        {!isPrep
+                          ? '仅限开店前启动研发'
+                          : selectedTechStatus.status !== 'AVAILABLE'
+                            ? '未满足前置条件'
+                            : !hasPts
+                              ? `升级点不足（需 ${selectedTechNode.pointCost} 点，当前 ${world.upgradePoints} 点）`
+                              : !hasCash
+                                ? `资金不足（需 ¥${selectedTechNode.cost.toLocaleString()}）`
+                                : `消耗 ${selectedTechNode.pointCost} 点 + ¥${selectedTechNode.cost.toLocaleString()} · 启动筹建（${selectedTechNode.researchDays}天）`}
+                      </button>
+                    );
+                  })()
                 )}
               </div>
             </div>

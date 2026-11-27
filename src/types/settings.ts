@@ -36,11 +36,12 @@ export const DEFAULT_SETTINGS: GameSettings = {
   muted: false,
   bgmMuted: false,
   bgmMode: 'auto',
-  aspectRatio: '16:9',
+  aspectRatio: 'auto',
   resolution: 'auto',
 };
 
-const SETTINGS_STORAGE_KEY = 'chaoxian_hotpot_settings_v1';
+const SETTINGS_STORAGE_KEY = 'chaoxian_hotpot_settings_v2';
+const LEGACY_SETTINGS_KEY = 'chaoxian_hotpot_settings_v1';
 
 const VALID_BGM_MODES: BgmMode[] = ['auto', 'TITLE', 'PREP', 'SERVICE', 'RUSH', 'CLOSING'];
 
@@ -70,6 +71,34 @@ export function loadSettings(): GameSettings {
         aspectRatio: ['auto', '16:9', '21:9', '3:2'].includes(parsed.aspectRatio)
           ? parsed.aspectRatio
           : DEFAULT_SETTINGS.aspectRatio,
+        resolution: ['auto', '720p', '1080p', '1440p'].includes(parsed.resolution)
+          ? parsed.resolution
+          : DEFAULT_SETTINGS.resolution,
+      };
+    }
+    const legacyRaw = localStorage.getItem(LEGACY_SETTINGS_KEY);
+    if (legacyRaw) {
+      const parsed = JSON.parse(legacyRaw);
+      return {
+        ...DEFAULT_SETTINGS,
+        volume:
+          typeof parsed.volume === 'number'
+            ? Math.max(0, Math.min(100, Math.round(parsed.volume)))
+            : DEFAULT_SETTINGS.volume,
+        bgmVolume:
+          typeof parsed.bgmVolume === 'number'
+            ? Math.max(0, Math.min(100, Math.round(parsed.bgmVolume)))
+            : DEFAULT_SETTINGS.bgmVolume,
+        sfxVolume:
+          typeof parsed.sfxVolume === 'number'
+            ? Math.max(0, Math.min(100, Math.round(parsed.sfxVolume)))
+            : DEFAULT_SETTINGS.sfxVolume,
+        muted: Boolean(parsed.muted),
+        bgmMuted: Boolean(parsed.bgmMuted),
+        bgmMode: VALID_BGM_MODES.includes(parsed.bgmMode)
+          ? parsed.bgmMode
+          : DEFAULT_SETTINGS.bgmMode,
+        aspectRatio: 'auto',
         resolution: ['auto', '720p', '1080p', '1440p'].includes(parsed.resolution)
           ? parsed.resolution
           : DEFAULT_SETTINGS.resolution,
