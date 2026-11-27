@@ -58,24 +58,24 @@ export function SaveLoadModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="game-panel w-full max-w-2xl rounded-xl p-6 text-[#F7EFE2] flex flex-col max-h-[88vh]">
+    <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-2.5 sm:p-4">
+      <div className="game-panel w-full max-w-2xl rounded-xl p-4 sm:p-6 text-[#F7EFE2] flex flex-col max-h-[92dvh]">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#593b25]">
-          <div className="flex items-center gap-2.5">
-            <HardDrive className="w-5 h-5 text-[#E8C97A]" />
-            <div>
-              <h2 className="font-display text-xl font-bold text-[#FFF6E5]">
+        <div className="flex items-center justify-between gap-2 pb-3.5 sm:pb-4 border-b border-[#593b25]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <HardDrive className="w-5 h-5 text-[#E8C97A] shrink-0" />
+            <div className="min-w-0">
+              <h2 className="font-display text-lg sm:text-xl font-bold text-[#FFF6E5] truncate">
                 {mode === 'IN_GAME' ? '存档与读档管理' : '读取本地经营档案'}
               </h2>
-              <p className="text-xs text-[#C5AE92]">
-                档案存储于当前浏览器本地，支持自动存档与 3 个手动槽位随时切换
+              <p className="text-[11px] sm:text-xs text-[#C5AE92]">
+                档案存储于当前设备本地，支持自动存档与 3 个手动槽位随时切换
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="game-btn-wood p-1.5 rounded cursor-pointer"
+            className="game-btn-wood min-w-[40px] min-h-[40px] p-2 rounded-lg flex items-center justify-center cursor-pointer shrink-0"
             aria-label="关闭存档管理"
           >
             <X className="w-4 h-4" />
@@ -89,7 +89,7 @@ export function SaveLoadModal({
         )}
 
         {/* Slot List */}
-        <div className="mt-4 space-y-3 overflow-y-auto pr-1 flex-1">
+        <div className="mt-4 space-y-3 overflow-y-auto touch-scroll pr-1 flex-1">
           {SLOT_ORDER.map((slot) => {
             const meta = slots[slot.id];
             const charDef = meta ? getCharacterDef(meta.characterId) : null;

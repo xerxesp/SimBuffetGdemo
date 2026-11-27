@@ -191,12 +191,12 @@ export function EndingEpilogueModal({
           : Compass;
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#090503]/95 backdrop-blur-md flex items-center justify-center p-2.5 md:p-5">
-      <div className="relative game-panel w-[97vw] max-w-6xl h-[92vh] max-h-[820px] rounded-xl overflow-hidden flex flex-col text-[#F7EFE2] shadow-2xl border-2 border-[#c9a45c]">
+    <div className="fixed inset-0 z-50 h-[100dvh] bg-[#090503]/95 backdrop-blur-md flex items-center justify-center p-2 sm:p-5">
+      <div className="relative game-panel w-[97vw] max-w-6xl h-[93dvh] sm:h-[92dvh] max-h-[820px] rounded-xl overflow-hidden flex flex-col text-[#F7EFE2] shadow-2xl border-2 border-[#c9a45c]">
         <ChaoshanCornerOrnament className="absolute top-1.5 left-1.5 z-30 w-6 h-6 opacity-85" />
         <ChaoshanCornerOrnament className="absolute top-1.5 right-1.5 z-30 w-6 h-6 rotate-90 opacity-85" />
         {/* Top Compact Cinema Header */}
-        <header className="px-5 py-3 bg-gradient-to-r from-[#2c190f] via-[#21130c] to-[#1a0f0a] border-b border-[#8c6239] flex items-center justify-between gap-3 shrink-0">
+        <header className="px-3.5 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-[#2c190f] via-[#21130c] to-[#1a0f0a] border-b border-[#8c6239] flex items-center justify-between gap-2.5 sm:gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <VermilionSealStamp label="终章" size="sm" />
             <div className="w-8 h-8 rounded-full border border-[#e8c97a] bg-[#160c08] hidden sm:flex items-center justify-center text-[#E8C97A] shrink-0">

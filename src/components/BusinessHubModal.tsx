@@ -83,18 +83,18 @@ export function BusinessHubModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="game-panel w-full max-w-4xl rounded-xl p-5 md:p-6 text-[#F7EFE2] flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-2.5 sm:p-4">
+      <div className="game-panel w-full max-w-4xl rounded-xl p-4 sm:p-6 text-[#F7EFE2] flex flex-col max-h-[92dvh]">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-[#593b25]">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <TrendingUp className="w-5 h-5 text-[#E8C97A]" />
-              <h2 className="font-display text-xl font-bold text-[#FFF6E5]">
+        <div className="flex items-start sm:items-center justify-between gap-3 pb-3 sm:pb-3.5 border-b border-[#593b25]">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-[#E8C97A] shrink-0" />
+              <h2 className="font-display text-lg sm:text-xl font-bold text-[#FFF6E5] truncate">
                 商战经营总台 · 营销 · 装潢 · 榜单与复盘
               </h2>
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#C5AE92]">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-[#C5AE92]">
               <span className="inline-flex items-center gap-1 font-semibold" style={{ color: seasonDef.color }}>
                 <SeasonSvgIcon season={world.season} className="w-4 h-4 shrink-0" />
                 {seasonDef.name}
@@ -120,7 +120,7 @@ export function BusinessHubModal({
 
           <button
             onClick={onClose}
-            className="game-btn-wood p-1.5 rounded cursor-pointer"
+            className="game-btn-wood min-w-[40px] min-h-[40px] p-2 rounded-lg flex items-center justify-center cursor-pointer shrink-0"
             aria-label="关闭商战经营总台"
           >
             <X className="w-4 h-4" />
@@ -128,7 +128,7 @@ export function BusinessHubModal({
         </div>
 
         {/* Tabs */}
-        <div className="flex flex-wrap gap-2 mt-3.5 pb-3 border-b border-[#4a2f1d]">
+        <div className="flex flex-nowrap sm:flex-wrap gap-2 mt-3 pb-3 border-b border-[#4a2f1d] overflow-x-auto no-scrollbar touch-scroll shrink-0">
           {tabs.map((t) => {
             const Icon = t.icon;
             const active = tab === t.id;
@@ -136,7 +136,7 @@ export function BusinessHubModal({
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`px-3.5 py-2 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                className={`px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
                   active ? 'game-btn-gold' : 'game-btn-wood text-[#DFCDB6]'
                 }`}
               >
@@ -148,7 +148,7 @@ export function BusinessHubModal({
         </div>
 
         {/* Tab Content */}
-        <div className="mt-4 overflow-y-auto pr-1 flex-1 space-y-4">
+        <div className="mt-3.5 sm:mt-4 overflow-y-auto touch-scroll pr-1 flex-1 space-y-4">
           {/* TAB 1: MARKETING & LOAN */}
           {tab === 'MARKETING' && (
             <>

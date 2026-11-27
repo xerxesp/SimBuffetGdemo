@@ -1,0 +1,35 @@
+{
+  "id": "./",
+  "name": "潮鲜沸鼎 · 海鲜自助火锅店长",
+  "short_name": "潮鲜沸鼎",
+  "description": "潮汕海畔海鲜自助火锅模拟经营单机游戏：迎宾上锅、七大明档补菜、后场七房巡视与十章人物主线剧情，全面适配桌面与移动端。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
+  "orientation": "any",
+  "theme_color": "#140e0a",
+  "background_color": "#0d1819",
+  "lang": "zh-CN",
+  "categories": ["games", "simulation", "strategy"],
+  "icons": [
+    {
+      "src": "./pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -19,7 +19,7 @@ export function CharacterSelectScreen({
   const chosen = MANAGER_CHARACTERS.find((c) => c.id === selectedId) || MANAGER_CHARACTERS[0];
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#120a07] text-[#F7EFE2] flex flex-col select-none">
+    <div className="relative h-[100dvh] w-screen overflow-hidden bg-[#120a07] text-[#F7EFE2] flex flex-col select-none">
       {/* Subtle Dimmed Key-Art Atmosphere */}
       <img
         src={TITLE_KEYART_URL}
@@ -37,26 +37,34 @@ export function CharacterSelectScreen({
       />
 
       {/* Main Framed Selection Stage */}
-      <div className="relative z-10 flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-6 py-5 md:py-7">
+      <div
+        className="relative z-10 flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-4 sm:px-6 py-4 md:py-7"
+        style={{
+          paddingTop: 'max(0.85rem, env(safe-area-inset-top, 0px))',
+          paddingBottom: 'max(0.85rem, env(safe-area-inset-bottom, 0px))',
+          paddingLeft: 'max(1rem, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))',
+        }}
+      >
         {/* Header Bar */}
-        <div className="flex items-center justify-between gap-4 pb-4 border-b border-[#593b25] shrink-0">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-[#593b25] shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <button
               type="button"
               onClick={onBackToMenu}
-              className="game-btn-wood inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer whitespace-nowrap"
+              className="game-btn-wood inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>返回主菜单</span>
+              <span>返回</span>
             </button>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <VermilionSealStamp label="择主" size="sm" className="hidden sm:inline-flex" />
-              <div>
-                <h1 className="font-display text-2xl md:text-3xl font-bold text-[#FFF6E5]">
+              <div className="min-w-0">
+                <h1 className="font-display text-xl sm:text-2xl md:text-3xl font-bold text-[#FFF6E5] truncate">
                   择定开局店长
                 </h1>
-                <p className="text-xs text-[#C5AE92] mt-0.5">
-                  三位店长各具出身、初始资金与经营绝技 · 双击立绘可直接启程
+                <p className="text-[11px] sm:text-xs text-[#C5AE92] mt-0.5 truncate">
+                  三位店长各具出身、初始资金与经营绝技
                 </p>
               </div>
             </div>
@@ -67,7 +75,7 @@ export function CharacterSelectScreen({
         </div>
 
         {/* 3 Tall 3:4 Portrait Character Dossiers */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-5 py-5 overflow-y-auto">
+        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 py-4 sm:py-5 overflow-y-auto touch-scroll">
           {MANAGER_CHARACTERS.map((char) => {
             const active = char.id === selectedId;
             return (
@@ -76,9 +84,9 @@ export function CharacterSelectScreen({
                 type="button"
                 onClick={() => setSelectedId(char.id)}
                 onDoubleClick={() => onConfirmStart(char.id)}
-                className={`relative text-left rounded-xl overflow-hidden transition-all duration-200 cursor-pointer flex flex-col ${
+                className={`relative text-left rounded-xl overflow-hidden transition-all duration-200 cursor-pointer flex flex-col shrink-0 ${
                   active
-                    ? 'bg-[#342015] border-2 border-[#E8C97A] shadow-[0_0_30px_rgba(232,201,122,0.22)] -translate-y-0.5'
+                    ? 'bg-[#342015] border-2 border-[#E8C97A] shadow-[0_0_30px_rgba(232,201,122,0.22)] md:-translate-y-0.5'
                     : 'bg-[#20130d]/92 border border-[#593b25] hover:border-[#b58942]'
                 }`}
               >
@@ -89,7 +97,7 @@ export function CharacterSelectScreen({
                   </>
                 )}
                 {/* Tall 3:4 Illustrated Character Portrait */}
-                <div className="relative h-64 sm:h-72 lg:h-80 w-full bg-[#160c08] overflow-hidden shrink-0">
+                <div className="relative h-48 sm:h-64 lg:h-80 w-full bg-[#160c08] overflow-hidden shrink-0">
                   <img
                     src={char.portraitUrl}
                     alt={`${char.name} - ${char.title}`}
@@ -114,7 +122,7 @@ export function CharacterSelectScreen({
                     </div>
                   )}
                   <div className="absolute bottom-3 left-4 right-4 flex items-baseline justify-between gap-2">
-                    <span className="font-display text-2xl font-bold text-[#FFF7E8]">
+                    <span className="font-display text-xl sm:text-2xl font-bold text-[#FFF7E8]">
                       {char.name}
                     </span>
                     <span
@@ -127,10 +135,10 @@ export function CharacterSelectScreen({
                 </div>
 
                 {/* Story & Stats */}
-                <div className="p-4 flex-1 flex flex-col justify-between gap-3">
+                <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between gap-3">
                   <p className="text-xs text-[#DFCDB6] leading-relaxed">{char.backstory}</p>
 
-                  <div className="space-y-2.5 pt-3 border-t border-[#593b25]">
+                  <div className="space-y-2 pt-2.5 border-t border-[#593b25]">
                     <div className="flex items-center justify-between text-xs font-mono-num text-[#DFCDB6]">
                       <span>
                         初始资金 <strong className="text-[#E8C97A]">¥{char.startingCash}</strong>
@@ -157,29 +165,29 @@ export function CharacterSelectScreen({
         </div>
 
         {/* Bottom Confirmation Dock */}
-        <div className="hud-float rounded-xl px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3.5 min-w-0">
+        <div className="hud-float rounded-xl px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             <img
               src={chosen.portraitUrl}
               alt={chosen.name}
               referrerPolicy="no-referrer"
-              className="w-11 h-11 rounded-full object-cover object-top border-2 border-[#E8C97A] shrink-0"
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover object-top border-2 border-[#E8C97A] shrink-0"
             />
             <div className="min-w-0">
-              <div className="text-sm font-bold text-[#FFF6E5]">
+              <div className="text-xs sm:text-sm font-bold text-[#FFF6E5]">
                 已选定：{chosen.name}
                 <span className="ml-2 text-xs font-medium" style={{ color: chosen.accentColor }}>
                   {chosen.title}
                 </span>
               </div>
-              <div className="text-xs text-[#C5AE92] truncate">{chosen.perkSummary}</div>
+              <div className="text-[11px] sm:text-xs text-[#C5AE92] truncate">{chosen.perkSummary}</div>
             </div>
           </div>
 
           <button
             type="button"
             onClick={() => onConfirmStart(selectedId)}
-            className="game-btn-gold inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-display font-bold text-base tracking-wide cursor-pointer whitespace-nowrap shrink-0"
+            className="game-btn-gold min-h-[44px] inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-display font-bold text-sm sm:text-base tracking-wide cursor-pointer whitespace-nowrap shrink-0"
           >
             <Play className="w-4 h-4 fill-current" />
             <span>进入开店准备</span>

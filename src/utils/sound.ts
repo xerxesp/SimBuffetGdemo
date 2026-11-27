@@ -309,11 +309,30 @@ class SoundManager {
       if (audio) {
         this.startSchedulerIfNeeded();
       }
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
+      if (this.ctx && this.ctx.state === 'running') {
+        window.removeEventListener('pointerdown', unlock);
+        window.removeEventListener('touchstart', unlock);
+        window.removeEventListener('touchend', unlock);
+        window.removeEventListener('click', unlock);
+        window.removeEventListener('keydown', unlock);
+      }
     };
     window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('touchstart', unlock, { passive: true });
+    window.addEventListener('touchend', unlock, { passive: true });
+    window.addEventListener('click', unlock, { passive: true });
     window.addEventListener('keydown', unlock, { passive: true });
+
+    // Resume AudioContext cleanly when returning to the app on iOS/Android/HarmonyOS
+    document.addEventListener('visibilitychange', () => {
+      if (!this.ctx) return;
+      if (document.visibilityState === 'visible') {
+        if (this.ctx.state !== 'running') {
+          this.ctx.resume().catch(() => {});
+        }
+        this.nextNoteTime = this.ctx.currentTime + 0.1;
+      }
+    });
   }
 
   private ensureContext(forBgm = false): {

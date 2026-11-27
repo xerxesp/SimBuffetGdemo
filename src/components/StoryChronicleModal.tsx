@@ -56,51 +56,52 @@ export function StoryChronicleModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-3 md:p-5"
+      className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-2.5 sm:p-5"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="game-panel w-[94vw] max-w-6xl max-h-[88vh] rounded-xl overflow-hidden flex flex-col text-[#F7EFE2]">
+      <div className="game-panel w-[96vw] sm:w-[94vw] max-w-6xl max-h-[92dvh] sm:max-h-[88dvh] rounded-xl overflow-hidden flex flex-col text-[#F7EFE2]">
         {/* Header */}
-        <header className="px-6 py-3.5 bg-gradient-to-b from-[#331f15] to-[#1d110c] border-b-2 border-[#b58942] flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full border-2 border-[#e8c97a] bg-[#1a0f0a] flex items-center justify-center text-[#e8c97a] shrink-0">
+        <header className="px-4 sm:px-6 py-3 sm:py-3.5 bg-gradient-to-b from-[#331f15] to-[#1d110c] border-b-2 border-[#b58942] flex items-center justify-between gap-2.5 sm:gap-4 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-[#e8c97a] bg-[#1a0f0a] hidden sm:flex items-center justify-center text-[#e8c97a] shrink-0">
               <BookOpen className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="font-display text-xl font-bold text-[#FFF6E5]">
+            <div className="min-w-0">
+              <h2 className="font-display text-base sm:text-xl font-bold text-[#FFF6E5] truncate">
                 店长纪略 · 特殊店员羁绊与堂口见闻录
               </h2>
-              <p className="text-xs text-[#C5AE92]">
+              <p className="text-[11px] sm:text-xs text-[#C5AE92] truncate hidden sm:block">
                 {world.mainStoryCompleted
                   ? '主线终章已圆满落幕 · 无尽模式将不再触发新剧情推进，此处仅供回顾档案与重温结局画卷'
                   : '主线满足条件将自动触发人物对话剧情；未邂逅的江湖奇遇严格保密'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {world.endingReport && (
               <button
                 onClick={onOpenEnding}
-                className="game-btn-gold inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
+                className="game-btn-gold inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
               >
                 <Crown className="w-4 h-4" />
-                重温命运终章结局
+                <span className="hidden sm:inline">重温命运终章结局</span>
+                <span className="sm:hidden">终章</span>
               </button>
             )}
             <button
               onClick={onClose}
-              className="game-btn-wood inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer whitespace-nowrap"
+              className="game-btn-wood inline-flex items-center gap-1 px-3 sm:px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-semibold cursor-pointer whitespace-nowrap"
             >
               <X className="w-4 h-4" />
-              返回厅堂
+              返回
             </button>
           </div>
         </header>
 
         {/* Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-6 bg-gradient-to-b from-[#1e120c]/95 to-[#140b07]/98">
+        <div className="flex-1 min-h-0 overflow-y-auto touch-scroll p-4 sm:p-6 bg-gradient-to-b from-[#1e120c]/95 to-[#140b07]/98">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left 6 cols: Manager Dossier + Main Storyline & Philosophy */}
             <div className="lg:col-span-6 space-y-5">

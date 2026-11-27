@@ -17,19 +17,19 @@ export function GameOverModal({
   const chapterDef = MAIN_CHAPTERS[Math.min(world.mainChapter, MAIN_CHAPTERS.length) - 1];
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0d0604]/86 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="game-panel w-full max-w-xl rounded-xl overflow-hidden border-[#b83b24] text-[#F7EFE2]">
-        <div className="px-6 py-4 bg-gradient-to-b from-[#3d1713] to-[#240d0a] border-b border-[#8e2715] flex items-center justify-between">
-          <div className="flex items-center gap-2.5 text-[#F87171]">
-            <ShieldAlert className="w-6 h-6" />
-            <h2 className="font-display text-2xl font-bold tracking-wide">
+    <div className="fixed inset-0 z-50 bg-[#0d0604]/86 backdrop-blur-[2px] flex items-center justify-center p-2.5 sm:p-4">
+      <div className="game-panel w-full max-w-xl max-h-[92dvh] flex flex-col rounded-xl overflow-hidden border-[#b83b24] text-[#F7EFE2]">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-gradient-to-b from-[#3d1713] to-[#240d0a] border-b border-[#8e2715] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 text-[#F87171]">
+            <ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+            <h2 className="font-display text-xl sm:text-2xl font-bold tracking-wide">
               经营失败 · 停业通告
             </h2>
           </div>
-          <span className="text-xs font-mono-num text-[#DFBFB8]">第 {world.day} 天</span>
+          <span className="text-xs font-mono-num text-[#DFBFB8] shrink-0">第 {world.day} 天</span>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto touch-scroll">
           {/* Manager Portrait + Failure Cause */}
           <div className="flex items-start gap-4 pb-4 border-b border-[#593b25]">
             <img

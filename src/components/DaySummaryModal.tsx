@@ -27,9 +27,9 @@ export function DaySummaryModal({ world, onNextDay }: DaySummaryModalProps) {
   const playerLevelTitle = getPlayerLevelTitle(world.playerLevel);
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="game-panel w-full max-w-lg rounded-xl overflow-hidden text-[#F7EFE2] max-h-[92vh] flex flex-col">
-        <div className="px-6 py-4 bg-gradient-to-b from-[#331f15] to-[#1d110c] border-b-2 border-[#b58942] flex items-baseline justify-between shrink-0">
+    <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-2.5 sm:p-4">
+      <div className="game-panel w-full max-w-lg rounded-xl overflow-hidden text-[#F7EFE2] max-h-[92dvh] flex flex-col">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-gradient-to-b from-[#331f15] to-[#1d110c] border-b-2 border-[#b58942] flex items-baseline justify-between gap-2 shrink-0">
           <div>
             <p className="text-xs font-semibold tracking-wider flex items-center gap-1.5 flex-wrap" style={{ color: seasonDef.color }}>
               <SeasonSvgIcon season={world.season} className="w-4 h-4 shrink-0" />
@@ -40,16 +40,16 @@ export function DaySummaryModal({ world, onNextDay }: DaySummaryModalProps) {
                 {weatherDef.shortName}
               </span>
             </p>
-            <h2 className="font-display text-2xl font-bold mt-0.5 text-[#FFF6E5]">
+            <h2 className="font-display text-xl sm:text-2xl font-bold mt-0.5 text-[#FFF6E5]">
               第 {s.day} 天营业结算
             </h2>
           </div>
-          <span className="text-xs text-[#C5AE92] font-mono-num">
+          <span className="text-xs text-[#C5AE92] font-mono-num shrink-0">
             结余资金 ¥{world.cash.toLocaleString()}
           </span>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-4">
+        <div className="p-4 sm:p-6 overflow-y-auto touch-scroll space-y-4">
           <div className="grid grid-cols-3 gap-3 pb-4 border-b border-[#593b25] text-center">
             <div className="game-inset py-2.5 rounded-lg">
               <div className="text-[11px] text-[#C5AE92]">接待桌次</div>

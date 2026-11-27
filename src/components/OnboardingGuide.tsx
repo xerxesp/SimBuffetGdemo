@@ -20,6 +20,8 @@ interface OnboardingGuideProps {
   world: GameWorld;
   forceOpen?: boolean;
   showIntroModal?: boolean;
+  topOffsetPx?: number;
+  hudScale?: number;
   onConfirmStartGuide?: () => void;
   onSetStep: (step: number) => void;
   onSkipAll: () => void;
@@ -247,6 +249,8 @@ export function OnboardingGuide({
   world,
   forceOpen = false,
   showIntroModal = false,
+  topOffsetPx,
+  hudScale = 1,
   onConfirmStartGuide,
   onSetStep,
   onSkipAll,
@@ -262,12 +266,12 @@ export function OnboardingGuide({
   if (showIntroModal) {
     const charDef = getCharacterDef(world.characterId);
     return (
-      <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-4 pointer-events-auto">
-        <div className="game-panel w-full max-w-[700px] rounded-2xl border-2 border-[#E8C97A] shadow-[0_24px_60px_rgba(0,0,0,0.9)] overflow-hidden">
+      <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-2.5 sm:p-4 pointer-events-auto">
+        <div className="game-panel w-full max-w-[700px] max-h-[92dvh] overflow-y-auto touch-scroll rounded-2xl border-2 border-[#E8C97A] shadow-[0_24px_60px_rgba(0,0,0,0.9)]">
           <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr]">
             {/* Left: Chosen Manager Portrait Frame */}
             <div className="relative bg-[#160c08] border-b sm:border-b-0 sm:border-r border-[#593b25] flex flex-col">
-              <div className="relative h-44 sm:h-full min-h-[220px] w-full overflow-hidden">
+              <div className="relative h-36 sm:h-full min-h-[144px] sm:min-h-[220px] w-full overflow-hidden">
                 <img
                   src={charDef.portraitUrl}
                   alt={charDef.name}
@@ -367,14 +371,14 @@ export function OnboardingGuide({
                 <button
                   type="button"
                   onClick={onSkipAll}
-                  className="game-btn-wood px-4 py-2.5 rounded-lg text-xs font-semibold text-[#D6C3A8] cursor-pointer text-center"
+                  className="game-btn-wood px-4 py-2.5 min-h-[44px] rounded-lg text-xs font-semibold text-[#D6C3A8] cursor-pointer text-center"
                 >
                   我是老店长，跳过引导
                 </button>
                 <button
                   type="button"
                   onClick={() => onConfirmStartGuide?.()}
-                  className="game-btn-gold px-5 py-2.5 rounded-lg text-xs font-black inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-lg"
+                  className="game-btn-gold px-5 py-2.5 min-h-[44px] rounded-lg text-xs font-black inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-lg"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
                   开始首日开店指引（推荐）
@@ -399,12 +403,30 @@ export function OnboardingGuide({
     else if (step.actionKey === 'BUSINESS') onOpenBusiness();
   };
 
+  const resolvedTopStyle =
+    topOffsetPx !== undefined
+      ? {
+          top: `calc(env(safe-area-inset-top, 0px) + ${topOffsetPx}px)`,
+          right: 'max(0.625rem, env(safe-area-inset-right, 0px))',
+          ...(Math.abs(hudScale - 1) > 0.005
+            ? { transform: `scale(${hudScale})`, transformOrigin: 'top right' as const }
+            : {}),
+        }
+      : undefined;
+
   if (collapsed) {
     return (
-      <div className="absolute top-[62px] right-3 z-30 pointer-events-auto">
+      <div
+        className={
+          resolvedTopStyle
+            ? 'absolute z-30 pointer-events-auto'
+            : 'absolute top-[calc(86px+env(safe-area-inset-top,0px))] lg:top-[calc(62px+env(safe-area-inset-top,0px))] right-[max(0.625rem,env(safe-area-inset-right))] z-30 pointer-events-auto'
+        }
+        style={resolvedTopStyle}
+      >
         <button
           onClick={() => setCollapsed(false)}
-          className="hud-float backdrop-blur-md px-3.5 py-2 rounded-lg border-[#E8C97A]/80 flex items-center gap-2 cursor-pointer hover:border-[#F6DA8D] transition-colors"
+          className="hud-float backdrop-blur-md px-3.5 py-2 min-h-[40px] rounded-lg border-[#E8C97A]/80 flex items-center gap-2 cursor-pointer hover:border-[#F6DA8D] transition-colors"
         >
           <Compass className="w-4 h-4 text-[#E8C97A]" />
           <span className="font-display font-bold text-xs text-[#F6DA8D]">
@@ -417,8 +439,15 @@ export function OnboardingGuide({
   }
 
   return (
-    <div className="absolute top-[62px] right-3 z-30 w-[352px] max-w-[92vw] pointer-events-auto">
-      <div className="hud-float backdrop-blur-md rounded-xl p-3.5 border-[#E8C97A]/85">
+    <div
+      className={
+        resolvedTopStyle
+          ? 'absolute z-30 w-[352px] max-w-[calc(100vw-20px)] pointer-events-auto'
+          : 'absolute top-[calc(86px+env(safe-area-inset-top,0px))] lg:top-[calc(62px+env(safe-area-inset-top,0px))] right-[max(0.625rem,env(safe-area-inset-right))] z-30 w-[352px] max-w-[calc(100vw-20px)] pointer-events-auto'
+      }
+      style={resolvedTopStyle}
+    >
+      <div className="hud-float backdrop-blur-md rounded-xl p-3 sm:p-3.5 border-[#E8C97A]/85 max-h-[calc(100dvh-205px)] overflow-y-auto touch-scroll">
         {/* Header */}
         <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#593b25]">
           <div className="flex items-center gap-1.5 min-w-0">

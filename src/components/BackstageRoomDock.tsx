@@ -25,6 +25,11 @@ import { HudResourceSvgIcon, SeafoodSvgIcon, SeasonSvgIcon } from './VintageIcon
 
 interface BackstageRoomDockProps {
   world: GameWorld;
+  isTouchDevice?: boolean;
+  hudScale?: number;
+  compactLayout?: boolean;
+  bottomOffsetPx?: number;
+  rightReservePx?: number;
   onExitBackstage: () => void;
   onWalkToRoom: (roomId: FacilitySceneId) => void;
   onPerformRoomAction: (roomId: FacilitySceneId) => void;
@@ -51,6 +56,11 @@ const ROOM_ACTION_LABEL: Record<FacilitySceneId, string> = {
 
 export function BackstageRoomDock({
   world,
+  isTouchDevice = false,
+  hudScale = 1,
+  compactLayout = false,
+  bottomOffsetPx = 10,
+  rightReservePx = 0,
   onExitBackstage,
   onWalkToRoom,
   onPerformRoomAction,
@@ -108,11 +118,36 @@ export function BackstageRoomDock({
       .filter((d) => d.itemId === itemId)
       .reduce((acc, d) => acc + d.quantity, 0);
 
+  const isScaled = Math.abs(hudScale - 1) > 0.005;
+  const dockAnchorLeft = rightReservePx > 0;
+
   return (
-    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 w-[94vw] max-w-[940px] pointer-events-none flex flex-col items-center gap-2">
+    <div
+      className={`absolute z-30 pointer-events-none flex flex-col gap-2 ${
+        dockAnchorLeft
+          ? 'items-start'
+          : 'left-2.5 right-2.5 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[92vw] md:max-w-[820px] xl:max-w-[940px] items-center'
+      }`}
+      style={{
+        bottom: `calc(env(safe-area-inset-bottom, 0px) + ${bottomOffsetPx}px)`,
+        ...(dockAnchorLeft
+          ? {
+              left: 'calc(env(safe-area-inset-left, 0px) + 10px)',
+              width: `calc((100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - ${rightReservePx + 18}px) / ${hudScale})`,
+              maxWidth: '880px',
+            }
+          : {}),
+        ...(isScaled
+          ? {
+              transform: `scale(${hudScale})`,
+              transformOrigin: dockAnchorLeft ? 'bottom left' : 'bottom center',
+            }
+          : {}),
+      }}
+    >
       {/* Expandable Warehouse Closing Procurement Drawer (Cold Storage / Office) */}
       {canOpenWarehouse && drawerMode === 'WAREHOUSE' && (
-        <div className="pointer-events-auto game-panel rounded-xl p-3.5 w-full max-w-[820px] space-y-2.5 max-h-[44vh] flex flex-col">
+        <div className="pointer-events-auto game-panel rounded-xl p-3 sm:p-3.5 w-full max-w-[820px] space-y-2.5 max-h-[46dvh] flex flex-col">
           <div className="flex items-center justify-between gap-2 text-xs shrink-0 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-display font-bold text-[#E8C97A] flex items-center gap-1.5">
@@ -321,10 +356,18 @@ export function BackstageRoomDock({
       )}
 
       {/* Main Floating Room Command Dock */}
-      <div className="pointer-events-auto hud-float backdrop-blur-md rounded-xl px-4 py-2.5 w-full space-y-2">
+      <div
+        className={`pointer-events-auto hud-float backdrop-blur-md rounded-xl w-full ${
+          compactLayout ? 'px-2.5 py-1.5 space-y-1.5' : 'px-2.5 sm:px-4 py-2 sm:py-2.5 space-y-2'
+        }`}
+      >
         {/* Top Row: Quick Room Jump Bar + Exit to Dining Hall */}
-        <div className="flex items-center justify-between gap-2 flex-wrap border-b border-[#593b25] pb-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div
+          className={`flex items-center justify-between gap-2 border-b border-[#593b25] ${
+            compactLayout ? 'pb-1.5' : 'pb-2'
+          }`}
+        >
+          <div className="flex items-center gap-1.5 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar touch-scroll min-w-0">
             {BACKSTAGE_ROOMS.map((r) => {
               const active = currentRoomId === r.id;
               const hasUnrecruitedNpc =
@@ -340,7 +383,7 @@ export function BackstageRoomDock({
                     setDrawerMode('NONE');
                     onWalkToRoom(r.id);
                   }}
-                  className={`px-2.5 py-1 rounded text-[11px] font-bold border cursor-pointer transition-colors ${
+                  className={`px-2.5 py-1.5 sm:py-1 rounded text-[11px] font-bold border cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
                     active
                       ? 'bg-[#42291c] border-[#e8c97a] text-[#FFF6E5]'
                       : 'bg-[#1c100b] border-[#593b25] text-[#C5AE92] hover:border-[#c9a45c]'
@@ -356,20 +399,29 @@ export function BackstageRoomDock({
 
           <button
             onClick={onExitBackstage}
-            className="game-btn-gold inline-flex items-center gap-1 px-3 py-1 rounded text-xs font-bold cursor-pointer whitespace-nowrap"
+            className="game-btn-gold inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-1 rounded text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            返回前厅 [M]
+            <span>{isTouchDevice ? '回前厅' : '返回前厅 [M]'}</span>
           </button>
         </div>
 
         {/* Bottom Row: Contextual Actions for Current Room */}
         {!roomRect ? (
-          <div className="text-xs text-[#D6C3A8] flex items-center justify-between gap-3 py-0.5">
+          <div className="text-[11px] sm:text-xs text-[#D6C3A8] flex items-center justify-between gap-3 py-0.5">
             <span>
-              当前位于 <strong className="text-[#FFF6E5]">后场中央走廊</strong> · 使用{' '}
-              <strong className="text-[#E8C97A]">WASD / 方向键</strong> 或{' '}
-              <strong className="text-[#E8C97A]">点击任意房间</strong> 走入巡视
+              当前位于 <strong className="text-[#FFF6E5]">后场中央走廊</strong> ·{' '}
+              {isTouchDevice ? (
+                <>
+                  <strong className="text-[#E8C97A]">单指拖动视角</strong> 或{' '}
+                  <strong className="text-[#E8C97A]">点击房间/上方标签</strong> 走入巡视
+                </>
+              ) : (
+                <>
+                  使用 <strong className="text-[#E8C97A]">WASD / 方向键</strong> 或{' '}
+                  <strong className="text-[#E8C97A]">点击任意房间</strong> 走入巡视
+                </>
+              )}
               {world.mainStoryCompleted ? (
                 <span className="text-[#6EE7B7] font-semibold">（终章已完结 · 无尽纯经营模式）</span>
               ) : (
@@ -380,9 +432,9 @@ export function BackstageRoomDock({
             </span>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span
                   className="font-display text-sm font-bold"
                   style={{ color: roomRect.accentColor }}
@@ -407,7 +459,7 @@ export function BackstageRoomDock({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar touch-scroll pb-0.5 sm:pb-0">
               {/* 1. Primary Room Operational Action */}
               <button
                 onClick={() => onPerformRoomAction(roomRect.id)}

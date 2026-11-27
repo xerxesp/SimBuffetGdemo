@@ -1,4 +1,6 @@
-import { Monitor, Music, Sliders, Volume2, VolumeX, X } from 'lucide-react';
+import { Maximize2, Minimize2, Monitor, Music, Sliders, Smartphone, Volume2, VolumeX, X } from 'lucide-react';
+import { DevicePlatform } from '../hooks/useMobileDevice';
+import { PWAInstallState } from '../hooks/usePWAInstall';
 import { SeasonId, WeatherId } from '../types/game';
 import {
   AspectRatioMode,
@@ -9,12 +11,19 @@ import {
   ResolutionPreset,
 } from '../types/settings';
 import { sound } from '../utils/sound';
+import { PWAInstallButton } from './PWAInstallButton';
 import { SeasonSvgIcon, WeatherSvgIcon } from './VintageIcons';
 
 interface SettingsModalProps {
   settings: GameSettings;
   activeBgmTrack: BgmTrackId;
   actualCanvasSize: { width: number; height: number } | null;
+  platform?: DevicePlatform;
+  platformLabel?: string;
+  pwa?: PWAInstallState;
+  canFullscreen?: boolean;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
   onChange: (next: GameSettings) => void;
   onClose: () => void;
 }
@@ -46,6 +55,12 @@ export function SettingsModal({
   settings,
   activeBgmTrack,
   actualCanvasSize,
+  platform = 'desktop',
+  platformLabel,
+  pwa,
+  canFullscreen = false,
+  isFullscreen = false,
+  onToggleFullscreen,
   onChange,
   onClose,
 }: SettingsModalProps) {
@@ -58,28 +73,28 @@ export function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-2.5 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="game-panel w-full max-w-2xl max-h-[90vh] rounded-xl overflow-hidden text-[#F7EFE2] flex flex-col">
+      <div className="game-panel w-full max-w-2xl max-h-[92dvh] rounded-xl overflow-hidden text-[#F7EFE2] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-b from-[#331f15] to-[#1d110c] border-b-2 border-[#b58942] flex items-center justify-between shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-gradient-to-b from-[#331f15] to-[#1d110c] border-b-2 border-[#b58942] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <Sliders className="w-5 h-5 text-[#E8C97A]" />
-            <h2 className="font-display text-2xl font-bold text-[#FFF6E5]">游戏设置</h2>
+            <h2 className="font-display text-xl sm:text-2xl font-bold text-[#FFF6E5]">游戏设置</h2>
           </div>
           <button
             onClick={onClose}
-            className="game-btn-wood p-1.5 rounded cursor-pointer"
+            className="game-btn-wood min-w-[40px] min-h-[40px] p-2 rounded-lg flex items-center justify-center cursor-pointer"
             aria-label="关闭设置"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 overflow-y-auto touch-scroll flex-1">
           {/* 1. Audio Mixer (Master + BGM + SFX) */}
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -344,13 +359,75 @@ export function SettingsModal({
               })}
             </div>
           </section>
+          {/* 5. Mobile / Tablet & PWA App Controls (Android / Huawei HarmonyOS / Apple iOS) */}
+          <section className="space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-bold text-[#FFF6E5]">
+                <Smartphone className="w-4 h-4 text-[#99F6E4]" />
+                <span>移动端适配与桌面安装（安卓 / 华为 / 苹果）</span>
+              </div>
+              {platformLabel && (
+                <span className="text-xs text-[#99F6E4] font-medium">
+                  当前终端：{platformLabel}
+                </span>
+              )}
+            </div>
+
+            <div className="game-inset px-4 py-3.5 rounded-lg space-y-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {canFullscreen && onToggleFullscreen && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playClick();
+                      onToggleFullscreen();
+                    }}
+                    className="game-btn-wood inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[42px] rounded-lg text-xs font-semibold text-[#F6DA8D] cursor-pointer whitespace-nowrap"
+                  >
+                    {isFullscreen ? (
+                      <>
+                        <Minimize2 className="w-4 h-4" />
+                        退出沉浸全屏
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="w-4 h-4" />
+                        开启沉浸全屏
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {pwa && (
+                  <PWAInstallButton platform={platform} pwa={pwa} variant="settings" />
+                )}
+
+                {pwa?.isInstalled && (
+                  <span className="text-xs font-semibold text-[#6EE7B7]">
+                    已以全屏独立应用模式运行（支持离线缓存）
+                  </span>
+                )}
+              </div>
+
+              <div className="text-[11px] text-[#C5AE92] leading-relaxed space-y-1 border-t border-[#4a2f1d] pt-2.5">
+                <div>
+                  <strong className="text-[#E8C97A]">触控手势：</strong>
+                  单指滑动平移全景厅堂与后场；双指捏合自由缩放视角；轻点工位、员工或后场房间即可直接互动。
+                </div>
+                <div>
+                  <strong className="text-[#99F6E4]">跨端建议：</strong>
+                  苹果 iOS Safari 可通过「分享 → 添加到主屏幕」获得全屏无地址栏体验；华为鸿蒙/EMUI 与安卓浏览器支持沉浸全屏及桌面图标安装，横竖屏均可自动适配。
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
 
-        <div className="px-6 py-4 bg-[#160c08] border-t border-[#593b25] flex items-center justify-between shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-[#160c08] border-t border-[#593b25] flex items-center justify-between gap-3 shrink-0">
           <span className="text-xs text-[#B59876]">设置实时生效并自动保存</span>
           <button
             onClick={onClose}
-            className="game-btn-primary px-6 py-2 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
+            className="game-btn-primary px-6 py-2.5 min-h-[42px] rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
           >
             确定返回
           </button>

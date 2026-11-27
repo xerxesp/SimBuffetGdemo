@@ -211,10 +211,10 @@ export function StoryEventModal({
   const speakerLabel = displaySpeaker === '你' ? charDef.name : displaySpeaker;
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0d0705]/62 backdrop-blur-[3px] flex flex-col justify-between items-center px-3 py-3 sm:px-6 sm:py-5 overflow-hidden">
+    <div className="fixed inset-0 z-50 h-[100dvh] bg-[#0d0705]/62 backdrop-blur-[3px] flex flex-col justify-between items-center px-2.5 sm:px-6 pt-[max(0.625rem,env(safe-area-inset-top))] pb-[max(0.625rem,env(safe-area-inset-bottom))] overflow-hidden">
       {/* Top Floating Chapter Ribbon (translucent, clean unboxed metadata + vermilion chapter seal) */}
-      <div className="w-full max-w-5xl hud-float rounded-xl px-5 py-2.5 flex items-center justify-between gap-4 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="w-full max-w-5xl hud-float rounded-xl px-3.5 py-2 sm:px-5 sm:py-2.5 flex items-center justify-between gap-2.5 sm:gap-4 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <VermilionSealStamp
             label={
               event.category === 'INSPECTION'
@@ -228,28 +228,28 @@ export function StoryEventModal({
             size="sm"
           />
           <span
-            className="text-xs font-semibold tracking-wider whitespace-nowrap shrink-0"
+            className="text-[11px] sm:text-xs font-semibold tracking-wider whitespace-nowrap shrink-0 hidden sm:inline"
             style={{ color: event.accentColor }}
           >
             {event.badge}
           </span>
-          <span className="text-[#7c5c38]" aria-hidden="true">
+          <span className="text-[#7c5c38] hidden sm:inline" aria-hidden="true">
             ·
           </span>
-          <h2 className="font-display text-base md:text-lg font-bold text-[#FFF7E8] truncate">
+          <h2 className="font-display text-sm sm:text-base md:text-lg font-bold text-[#FFF7E8] truncate">
             {event.headline}
           </h2>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-xs text-[#D4BC9E] font-mono-num whitespace-nowrap">
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+          <span className="text-[11px] sm:text-xs text-[#D4BC9E] font-mono-num whitespace-nowrap">
             {lines ? `${lineIndex + 1} / ${lines.length}` : displayTitle || displaySpeaker}
           </span>
           {lines && !isLastLine && (
             <button
               type="button"
               onClick={handleSkipToEnd}
-              className="inline-flex items-center gap-1 text-xs font-medium text-[#E8C97A] hover:text-[#FFF7E8] transition-colors cursor-pointer whitespace-nowrap"
+              className="inline-flex items-center gap-1 px-2 py-1 min-h-[34px] text-xs font-medium text-[#E8C97A] hover:text-[#FFF7E8] transition-colors cursor-pointer whitespace-nowrap"
               title="直接跳转至本段末句与抉择"
             >
               <FastForward className="w-3.5 h-3.5" />
@@ -260,9 +260,9 @@ export function StoryEventModal({
       </div>
 
       {/* Visual Novel Stage: Large 3:4 Waist-Up Portraits + Classical Gold-Filigree Dialogue Box */}
-      <div className="w-full max-w-5xl flex flex-col items-stretch mt-auto">
+      <div className="w-full max-w-5xl flex flex-col items-stretch mt-auto min-h-0">
         {/* Dual Portrait Stage rising smoothly behind top rim of dialogue frame */}
-        <div className="relative flex items-end justify-between px-2 sm:px-10 -mb-7 pointer-events-none select-none">
+        <div className="relative flex items-end justify-between px-2 sm:px-10 -mb-5 sm:-mb-7 pointer-events-none select-none shrink-0">
           {/* Left Portrait: Manager (Player) */}
           <div
             className={`relative flex flex-col items-center transition-all duration-300 ease-out origin-bottom ${
@@ -278,7 +278,7 @@ export function StoryEventModal({
               />
             )}
             <div
-              className="relative w-40 h-52 sm:w-56 sm:h-72 md:w-64 md:h-[330px] rounded-t-2xl overflow-hidden border border-[#cfa356]/75 bg-[#160d09] shadow-[0_14px_40px_rgba(0,0,0,0.72)]"
+              className="relative w-28 h-36 sm:w-52 sm:h-68 md:w-64 md:h-[330px] rounded-t-2xl overflow-hidden border border-[#cfa356]/75 bg-[#160d09] shadow-[0_14px_40px_rgba(0,0,0,0.72)]"
               style={{
                 borderColor: isManagerSpeaking ? '#E8C97A' : 'rgba(110, 78, 46, 0.55)',
               }}
@@ -290,7 +290,7 @@ export function StoryEventModal({
                 className="w-full h-full object-cover object-top"
               />
               {/* Seamless warm vignette fade into dialogue frame */}
-              <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#160d09] via-[#160d09]/55 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 h-14 sm:h-20 bg-gradient-to-t from-[#160d09] via-[#160d09]/55 to-transparent" />
             </div>
           </div>
 
@@ -311,7 +311,7 @@ export function StoryEventModal({
                 />
               )}
               <div
-                className="relative w-40 h-52 sm:w-56 sm:h-72 md:w-64 md:h-[330px] rounded-t-2xl overflow-hidden border bg-[#160d09] shadow-[0_14px_40px_rgba(0,0,0,0.72)]"
+                className="relative w-28 h-36 sm:w-52 sm:h-68 md:w-64 md:h-[330px] rounded-t-2xl overflow-hidden border bg-[#160d09] shadow-[0_14px_40px_rgba(0,0,0,0.72)]"
                 style={{
                   borderColor: !isManagerSpeaking ? event.accentColor : 'rgba(110, 78, 46, 0.55)',
                 }}
@@ -322,7 +322,7 @@ export function StoryEventModal({
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover object-top"
                 />
-                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#160d09] via-[#160d09]/55 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 h-14 sm:h-20 bg-gradient-to-t from-[#160d09] via-[#160d09]/55 to-transparent" />
               </div>
             </div>
           )}
@@ -330,18 +330,18 @@ export function StoryEventModal({
 
         {/* Classical Chinese Lacquer & Gold-Filigree Dialogue Box */}
         <div className="relative z-20 vn-dialogue-box rounded-2xl text-[#F7EFE2]">
-          <ChaoshanCornerOrnament className="absolute top-2 left-2 w-7 h-7 opacity-90" />
-          <ChaoshanCornerOrnament className="absolute top-2 right-2 w-7 h-7 rotate-90 opacity-90" />
-          <ChaoshanCornerOrnament className="absolute bottom-2 right-2 w-7 h-7 rotate-180 opacity-90" />
-          <ChaoshanCornerOrnament className="absolute bottom-2 left-2 w-7 h-7 -rotate-90 opacity-90" />
+          <ChaoshanCornerOrnament className="absolute top-2 left-2 w-6 h-6 sm:w-7 sm:h-7 opacity-90" />
+          <ChaoshanCornerOrnament className="absolute top-2 right-2 w-6 h-6 sm:w-7 sm:h-7 rotate-90 opacity-90" />
+          <ChaoshanCornerOrnament className="absolute bottom-2 right-2 w-6 h-6 sm:w-7 sm:h-7 rotate-180 opacity-90" />
+          <ChaoshanCornerOrnament className="absolute bottom-2 left-2 w-6 h-6 sm:w-7 sm:h-7 -rotate-90 opacity-90" />
 
-          {/* Floating Ornate Speaker Name Plaque perched on top rim (matching approved mockup!) */}
+          {/* Floating Ornate Speaker Name Plaque perched on top rim */}
           <div
-            className={`absolute -top-5 z-30 flex items-center gap-2 vn-nameplate px-5 py-1.5 rounded-lg transition-all duration-200 ${
-              isManagerSpeaking ? 'left-6 sm:left-10' : 'right-6 sm:right-10'
+            className={`absolute -top-4 sm:-top-5 z-30 flex items-center gap-2 vn-nameplate px-3.5 py-1 sm:px-5 sm:py-1.5 rounded-lg transition-all duration-200 ${
+              isManagerSpeaking ? 'left-4 sm:left-10' : 'right-4 sm:right-10'
             }`}
           >
-            <span className="font-display text-base sm:text-lg font-bold tracking-wider text-[#FFF6E5] whitespace-nowrap">
+            <span className="font-display text-sm sm:text-lg font-bold tracking-wider text-[#FFF6E5] whitespace-nowrap">
               【{speakerLabel}】
             </span>
             {displayTitle && (
@@ -351,11 +351,11 @@ export function StoryEventModal({
             )}
           </div>
 
-          {/* Main Dialogue Body */}
-          <div className="px-6 pt-7 pb-5 sm:px-9 sm:pt-8 sm:pb-6 space-y-4">
+          {/* Main Dialogue Body (internally scrollable on short mobile screens so choices never clip) */}
+          <div className="px-4 pt-6 pb-4 sm:px-9 sm:pt-8 sm:pb-6 space-y-3 sm:space-y-4 max-h-[62dvh] sm:max-h-[68dvh] overflow-y-auto touch-scroll">
             <div
               onClick={handleAdvanceOrFinish}
-              className={`min-h-[84px] sm:min-h-[96px] flex flex-col justify-between ${
+              className={`min-h-[64px] sm:min-h-[96px] flex flex-col justify-between ${
                 !showChoices ? 'cursor-pointer' : ''
               }`}
             >
@@ -438,13 +438,13 @@ export function StoryEventModal({
                       key={ch.id}
                       type="button"
                       onClick={() => handlePickChoice(ch)}
-                      className="vn-choice-plaque w-full text-left px-5 py-3 rounded-xl cursor-pointer group"
+                      className="vn-choice-plaque w-full text-left px-4 sm:px-5 py-3 min-h-[48px] rounded-xl cursor-pointer group"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-display text-sm sm:text-[15px] font-bold text-[#FFF6E5] group-hover:text-[#FDE68A]">
                           【{ch.label}】
                         </span>
-                        <span className="font-mono-num text-[11px] text-[#E8C97A]/85 shrink-0">
+                        <span className="font-mono-num text-[11px] text-[#E8C97A]/85 shrink-0 hidden sm:inline">
                           [{idx + 1}]
                         </span>
                       </div>
@@ -456,21 +456,21 @@ export function StoryEventModal({
             )}
 
             {/* Clean Footer Action Bar */}
-            <div className="pt-3 border-t border-[#593b25]/70 flex items-center justify-between gap-3">
+            <div className="pt-2.5 sm:pt-3 border-t border-[#593b25]/70 flex items-center justify-between gap-3">
               {!isTypingDone || (lines && !isLastLine) ? (
                 <>
-                  <span className="text-xs text-[#BFA587] inline-flex items-center gap-1.5">
-                    <ScrollText className="w-3.5 h-3.5 text-[#D9B060]" />
-                    <span>
+                  <span className="text-xs text-[#BFA587] inline-flex items-center gap-1.5 min-w-0">
+                    <ScrollText className="w-3.5 h-3.5 text-[#D9B060] shrink-0" />
+                    <span className="truncate">
                       {!isTypingDone && hasPendingChoice && isLastLine
-                        ? '点击显示全文并展开抉择选项'
-                        : '点击对话框或按空格键继续'}
+                        ? '点击显示全文并展开抉择'
+                        : '轻点对话框继续'}
                     </span>
                   </span>
                   <button
                     type="button"
                     onClick={handleAdvanceOrFinish}
-                    className="game-btn-gold inline-flex items-center gap-1.5 px-6 py-2 rounded-lg font-bold text-sm cursor-pointer whitespace-nowrap"
+                    className="game-btn-gold inline-flex items-center gap-1.5 px-5 sm:px-6 py-2.5 min-h-[42px] rounded-lg font-bold text-sm cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <span>
                       {!isTypingDone
@@ -505,7 +505,7 @@ export function StoryEventModal({
                       sound.playClick();
                       onClose();
                     }}
-                    className="game-btn-gold inline-flex items-center gap-1.5 px-6 py-2 rounded-lg font-bold text-sm cursor-pointer whitespace-nowrap shrink-0"
+                    className="game-btn-gold inline-flex items-center gap-1.5 px-5 sm:px-6 py-2.5 min-h-[42px] rounded-lg font-bold text-sm cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <Check className="w-4 h-4" />
                     <span>

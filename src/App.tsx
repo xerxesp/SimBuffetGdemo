@@ -4,6 +4,7 @@ import {
   BookOpen,
   CalendarClock,
   ChevronDown,
+  ChevronUp,
   LayoutGrid,
   Moon,
   ScrollText,
@@ -22,12 +23,15 @@ import { EndingEpilogueModal } from './components/EndingEpilogueModal';
 import { GameOverModal } from './components/GameOverModal';
 import { MainMenuScreen } from './components/MainMenuScreen';
 import { OnboardingGuide } from './components/OnboardingGuide';
+import { OfflineBanner, PWAInstallButton } from './components/PWAInstallButton';
 import { SaveLoadModal } from './components/SaveLoadModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ConfigTab, StoreConfigModal } from './components/StoreConfigModal';
 import { StoryChronicleModal } from './components/StoryChronicleModal';
 import { StoryEventModal } from './components/StoryEventModal';
 import { TopHud } from './components/TopHud';
+import { useMobileDevice } from './hooks/useMobileDevice';
+import { usePWAInstall } from './hooks/usePWAInstall';
 import {
   generateCandidatePool,
   getFrontHallBounds,
@@ -201,6 +205,272 @@ function saveBestRecord(days: number, cash: number) {
   }
 }
 
+type HudResponsiveTier =
+  | 'LANDSCAPE_ULTRA'
+  | 'LANDSCAPE_COMPACT'
+  | 'PORTRAIT_COMPACT'
+  | 'PORTRAIT_STANDARD'
+  | 'PORTRAIT_TALL'
+  | 'TABLET'
+  | 'DESKTOP';
+
+interface MobileHudLayout {
+  tier: HudResponsiveTier;
+  isMobile: boolean;
+  compactLandscape: boolean;
+  topHudScale: number;
+  leftMenuScale: number;
+  hotbarScale: number;
+  orbScale: number;
+  topMenuTopPx: number;
+  alertTopPx: number;
+  hotbarCompact: boolean;
+  hotbarBottomPx: number;
+  hotbarSideBySideWithOrb: boolean;
+  hotbarRightReservePx: number;
+  orbBottomDiningPx: number;
+  orbBottomBackstagePx: number;
+  backstageDockBottomPx: number;
+  cameraPanYBias: number;
+}
+
+const MOBILE_HUD_MEDIA_QUERIES = [
+  '(orientation: landscape) and (max-height: 440px)',
+  '(orientation: landscape) and (max-height: 560px) and (max-width: 1024px)',
+  '(max-width: 767px) and (orientation: portrait) and (min-aspect-ratio: 9/17)',
+  '(max-width: 767px) and (orientation: portrait) and (max-height: 700px)',
+  '(max-width: 767px) and (orientation: portrait) and (max-aspect-ratio: 9/19)',
+  '(max-width: 767px) and (orientation: portrait)',
+  '(min-width: 768px) and (max-width: 1024px)',
+] as const;
+
+function computeMobileHudLayout(): MobileHudLayout {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return {
+      tier: 'DESKTOP',
+      isMobile: false,
+      compactLandscape: false,
+      topHudScale: 1,
+      leftMenuScale: 1,
+      hotbarScale: 1,
+      orbScale: 1,
+      topMenuTopPx: 62,
+      alertTopPx: 62,
+      hotbarCompact: false,
+      hotbarBottomPx: 12,
+      hotbarSideBySideWithOrb: true,
+      hotbarRightReservePx: 256,
+      orbBottomDiningPx: 14,
+      orbBottomBackstagePx: 14,
+      backstageDockBottomPx: 12,
+      cameraPanYBias: 0,
+    };
+  }
+
+  const mm = (query: string) => window.matchMedia(query).matches;
+
+  // 1. Ultra-short mobile landscape (e.g. 667x375, 844x390, 915x412)
+  if (mm(MOBILE_HUD_MEDIA_QUERIES[0])) {
+    return {
+      tier: 'LANDSCAPE_ULTRA',
+      isMobile: true,
+      compactLandscape: true,
+      topHudScale: 0.84,
+      leftMenuScale: 0.82,
+      hotbarScale: 0.78,
+      orbScale: 0.72,
+      topMenuTopPx: 46,
+      alertTopPx: 46,
+      hotbarCompact: true,
+      hotbarBottomPx: 6,
+      hotbarSideBySideWithOrb: true,
+      hotbarRightReservePx: 236,
+      orbBottomDiningPx: 6,
+      orbBottomBackstagePx: 6,
+      backstageDockBottomPx: 6,
+      cameraPanYBias: 44,
+    };
+  }
+
+  // 2. Standard phone / phablet landscape (height 441px–560px)
+  if (mm(MOBILE_HUD_MEDIA_QUERIES[1])) {
+    return {
+      tier: 'LANDSCAPE_COMPACT',
+      isMobile: true,
+      compactLandscape: true,
+      topHudScale: 0.9,
+      leftMenuScale: 0.88,
+      hotbarScale: 0.85,
+      orbScale: 0.8,
+      topMenuTopPx: 50,
+      alertTopPx: 50,
+      hotbarCompact: true,
+      hotbarBottomPx: 8,
+      hotbarSideBySideWithOrb: true,
+      hotbarRightReservePx: 262,
+      orbBottomDiningPx: 8,
+      orbBottomBackstagePx: 8,
+      backstageDockBottomPx: 8,
+      cameraPanYBias: 36,
+    };
+  }
+
+  // 3. Compact 16:9 / 18:9 portrait phones (e.g. iPhone SE 375x667, 360x640)
+  if (mm(MOBILE_HUD_MEDIA_QUERIES[2]) || mm(MOBILE_HUD_MEDIA_QUERIES[3])) {
+    return {
+      tier: 'PORTRAIT_COMPACT',
+      isMobile: true,
+      compactLandscape: false,
+      topHudScale: 0.9,
+      leftMenuScale: 0.86,
+      hotbarScale: 0.86,
+      orbScale: 0.78,
+      topMenuTopPx: 76,
+      alertTopPx: 76,
+      hotbarCompact: true,
+      hotbarBottomPx: 6,
+      hotbarSideBySideWithOrb: false,
+      hotbarRightReservePx: 10,
+      orbBottomDiningPx: 62,
+      orbBottomBackstagePx: 112,
+      backstageDockBottomPx: 6,
+      cameraPanYBias: 32,
+    };
+  }
+
+  // 4. Ultra-tall 20:9 / 21:9 portrait phones (e.g. Huawei Mate/Pura, Android 20:9, iPhone Pro Max)
+  if (mm(MOBILE_HUD_MEDIA_QUERIES[4])) {
+    return {
+      tier: 'PORTRAIT_TALL',
+      isMobile: true,
+      compactLandscape: false,
+      topHudScale: 0.95,
+      leftMenuScale: 0.92,
+      hotbarScale: 0.93,
+      orbScale: 0.88,
+      topMenuTopPx: 84,
+      alertTopPx: 84,
+      hotbarCompact: false,
+      hotbarBottomPx: 8,
+      hotbarSideBySideWithOrb: false,
+      hotbarRightReservePx: 10,
+      orbBottomDiningPx: 92,
+      orbBottomBackstagePx: 126,
+      backstageDockBottomPx: 8,
+      cameraPanYBias: 18,
+    };
+  }
+
+  // 5. Standard 19.5:9 portrait phones (e.g. 390x844)
+  if (mm(MOBILE_HUD_MEDIA_QUERIES[5])) {
+    return {
+      tier: 'PORTRAIT_STANDARD',
+      isMobile: true,
+      compactLandscape: false,
+      topHudScale: 0.92,
+      leftMenuScale: 0.9,
+      hotbarScale: 0.9,
+      orbScale: 0.84,
+      topMenuTopPx: 80,
+      alertTopPx: 80,
+      hotbarCompact: false,
+      hotbarBottomPx: 8,
+      hotbarSideBySideWithOrb: false,
+      hotbarRightReservePx: 10,
+      orbBottomDiningPx: 88,
+      orbBottomBackstagePx: 120,
+      backstageDockBottomPx: 8,
+      cameraPanYBias: 24,
+    };
+  }
+
+  // 6. Tablets & unfolded foldables (768px–1024px)
+  if (mm(MOBILE_HUD_MEDIA_QUERIES[6])) {
+    return {
+      tier: 'TABLET',
+      isMobile: false,
+      compactLandscape: false,
+      topHudScale: 0.96,
+      leftMenuScale: 0.94,
+      hotbarScale: 0.92,
+      orbScale: 0.9,
+      topMenuTopPx: 62,
+      alertTopPx: 62,
+      hotbarCompact: false,
+      hotbarBottomPx: 10,
+      hotbarSideBySideWithOrb: true,
+      hotbarRightReservePx: 274,
+      orbBottomDiningPx: 12,
+      orbBottomBackstagePx: 12,
+      backstageDockBottomPx: 10,
+      cameraPanYBias: 14,
+    };
+  }
+
+  return {
+    tier: 'DESKTOP',
+    isMobile: false,
+    compactLandscape: false,
+    topHudScale: 1,
+    leftMenuScale: 1,
+    hotbarScale: 1,
+    orbScale: 1,
+    topMenuTopPx: 62,
+    alertTopPx: 62,
+    hotbarCompact: false,
+    hotbarBottomPx: 12,
+    hotbarSideBySideWithOrb: true,
+    hotbarRightReservePx: 256,
+    orbBottomDiningPx: 14,
+    orbBottomBackstagePx: 14,
+    backstageDockBottomPx: 12,
+    cameraPanYBias: 0,
+  };
+}
+
+function useMobileHudLayout(): MobileHudLayout {
+  const [layout, setLayout] = useState<MobileHudLayout>(computeMobileHudLayout);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+    const sync = () => {
+      const next = computeMobileHudLayout();
+      setLayout((prev) => (prev.tier === next.tier ? prev : next));
+    };
+
+    const mqls = MOBILE_HUD_MEDIA_QUERIES.map((q) => window.matchMedia(q));
+    mqls.forEach((mql) => {
+      if (typeof mql.addEventListener === 'function') {
+        mql.addEventListener('change', sync);
+      } else {
+        mql.addListener(sync);
+      }
+    });
+    window.addEventListener('resize', sync);
+    window.addEventListener('orientationchange', sync);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', sync);
+
+    sync();
+
+    return () => {
+      mqls.forEach((mql) => {
+        if (typeof mql.removeEventListener === 'function') {
+          mql.removeEventListener('change', sync);
+        } else {
+          mql.removeListener(sync);
+        }
+      });
+      window.removeEventListener('resize', sync);
+      window.removeEventListener('orientationchange', sync);
+      vv?.removeEventListener('resize', sync);
+    };
+  }, []);
+
+  return layout;
+}
+
 export default function App() {
   const worldRef = useRef<GameWorld>(createInitialWorld('MAIN_MENU', 'harbor_heir'));
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -225,7 +495,14 @@ export default function App() {
   const [manualGuideOpen, setManualGuideOpen] = useState(false);
   const [showOnboardingIntro, setShowOnboardingIntro] = useState(false);
   const showOnboardingIntroRef = useRef(false);
-  const cameraRef = useRef<SceneCamera>({ zoom: 1, panX: 0, panY: 0 });
+  const device = useMobileDevice();
+  const hudLayout = useMobileHudLayout();
+  const hudLayoutRef = useRef<MobileHudLayout>(hudLayout);
+  hudLayoutRef.current = hudLayout;
+  const [hotbarCollapsed, setHotbarCollapsed] = useState(false);
+  const pwa = usePWAInstall(device.platform);
+  const lastTouchTapAtRef = useRef(0);
+  const cameraRef = useRef<SceneCamera>({ zoom: 1, panX: 0, panY: hudLayout.cameraPanYBias });
   const panDragRef = useRef<{
     active: boolean;
     startClientX: number;
@@ -235,8 +512,8 @@ export default function App() {
   } | null>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [stageSize, setStageSize] = useState<{ width: number; height: number }>({
-    width: 1280,
-    height: 720,
+    width: typeof window !== 'undefined' ? window.innerWidth : 1280,
+    height: typeof window !== 'undefined' ? window.innerHeight : 720,
   });
 
   const refreshPersistentData = useCallback(() => {
@@ -303,9 +580,14 @@ export default function App() {
     const ro = new ResizeObserver(() => measure());
     ro.observe(el);
     window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', measure);
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+      vv?.removeEventListener('resize', measure);
     };
   }, [isGameplayStage, currentPhase]);
 
@@ -466,7 +748,11 @@ export default function App() {
         keysPressedRef.current.clear();
         if (worldRef.current.activeScene === 'BACKSTAGE') {
           exitBackstageToDiningHall(worldRef.current);
-          cameraRef.current = { zoom: 1.42, panX: -225, panY: 138 };
+          cameraRef.current = {
+            zoom: 1.42,
+            panX: -225,
+            panY: 138 + Math.round(hudLayoutRef.current.cameraPanYBias * 0.65),
+          };
           setZoomPercent(142);
         } else {
           enterBackstageScene(worldRef.current);
@@ -647,12 +933,13 @@ export default function App() {
   }, [forceUiSync]);
 
   const clampCameraPan = useCallback((zoom: number, panX: number, panY: number) => {
+    const basePanY = hudLayoutRef.current.cameraPanYBias;
     if (zoom <= 0.92) {
-      return { panX: 0, panY: 0 };
+      return { panX: 0, panY: basePanY };
     }
     const m = getIsoMapMetrics(worldRef.current.shopLevel);
     const maxPanX = (m.boundsW * Math.max(0.25, zoom - 0.85)) / (2 * zoom) + 220;
-    const maxPanY = (m.boundsH * Math.max(0.25, zoom - 0.85)) / (2 * zoom) + 160;
+    const maxPanY = (m.boundsH * Math.max(0.25, zoom - 0.85)) / (2 * zoom) + 160 + basePanY;
     return {
       panX: Math.max(-maxPanX, Math.min(maxPanX, panX)),
       panY: Math.max(-maxPanY, Math.min(maxPanY, panY)),
@@ -660,12 +947,16 @@ export default function App() {
   }, []);
 
   const resetCameraZoom = useCallback(() => {
-    cameraRef.current = { zoom: 1, panX: 0, panY: 0 };
+    cameraRef.current = { zoom: 1, panX: 0, panY: hudLayoutRef.current.cameraPanYBias };
     setZoomPercent(100);
   }, []);
 
   const focusFrontHallCamera = useCallback(() => {
-    cameraRef.current = { zoom: 1.42, panX: -225, panY: 138 };
+    cameraRef.current = {
+      zoom: 1.42,
+      panX: -225,
+      panY: 138 + Math.round(hudLayoutRef.current.cameraPanYBias * 0.65),
+    };
     setZoomPercent(142);
   }, []);
 
@@ -673,6 +964,20 @@ export default function App() {
     cameraRef.current = { zoom: 1.42, panX: 230, panY: -88 };
     setZoomPercent(142);
   }, []);
+
+  // Dynamically maintain bottom-scene camera clearance when rotating or crossing mobile media-query tiers
+  useEffect(() => {
+    if (!isGameplayStage) return;
+    if (!hudLayout.isMobile) {
+      setHotbarCollapsed(false);
+    }
+    if (cameraRef.current.zoom <= 1.05 && Math.abs(cameraRef.current.panX) < 12) {
+      cameraRef.current = {
+        ...cameraRef.current,
+        panY: hudLayout.cameraPanYBias,
+      };
+    }
+  }, [isGameplayStage, hudLayout.isMobile, hudLayout.cameraPanYBias]);
 
   useEffect(() => {
     if (!isGameplayStage) return;
@@ -710,7 +1015,7 @@ export default function App() {
       const iy = (bufY - prevVt.offsetY) / prevVt.scale;
 
       if (nextZoom <= 0.96) {
-        cameraRef.current = { zoom: nextZoom, panX: 0, panY: 0 };
+        cameraRef.current = { zoom: nextZoom, panX: 0, panY: hudLayoutRef.current.cameraPanYBias };
       } else {
         const baseScale = Math.min(canvas.width / m.boundsW, canvas.height / m.boundsH) * 0.96;
         const nextScale = baseScale * nextZoom;
@@ -729,23 +1034,263 @@ export default function App() {
     };
   }, [isGameplayStage, clampCameraPan]);
 
-  const toCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = e.currentTarget;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0 || canvas.width <= 0 || canvas.height <= 0) {
-      return { x: -9999, y: -9999 };
-    }
-    const bufX = ((e.clientX - rect.left) / rect.width) * canvas.width;
-    const bufY = ((e.clientY - rect.top) / rect.height) * canvas.height;
-    return screenBufToUnifiedWorld(
-      bufX,
-      bufY,
-      canvas.width,
-      canvas.height,
-      cameraRef.current,
-      worldRef.current.shopLevel
-    );
-  };
+  const clientPointToUnifiedWorld = useCallback(
+    (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || canvas.width <= 0 || canvas.height <= 0) {
+        return { x: -9999, y: -9999 };
+      }
+      const bufX = ((clientX - rect.left) / rect.width) * canvas.width;
+      const bufY = ((clientY - rect.top) / rect.height) * canvas.height;
+      return screenBufToUnifiedWorld(
+        bufX,
+        bufY,
+        canvas.width,
+        canvas.height,
+        cameraRef.current,
+        worldRef.current.shopLevel
+      );
+    },
+    []
+  );
+
+  const dispatchCanvasTapAtClientPoint = useCallback(
+    (canvas: HTMLCanvasElement, clientX: number, clientY: number) => {
+      if (activeOverlayRef.current || showOnboardingIntroRef.current) return;
+      const pt = clientPointToUnifiedWorld(canvas, clientX, clientY);
+      const w = worldRef.current;
+      const frontBounds = getFrontHallBounds(w.shopLevel);
+
+      // Unified Grand Map: Backstage Wing sits seamlessly at wy < -12; Expanded Front Hall at wy >= -12
+      if (pt.y < -12 && pt.y >= BACKSTAGE_OFFSET_Y - 24 && pt.x >= -20 && pt.x <= 980) {
+        const localY = pt.y - BACKSTAGE_OFFSET_Y;
+        if (w.activeScene !== 'BACKSTAGE') {
+          walkPlayerToBackstage(w, pt.x, localY);
+        } else {
+          handleBackstageCanvasClick(w, pt.x, localY);
+        }
+      } else if (
+        pt.y >= -12 &&
+        pt.y <= frontBounds.height + 36 &&
+        pt.x >= -20 &&
+        pt.x <= frontBounds.width + 24
+      ) {
+        if (w.activeScene !== 'DINING_HALL') {
+          walkBackstagePlayerToFrontHall(w, pt.x, pt.y);
+        } else {
+          const res = handleCanvasClick(w, pt.x, pt.y);
+          if (res === 'OPEN_ZONE_CONFIG') {
+            setConfigInitialTab('ZONES');
+            setActiveOverlay('CONFIG');
+          }
+        }
+      }
+      forceUiSync();
+    },
+    [clientPointToUnifiedWorld, forceUiSync]
+  );
+
+  // Full multi-touch gesture engine for Android, Huawei HarmonyOS/EMUI, and Apple iOS
+  // Supports: 1-finger tap (interact), 1-finger drag (pan), 2-finger pinch (zoom anchored at midpoint + pan)
+  useEffect(() => {
+    if (!isGameplayStage) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let mode: 'NONE' | 'SINGLE' | 'PINCH' = 'NONE';
+    let startClientX = 0;
+    let startClientY = 0;
+    let startPanX = 0;
+    let startPanY = 0;
+    let moved = false;
+    let hadPinch = false;
+
+    let pinchStartDist = 1;
+    let pinchStartZoom = 1;
+    let pinchAnchorIx = 0;
+    let pinchAnchorIy = 0;
+
+    const getTouchDist = (t0: Touch, t1: Touch) =>
+      Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+
+    const beginPinch = (t0: Touch, t1: Touch) => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || canvas.width <= 0 || canvas.height <= 0) return;
+      const midX = (t0.clientX + t1.clientX) * 0.5;
+      const midY = (t0.clientY + t1.clientY) * 0.5;
+      const bufX = ((midX - rect.left) / rect.width) * canvas.width;
+      const bufY = ((midY - rect.top) / rect.height) * canvas.height;
+      const vt = getIsoViewportTransform(
+        canvas.width,
+        canvas.height,
+        cameraRef.current,
+        worldRef.current.shopLevel
+      );
+      pinchAnchorIx = (bufX - vt.offsetX) / vt.scale;
+      pinchAnchorIy = (bufY - vt.offsetY) / vt.scale;
+      pinchStartDist = Math.max(12, getTouchDist(t0, t1));
+      pinchStartZoom = cameraRef.current.zoom;
+      mode = 'PINCH';
+      moved = true;
+      hadPinch = true;
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (
+        activeOverlayRef.current ||
+        showOnboardingIntroRef.current ||
+        worldRef.current.pendingStoryModal
+      ) {
+        return;
+      }
+      if (leftMenuOpenRef.current) {
+        setLeftMenuOpen(false);
+        setShowChronicleDrawer(false);
+      }
+
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        mode = 'SINGLE';
+        startClientX = t.clientX;
+        startClientY = t.clientY;
+        startPanX = cameraRef.current.panX;
+        startPanY = cameraRef.current.panY;
+        moved = false;
+        hadPinch = false;
+      } else if (e.touches.length >= 2) {
+        e.preventDefault();
+        beginPinch(e.touches[0], e.touches[1]);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (
+        activeOverlayRef.current ||
+        showOnboardingIntroRef.current ||
+        worldRef.current.pendingStoryModal
+      ) {
+        return;
+      }
+      e.preventDefault();
+
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || canvas.width <= 0 || canvas.height <= 0) return;
+
+      if (e.touches.length >= 2) {
+        if (mode !== 'PINCH') {
+          beginPinch(e.touches[0], e.touches[1]);
+          return;
+        }
+        const t0 = e.touches[0];
+        const t1 = e.touches[1];
+        const dist = Math.max(12, getTouchDist(t0, t1));
+        const ratio = dist / pinchStartDist;
+        let nextZoom = Math.max(0.65, Math.min(2.6, pinchStartZoom * ratio));
+        if (Math.abs(nextZoom - 1) < 0.025) {
+          nextZoom = 1;
+        }
+
+        const midX = (t0.clientX + t1.clientX) * 0.5;
+        const midY = (t0.clientY + t1.clientY) * 0.5;
+        const bufX = ((midX - rect.left) / rect.width) * canvas.width;
+        const bufY = ((midY - rect.top) / rect.height) * canvas.height;
+        const shopLevel = worldRef.current.shopLevel;
+        const m = getIsoMapMetrics(shopLevel);
+
+        if (nextZoom <= 0.94) {
+          cameraRef.current = {
+            zoom: nextZoom,
+            panX: 0,
+            panY: hudLayoutRef.current.cameraPanYBias,
+          };
+        } else {
+          const baseScale = Math.min(canvas.width / m.boundsW, canvas.height / m.boundsH) * 0.96;
+          const nextScale = baseScale * nextZoom;
+          const rawPanX = pinchAnchorIx - m.centerX - (bufX - canvas.width / 2) / nextScale;
+          const rawPanY = pinchAnchorIy - m.centerY - (bufY - canvas.height / 2) / nextScale;
+          const clamped = clampCameraPan(nextZoom, rawPanX, rawPanY);
+          cameraRef.current = { zoom: nextZoom, panX: clamped.panX, panY: clamped.panY };
+        }
+        setZoomPercent(Math.round(cameraRef.current.zoom * 100));
+        return;
+      }
+
+      if (e.touches.length === 1 && mode === 'SINGLE') {
+        const t = e.touches[0];
+        const dx = t.clientX - startClientX;
+        const dy = t.clientY - startClientY;
+        if (!moved && Math.hypot(dx, dy) >= 10) {
+          moved = true;
+        }
+        if (moved) {
+          const vt = getIsoViewportTransform(
+            canvas.width,
+            canvas.height,
+            cameraRef.current,
+            worldRef.current.shopLevel
+          );
+          const dxBuf = (dx / rect.width) * canvas.width;
+          const dyBuf = (dy / rect.height) * canvas.height;
+          const clamped = clampCameraPan(
+            cameraRef.current.zoom,
+            startPanX - dxBuf / vt.scale,
+            startPanY - dyBuf / vt.scale
+          );
+          cameraRef.current = {
+            zoom: cameraRef.current.zoom,
+            panX: clamped.panX,
+            panY: clamped.panY,
+          };
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (mode === 'PINCH' && e.touches.length === 1) {
+        // Seamlessly transition remaining finger into pan mode without jumping
+        const t = e.touches[0];
+        mode = 'SINGLE';
+        startClientX = t.clientX;
+        startClientY = t.clientY;
+        startPanX = cameraRef.current.panX;
+        startPanY = cameraRef.current.panY;
+        moved = true;
+        return;
+      }
+
+      if (e.touches.length === 0) {
+        if (mode === 'SINGLE' && !moved && !hadPinch && e.changedTouches.length > 0) {
+          const t = e.changedTouches[0];
+          lastTouchTapAtRef.current = performance.now();
+          dispatchCanvasTapAtClientPoint(canvas, t.clientX, t.clientY);
+        }
+        mode = 'NONE';
+        moved = false;
+        hadPinch = false;
+      }
+    };
+
+    const onTouchCancel = () => {
+      mode = 'NONE';
+      moved = false;
+      hadPinch = false;
+    };
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: true });
+    canvas.addEventListener('touchcancel', onTouchCancel, { passive: true });
+
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
+      canvas.removeEventListener('touchcancel', onTouchCancel);
+    };
+  }, [isGameplayStage, clampCameraPan, dispatchCanvasTapAtClientPoint]);
+
+  const toCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) =>
+    clientPointToUnifiedWorld(e.currentTarget, e.clientX, e.clientY);
 
   const onCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (leftMenuOpenRef.current) {
@@ -805,36 +1350,9 @@ export default function App() {
   };
 
   const onCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (activeOverlayRef.current || showOnboardingIntroRef.current) return;
-    const pt = toCanvasCoords(e);
-    const w = worldRef.current;
-    const frontBounds = getFrontHallBounds(w.shopLevel);
-
-    // Unified Grand Map: Backstage Wing sits seamlessly at wy < -12; Expanded Front Hall at wy >= -12
-    if (pt.y < -12 && pt.y >= BACKSTAGE_OFFSET_Y - 24 && pt.x >= -20 && pt.x <= 980) {
-      const localY = pt.y - BACKSTAGE_OFFSET_Y;
-      if (w.activeScene !== 'BACKSTAGE') {
-        walkPlayerToBackstage(w, pt.x, localY);
-      } else {
-        handleBackstageCanvasClick(w, pt.x, localY);
-      }
-    } else if (
-      pt.y >= -12 &&
-      pt.y <= frontBounds.height + 36 &&
-      pt.x >= -20 &&
-      pt.x <= frontBounds.width + 24
-    ) {
-      if (w.activeScene !== 'DINING_HALL') {
-        walkBackstagePlayerToFrontHall(w, pt.x, pt.y);
-      } else {
-        const res = handleCanvasClick(w, pt.x, pt.y);
-        if (res === 'OPEN_ZONE_CONFIG') {
-          setConfigInitialTab('ZONES');
-          setActiveOverlay('CONFIG');
-        }
-      }
-    }
-    forceUiSync();
+    // Ignore delayed synthetic browser click right after a handled touch tap
+    if (performance.now() - lastTouchTapAtRef.current < 450) return;
+    dispatchCanvasTapAtClientPoint(e.currentTarget, e.clientX, e.clientY);
   };
 
   const handleEnterCharacterSelect = () => {
@@ -1048,12 +1566,15 @@ export default function App() {
           bestCash={bestRecord.bestCash}
           autoSaveMeta={saveSlots.auto}
           hasAnySave={hasAnySave}
+          platform={device.platform}
+          pwa={pwa}
           onContinueAutoSave={() => handleLoadSlot('auto')}
           onStartGame={handleEnterCharacterSelect}
           onOpenLoadModal={() => handleOpenOverlay('SAVE_LOAD')}
           onOpenEncyclopedia={() => handleOpenOverlay('ENCYCLOPEDIA')}
           onOpenSettings={() => handleOpenOverlay('SETTINGS')}
         />
+        <OfflineBanner isOffline={pwa.isOffline} />
         {activeOverlay === 'SAVE_LOAD' && (
           <SaveLoadModal
             mode="MAIN_MENU"
@@ -1074,6 +1595,12 @@ export default function App() {
             settings={settings}
             activeBgmTrack={desiredBgmTrack}
             actualCanvasSize={actualCanvasSize}
+            platform={device.platform}
+            platformLabel={device.platformLabel}
+            pwa={pwa}
+            canFullscreen={device.canFullscreen}
+            isFullscreen={device.isFullscreen}
+            onToggleFullscreen={device.toggleFullscreen}
             onChange={handleUpdateSettings}
             onClose={() => setActiveOverlay(null)}
           />
@@ -1090,11 +1617,18 @@ export default function App() {
           onBackToMenu={handleBackToMainMenu}
           onConfirmStart={handleConfirmCharacterAndPlay}
         />
+        <OfflineBanner isOffline={pwa.isOffline} />
         {activeOverlay === 'SETTINGS' && (
           <SettingsModal
             settings={settings}
             activeBgmTrack={desiredBgmTrack}
             actualCanvasSize={actualCanvasSize}
+            platform={device.platform}
+            platformLabel={device.platformLabel}
+            pwa={pwa}
+            canFullscreen={device.canFullscreen}
+            isFullscreen={device.isFullscreen}
+            onToggleFullscreen={device.toggleFullscreen}
             onChange={handleUpdateSettings}
             onClose={() => setActiveOverlay(null)}
           />
@@ -1234,7 +1768,8 @@ export default function App() {
     world.upgradePoints > 0;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#0c1718] text-[#F7EFE2]">
+    <div className="relative h-[100dvh] w-screen overflow-hidden bg-[#0c1718] text-[#F7EFE2]">
+      <OfflineBanner isOffline={pwa.isOffline} />
       {/* 100% Full-Viewport Edge-to-Edge 45° Isometric Stage + Layered Floating HUD Islands */}
       <main className="relative w-full h-full overflow-hidden bg-[#0c1718] isolate">
         {/* Layer 0 (z-0): Edge-to-Edge Adaptive Scene Canvas Container */}
@@ -1258,7 +1793,7 @@ export default function App() {
               onMouseLeave={onCanvasMouseLeave}
               onClick={onCanvasClick}
               onContextMenu={(e) => e.preventDefault()}
-              className="w-full h-full block cursor-pointer"
+              className="touch-canvas w-full h-full block cursor-pointer"
             />
           </div>
         </div>
@@ -1269,6 +1804,11 @@ export default function App() {
           muted={settings.muted || settings.volume === 0}
           bgmMuted={settings.bgmMuted || settings.bgmVolume === 0}
           activeBgmTitle={BGM_TRACK_META[desiredBgmTrack].title}
+          hudScale={hudLayout.topHudScale}
+          compactLandscape={hudLayout.compactLandscape}
+          canFullscreen={device.canFullscreen}
+          isFullscreen={device.isFullscreen}
+          onToggleFullscreen={device.toggleFullscreen}
           onTogglePause={handleTogglePause}
           onToggleSpeed={handleToggleSpeed}
           onToggleMute={handleToggleMute}
@@ -1294,7 +1834,19 @@ export default function App() {
         {/* ============================================================
             Layer 40 (z-40): TOP-LEFT CONSOLIDATED FLOATING MENU TRIGGER
             ============================================================ */}
-        <div className="absolute top-[62px] left-3 z-40 flex flex-col items-start gap-2 pointer-events-none">
+        <div
+          className="absolute z-40 flex flex-col items-start gap-2 pointer-events-none"
+          style={{
+            top: `calc(env(safe-area-inset-top, 0px) + ${hudLayout.topMenuTopPx}px)`,
+            left: 'calc(env(safe-area-inset-left, 0px) + 10px)',
+            ...(Math.abs(hudLayout.leftMenuScale - 1) > 0.005
+              ? {
+                  transform: `scale(${hudLayout.leftMenuScale})`,
+                  transformOrigin: 'top left',
+                }
+              : {}),
+          }}
+        >
           {/* Single Master Button that Expands All Top-Left Labels */}
           <button
             onClick={() => {
@@ -1355,8 +1907,8 @@ export default function App() {
 
           {/* Expandable Frosted Floating Panel Containing All Top-Left Labels */}
           {leftMenuOpen && (
-            <div className="pointer-events-auto flex items-start gap-2.5">
-              <div className="hud-float backdrop-blur-md rounded-xl p-2 w-[276px] flex flex-col gap-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.68)]">
+            <div className="pointer-events-auto flex flex-col sm:flex-row items-start gap-2 max-h-[calc(100dvh-160px)] overflow-y-auto no-scrollbar">
+              <div className="hud-float backdrop-blur-md rounded-xl p-2 w-[min(276px,calc(100vw-24px))] flex flex-col gap-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.68)] shrink-0">
                 {/* 1. Store Configuration */}
                 <button
                   onClick={() =>
@@ -1519,9 +2071,9 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Compact Collapsible World Tracker / Chronicle Drawer Beside Menu */}
+              {/* Compact Collapsible World Tracker / Chronicle Drawer Beside/Below Menu */}
               {showChronicleDrawer && (
-                <div className="w-[332px] max-w-[calc(100vw-310px)] max-h-[54vh] hud-float backdrop-blur-md rounded-xl overflow-hidden flex flex-col">
+                <div className="w-[min(320px,calc(100vw-24px))] sm:w-[332px] sm:max-w-[calc(100vw-310px)] max-h-[42dvh] sm:max-h-[54dvh] hud-float backdrop-blur-md rounded-xl overflow-hidden flex flex-col shrink-0">
               <div className="px-3.5 py-2.5 bg-[#24150e] border-b border-[#6b472b] flex items-center justify-between">
                 <span className="font-display text-xs font-bold text-[#E8C97A]">
                   堂口动态 · 排期与红线
@@ -1614,6 +2166,8 @@ export default function App() {
             world={world}
             forceOpen={manualGuideOpen}
             showIntroModal={showOnboardingIntro}
+            topOffsetPx={hudLayout.topMenuTopPx}
+            hudScale={hudLayout.leftMenuScale}
             onConfirmStartGuide={() => {
               sound.playClick();
               setShowOnboardingIntro(false);
@@ -1657,7 +2211,12 @@ export default function App() {
                   : 'danger-vignette-warning'
               }`}
             />
-            <div className="pointer-events-none absolute top-[62px] left-1/2 -translate-x-1/2 z-40 max-w-[620px] w-[92vw] sm:w-max">
+            <div
+              className="pointer-events-none absolute left-1/2 -translate-x-1/2 z-40 max-w-[620px] w-[92vw] sm:w-max"
+              style={{
+                top: `calc(env(safe-area-inset-top, 0px) + ${hudLayout.alertTopPx}px)`,
+              }}
+            >
               <div
                 className={`rounded-xl px-4 py-2 border-2 shadow-2xl backdrop-blur-md flex items-center gap-2.5 ${
                   nearFailure.level === 'CRITICAL'
@@ -1693,80 +2252,183 @@ export default function App() {
 
         {/* ============================================================
             BOTTOM HUD: DINING HALL HOTBAR OR WALKABLE BACKSTAGE DOCK
+            (Dynamically scaled & positioned via media queries so bottom hotbar never obscures key scene content)
             ============================================================ */}
         {world.activeScene === 'DINING_HALL' ? (
-          <div className="absolute bottom-3 left-3.5 z-30 max-w-[calc(100vw-240px)] pointer-events-none">
-            {spotlightHotbar && (
-              <div className="mb-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#FDE047] text-[#211208] text-[11px] font-black shadow-lg">
-                <span>
-                  {world.onboardingStep === 3
-                    ? '👇 指引操作：先按 1 迎宾带位，再按 2 端锅上桌'
-                    : world.onboardingStep === 4
-                      ? '👇 指引操作：按 3 补充冰台海鲜，按 7 现烹熟食热菜'
-                      : '👇 指引操作：客人离席后依次按 4 收桌 → 5 洗碗 → 6 摆台'}
-                </span>
-              </div>
-            )}
-            <div
-              className={`pointer-events-auto hud-float backdrop-blur-md rounded-xl px-3 py-2 flex flex-col gap-1.5 ${
-                spotlightHotbar
-                  ? 'border-2 border-[#FDE047] shadow-[0_0_24px_rgba(253,224,71,0.4)]'
-                  : ''
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3 text-[11px] px-0.5">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-display font-bold text-[#FFF6E5] whitespace-nowrap">
-                    {charDef.name}
-                  </span>
-                  <span className="text-[#8a6544]">·</span>
-                  <span className="text-[#E8C97A] font-semibold whitespace-nowrap">
-                    手持：{CARRY_LABEL[world.player.carrying]}
-                    {world.player.carryAmount > 0 ? ` ×${world.player.carryAmount}` : ''}
-                  </span>
-                  <span className="text-[#C5AE92] truncate hidden sm:inline">
-                    — {world.player.activeTaskLabel}
-                  </span>
-                </div>
-                <span className="font-mono-num text-[#D6C3A8] whitespace-nowrap shrink-0">
-                  今日营收{' '}
-                  <strong className="text-[#F6DA8D]">
-                    ¥{(world.todayStats.ticketRevenue + world.todayStats.tipRevenue).toLocaleString()}
-                  </strong>
-                </span>
-              </div>
+          (() => {
+            const isCollapsed = hudLayout.isMobile && hotbarCollapsed && !spotlightHotbar;
+            const urgentCount = hotbarItems.filter((item) => item.urgent).length;
+            const hotbarIsScaled = Math.abs(hudLayout.hotbarScale - 1) > 0.005;
+            const hotbarMaxWidthExpr = hudLayout.hotbarSideBySideWithOrb
+              ? `calc((100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - ${hudLayout.hotbarRightReservePx + 18}px) / ${hudLayout.hotbarScale})`
+              : `calc((100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 20px) / ${hudLayout.hotbarScale})`;
 
-              <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
-                {hotbarItems.map((item) => (
+            return (
+              <div
+                className="absolute z-30 pointer-events-none"
+                style={{
+                  left: 'calc(env(safe-area-inset-left, 0px) + 10px)',
+                  bottom: `calc(env(safe-area-inset-bottom, 0px) + ${hudLayout.hotbarBottomPx}px)`,
+                  width: isCollapsed
+                    ? 'auto'
+                    : hudLayout.hotbarSideBySideWithOrb
+                      ? undefined
+                      : hotbarMaxWidthExpr,
+                  maxWidth: isCollapsed ? undefined : hotbarMaxWidthExpr,
+                  ...(hotbarIsScaled
+                    ? {
+                        transform: `scale(${hudLayout.hotbarScale})`,
+                        transformOrigin: 'bottom left',
+                      }
+                    : {}),
+                }}
+              >
+                {spotlightHotbar && (
+                  <div className="mb-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#FDE047] text-[#211208] text-[11px] font-black shadow-lg">
+                    <span>
+                      {world.onboardingStep === 3
+                        ? '👇 指引：先点「迎宾带位」，再点「端锅上桌」'
+                        : world.onboardingStep === 4
+                          ? '👇 指引：点「冰台补菜」补海鲜，点「烹制熟食」出热菜'
+                          : '👇 指引：客人离席后依次点「收桌 → 洗碗 → 摆台」'}
+                    </span>
+                  </div>
+                )}
+
+                {isCollapsed ? (
                   <button
-                    key={item.action}
-                    onClick={() => handleQuickAction(item.action)}
-                    className={`game-btn-wood px-2 py-1.5 rounded-lg text-left cursor-pointer min-w-[84px] ${
-                      item.urgent ? 'border-[#e8c97a]' : ''
+                    type="button"
+                    onClick={() => {
+                      sound.playClick();
+                      setHotbarCollapsed(false);
+                    }}
+                    className="pointer-events-auto hud-float backdrop-blur-md rounded-full px-3.5 py-2 min-h-[40px] inline-flex items-center gap-2 text-xs font-bold text-[#FFF6E5] border-[#d9b060]/80 cursor-pointer shadow-lg"
+                    title="展开底部快捷调度栏"
+                  >
+                    <ChevronUp className="w-4 h-4 text-[#E8C97A] shrink-0" />
+                    <span className="font-display whitespace-nowrap">快捷调度</span>
+                    {urgentCount > 0 && (
+                      <span className="font-mono-num text-[10px] font-black bg-[#FDE047] text-[#211208] px-1.5 py-0.5 rounded">
+                        {urgentCount}待办
+                      </span>
+                    )}
+                    <span className="font-mono-num text-[11px] text-[#E8C97A] whitespace-nowrap">
+                      {CARRY_LABEL[world.player.carrying]}
+                    </span>
+                  </button>
+                ) : (
+                  <div
+                    className={`pointer-events-auto hud-float backdrop-blur-md rounded-xl flex flex-col ${
+                      hudLayout.hotbarCompact
+                        ? 'px-2 py-1.5 gap-1'
+                        : 'px-2.5 sm:px-3 py-1.5 sm:py-2 gap-1.5'
+                    } ${
+                      spotlightHotbar
+                        ? 'border-2 border-[#FDE047] shadow-[0_0_24px_rgba(253,224,71,0.4)]'
+                        : ''
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1">
-                      <span
-                        className="text-xs font-bold whitespace-nowrap"
-                        style={{ color: item.accent }}
-                      >
-                        {item.label}
-                      </span>
-                      <span className="font-mono-num text-[10px] text-[#C5AE92] bg-[#160c08] border border-[#593b25] px-1 rounded">
-                        {item.keyNum}
-                      </span>
+                    {/* Hide verbose status row in ultra-compact landscape/16:9 phones to protect vertical scene visibility */}
+                    {!hudLayout.hotbarCompact && (
+                      <div className="flex items-center justify-between gap-2 sm:gap-3 text-[11px] px-0.5">
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                          <span className="font-display font-bold text-[#FFF6E5] whitespace-nowrap">
+                            {charDef.name}
+                          </span>
+                          <span className="text-[#8a6544]">·</span>
+                          <span className="text-[#E8C97A] font-semibold whitespace-nowrap truncate">
+                            手持：{CARRY_LABEL[world.player.carrying]}
+                            {world.player.carryAmount > 0 ? ` ×${world.player.carryAmount}` : ''}
+                          </span>
+                          <span className="text-[#C5AE92] truncate hidden sm:inline">
+                            — {world.player.activeTaskLabel}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono-num text-[#D6C3A8] whitespace-nowrap">
+                            今日{' '}
+                            <strong className="text-[#F6DA8D]">
+                              ¥{(world.todayStats.ticketRevenue + world.todayStats.tipRevenue).toLocaleString()}
+                            </strong>
+                          </span>
+                          {hudLayout.isMobile && !spotlightHotbar && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                sound.playClick();
+                                setHotbarCollapsed(true);
+                              }}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#271810] border border-[#6b472b] text-[10px] text-[#DFCDB6] hover:text-[#FFF6E5] cursor-pointer whitespace-nowrap"
+                              title="收起快捷栏以查看完整厅堂"
+                            >
+                              <ChevronDown className="w-3 h-3" />
+                              <span>收起</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex lg:grid lg:grid-cols-7 gap-1.5 overflow-x-auto no-scrollbar touch-scroll pb-0.5 lg:pb-0 items-stretch">
+                      {hudLayout.hotbarCompact && hudLayout.isMobile && !spotlightHotbar && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            setHotbarCollapsed(true);
+                          }}
+                          className="game-btn-wood px-2 py-1 min-h-[42px] rounded-lg flex flex-col items-center justify-center text-[#DFCDB6] cursor-pointer shrink-0"
+                          title="收起快捷栏以查看完整厅堂"
+                          aria-label="收起快捷栏"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5 text-[#E8C97A]" />
+                          <span className="text-[9px] font-semibold whitespace-nowrap">收起</span>
+                        </button>
+                      )}
+                      {hotbarItems.map((item) => (
+                        <button
+                          key={item.action}
+                          onClick={() => handleQuickAction(item.action)}
+                          className={`game-btn-wood rounded-lg text-left cursor-pointer shrink-0 lg:shrink ${
+                            hudLayout.hotbarCompact
+                              ? 'px-2 py-1 min-h-[42px] min-w-[76px]'
+                              : 'px-2.5 lg:px-2 py-1.5 min-h-[44px] lg:min-h-0 min-w-[84px]'
+                          } ${item.urgent ? 'border-[#e8c97a]' : ''}`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span
+                              className="text-xs font-bold whitespace-nowrap"
+                              style={{ color: item.accent }}
+                            >
+                              {item.label}
+                            </span>
+                            {!device.isTouchDevice && (
+                              <span className="font-mono-num text-[10px] text-[#C5AE92] bg-[#160c08] border border-[#593b25] px-1 rounded">
+                                {item.keyNum}
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-mono-num text-[10px] text-[#DFCDB6] mt-0.5 truncate">
+                            {item.sub}
+                          </div>
+                        </button>
+                      ))}
                     </div>
-                    <div className="font-mono-num text-[10px] text-[#DFCDB6] mt-0.5 truncate">
-                      {item.sub}
-                    </div>
-                  </button>
-                ))}
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            );
+          })()
         ) : (
           <BackstageRoomDock
             world={world}
+            isTouchDevice={device.isTouchDevice}
+            hudScale={hudLayout.hotbarScale}
+            compactLayout={hudLayout.hotbarCompact}
+            bottomOffsetPx={hudLayout.backstageDockBottomPx}
+            rightReservePx={
+              hudLayout.hotbarSideBySideWithOrb ? hudLayout.hotbarRightReservePx : 0
+            }
             onExitBackstage={() => {
               exitBackstageToDiningHall(worldRef.current);
               forceUiSync();
@@ -1821,13 +2483,35 @@ export default function App() {
 
         {/* ============================================================
             BOTTOM-RIGHT ICONIC CIRCULAR PHASE & ACTION ORB
+            (Dynamically scaled & positioned via media queries to stay clear of the bottom hotbar)
             ============================================================ */}
-        <div className="absolute bottom-3.5 right-4 z-30 flex items-end gap-2.5 pointer-events-none">
+        <div
+          className="absolute z-30 flex items-end gap-2 md:gap-2.5 pointer-events-none transition-[bottom] duration-200"
+          style={{
+            right: 'calc(env(safe-area-inset-right, 0px) + 10px)',
+            bottom: `calc(env(safe-area-inset-bottom, 0px) + ${
+              world.activeScene === 'BACKSTAGE'
+                ? hudLayout.orbBottomBackstagePx
+                : hudLayout.isMobile &&
+                    hotbarCollapsed &&
+                    !spotlightHotbar &&
+                    !hudLayout.hotbarSideBySideWithOrb
+                  ? hudLayout.hotbarBottomPx
+                  : hudLayout.orbBottomDiningPx
+            }px)`,
+            ...(Math.abs(hudLayout.orbScale - 1) > 0.005
+              ? {
+                  transform: `scale(${hudLayout.orbScale})`,
+                  transformOrigin: 'bottom right',
+                }
+              : {}),
+          }}
+        >
           {/* Quick Open Config Dock beside the Turn Orb during PREP */}
           {effectivePhase === 'PREP' && world.activeScene === 'DINING_HALL' && (
             <button
               onClick={() => handleOpenOverlay('CONFIG', 'POLICY')}
-              className="pointer-events-auto mb-3 hud-float backdrop-blur-md hover:border-[#e8c97a] px-4 py-2 rounded-lg text-left cursor-pointer hidden sm:block transition-colors"
+              className="pointer-events-auto mb-3 hud-float backdrop-blur-md hover:border-[#e8c97a] px-4 py-2 rounded-lg text-left cursor-pointer hidden xl:block transition-colors"
             >
               <div className="flex items-center gap-1.5 font-display font-bold text-xs text-[#E8C97A] whitespace-nowrap">
                 <Store className="w-3.5 h-3.5" />
@@ -1845,14 +2529,14 @@ export default function App() {
           )}
 
           {/* Unified Grand Map Camera Preset & Zoom Controls */}
-          <div className="pointer-events-auto mb-3 flex items-center gap-1 hud-float backdrop-blur-md rounded-lg p-1">
+          <div className="pointer-events-auto mb-1.5 md:mb-3 flex items-center gap-1 hud-float backdrop-blur-md rounded-lg p-1">
             <button
               onClick={() => {
                 sound.playClick();
                 resetCameraZoom();
               }}
               title="复位全图视角（同时俯瞰前厅大堂与7大后场房间）"
-              className={`px-2 py-1 rounded text-[11px] font-semibold cursor-pointer whitespace-nowrap ${
+              className={`px-2 py-1.5 md:py-1 rounded text-[11px] font-semibold cursor-pointer whitespace-nowrap ${
                 zoomPercent === 100
                   ? 'bg-[#3b2517] text-[#F6DA8D] border border-[#c4974b]'
                   : 'text-[#DFCDB6] hover:text-[#FFF6E5]'
@@ -1870,7 +2554,7 @@ export default function App() {
                 forceUiSync();
               }}
               title="推进镜头聚焦前厅自助大堂"
-              className="px-2 py-1 rounded text-[11px] font-semibold text-[#DFCDB6] hover:text-[#FFF6E5] hover:bg-[#2a1a12] cursor-pointer whitespace-nowrap"
+              className="px-2 py-1.5 md:py-1 rounded text-[11px] font-semibold text-[#DFCDB6] hover:text-[#FFF6E5] hover:bg-[#2a1a12] cursor-pointer whitespace-nowrap"
             >
               前厅
             </button>
@@ -1887,7 +2571,7 @@ export default function App() {
                 forceUiSync();
               }}
               title="推进镜头聚焦后场 7 大功能区 (快捷键 M)"
-              className={`px-2 py-1 rounded text-[11px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${
+              className={`px-2 py-1.5 md:py-1 rounded text-[11px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${
                 spotlightBackstageBtn
                   ? 'bg-[#FDE047] text-[#211208] font-bold shadow-[0_0_14px_rgba(253,224,71,0.75)]'
                   : backstageUrgent
@@ -1900,8 +2584,8 @@ export default function App() {
             </button>
           </div>
 
-          {/* Giant Circular Action Orb */}
-          <div className="pointer-events-auto relative w-[116px] h-[116px] flex items-center justify-center shrink-0">
+          {/* Giant Circular Action Orb (Scaled cleanly on mobile phones) */}
+          <div className="pointer-events-auto relative w-[82px] h-[82px] md:w-[116px] md:h-[116px] flex items-center justify-center shrink-0">
             {(spotlightOpenShopOrb || spotlightSettleOrb) && (
               <div className="pointer-events-none absolute -top-9 right-0 whitespace-nowrap bg-[#FDE047] text-[#211208] font-black text-[11px] px-2.5 py-1 rounded shadow-[0_4px_16px_rgba(0,0,0,0.6)] animate-bounce">
                 {spotlightOpenShopOrb ? '👇 指引：点此正式开店' : '👇 指引：点此手动打烊结算'}
@@ -1938,18 +2622,18 @@ export default function App() {
             {effectivePhase === 'PREP' && (
               <button
                 onClick={handleOpenShop}
-                className={`civ-turn-orb w-[100px] h-[100px] rounded-full flex flex-col items-center justify-center text-center cursor-pointer px-2 ${
+                className={`civ-turn-orb w-[70px] h-[70px] md:w-[100px] md:h-[100px] rounded-full flex flex-col items-center justify-center text-center cursor-pointer px-1.5 md:px-2 ${
                   spotlightOpenShopOrb
                     ? 'ring-4 ring-[#FDE047] shadow-[0_0_28px_rgba(253,224,71,0.85)] animate-pulse'
                     : ''
                 }`}
                 title="结束筹备并挂牌正式开店营业"
               >
-                <Sun className="w-5 h-5 text-[#F6DA8D] mb-0.5" />
-                <span className="font-display font-black text-base text-[#FFF9EE] leading-tight">
+                <Sun className="w-4 h-4 md:w-5 md:h-5 text-[#F6DA8D] mb-0.5" />
+                <span className="font-display font-black text-xs md:text-base text-[#FFF9EE] leading-tight">
                   正式开店
                 </span>
-                <span className="font-mono-num text-[10px] text-[#FFE8C8] mt-0.5">
+                <span className="font-mono-num text-[9px] md:text-[10px] text-[#FFE8C8] mt-0.5">
                   第 {world.day} 天
                 </span>
               </button>
@@ -1957,16 +2641,16 @@ export default function App() {
 
             {effectivePhase === 'PLAYING' && (
               <div
-                className="civ-turn-orb-idle w-[100px] h-[100px] rounded-full flex flex-col items-center justify-center text-center px-2"
+                className="civ-turn-orb-idle w-[70px] h-[70px] md:w-[100px] md:h-[100px] rounded-full flex flex-col items-center justify-center text-center px-1.5 md:px-2"
                 title="今日营业倒计时（11:00 - 22:00）"
               >
-                <span className="text-[10px] font-bold text-[#C5AE92]">
-                  {world.rushHourActive ? '高峰客流' : '营业中'}
+                <span className="text-[9px] md:text-[10px] font-bold text-[#C5AE92]">
+                  {world.rushHourActive ? '高峰' : '营业中'}
                 </span>
-                <span className="font-mono-num font-bold text-xl text-[#FFF6E5] leading-tight mt-0.5">
+                <span className="font-mono-num font-bold text-sm md:text-xl text-[#FFF6E5] leading-tight mt-0.5">
                   {clockText}
                 </span>
-                <span className="font-mono-num text-[10px] text-[#E8C97A] mt-0.5">
+                <span className="font-mono-num text-[9px] md:text-[10px] text-[#E8C97A] mt-0.5">
                   第 {world.day} 天
                 </span>
               </div>
@@ -1976,7 +2660,7 @@ export default function App() {
               <button
                 onClick={handleFinishClosing}
                 disabled={!closingProg.canFinishEarly}
-                className={`w-[100px] h-[100px] rounded-full flex flex-col items-center justify-center text-center px-2 ${
+                className={`w-[70px] h-[70px] md:w-[100px] md:h-[100px] rounded-full flex flex-col items-center justify-center text-center px-1.5 md:px-2 ${
                   closingProg.canFinishEarly
                     ? 'civ-turn-orb-gold cursor-pointer'
                     : 'civ-turn-orb-idle cursor-not-allowed'
@@ -1994,12 +2678,12 @@ export default function App() {
                 }
               >
                 <Moon
-                  className={`w-4 h-4 mb-0.5 ${
+                  className={`w-3.5 h-3.5 md:w-4 md:h-4 mb-0.5 ${
                     closingProg.canFinishEarly ? 'text-[#211208]' : 'text-[#F6DA8D]'
                   }`}
                 />
                 <span
-                  className={`font-display font-black text-sm leading-tight ${
+                  className={`font-display font-black text-xs md:text-sm leading-tight ${
                     closingProg.canFinishEarly ? 'text-[#211208]' : 'text-[#FFF6E5]'
                   }`}
                 >
@@ -2010,12 +2694,12 @@ export default function App() {
                       : '闭店收尾'}
                 </span>
                 <span
-                  className={`font-mono-num text-[10px] mt-0.5 ${
+                  className={`font-mono-num text-[9px] md:text-[10px] mt-0.5 ${
                     closingProg.canFinishEarly ? 'text-[#3A220B] font-bold' : 'text-[#E8C97A]'
                   }`}
                 >
                   {closingProg.allClean
-                    ? '全清就绪 · 点此'
+                    ? '全清就绪'
                     : closingProg.canFinishEarly
                       ? `余脏 ${closingProg.dirtyTables + closingProg.dirtyDishes}`
                       : `余客 ${closingProg.seatedGuests} 桌`}
@@ -2036,7 +2720,7 @@ export default function App() {
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="game-panel rounded-xl px-7 py-6 text-center space-y-4 max-w-sm w-full border border-[#c9a45c]/75"
+              className="game-panel rounded-xl px-6 sm:px-7 py-5 sm:py-6 text-center space-y-4 max-w-sm w-full border border-[#c9a45c]/75 max-h-[90dvh] overflow-y-auto touch-scroll"
             >
               <div>
                 <h2 className="font-display text-2xl font-bold text-[#FFF6E5]">系统菜单</h2>
@@ -2050,37 +2734,40 @@ export default function App() {
                     sound.playClick();
                     setActiveOverlay(null);
                   }}
-                  className="game-btn-primary w-full py-2.5 rounded-lg font-display font-bold text-sm cursor-pointer"
+                  className="game-btn-primary w-full min-h-[44px] py-2.5 rounded-lg font-display font-bold text-sm cursor-pointer"
                 >
-                  继续经营 [Esc]
+                  {device.isTouchDevice ? '继续经营' : '继续经营 [Esc]'}
                 </button>
                 <button
                   onClick={() => handleOpenOverlay('CONFIG', 'POLICY')}
-                  className="game-btn-wood w-full py-2.5 rounded-lg font-semibold text-xs text-[#E8C97A] cursor-pointer"
+                  className="game-btn-wood w-full min-h-[44px] py-2.5 rounded-lg font-semibold text-xs text-[#E8C97A] cursor-pointer"
                 >
-                  门店配置中心 [C]
+                  {device.isTouchDevice ? '门店配置中心' : '门店配置中心 [C]'}
                 </button>
                 <button
                   onClick={() => handleOpenOverlay('SAVE_LOAD')}
-                  className="game-btn-wood w-full py-2.5 rounded-lg font-semibold text-xs cursor-pointer"
+                  className="game-btn-wood w-full min-h-[44px] py-2.5 rounded-lg font-semibold text-xs cursor-pointer"
                 >
                   存档 / 读档
                 </button>
                 <button
                   onClick={() => handleOpenOverlay('SETTINGS')}
-                  className="game-btn-wood w-full py-2.5 rounded-lg font-semibold text-xs cursor-pointer"
+                  className="game-btn-wood w-full min-h-[44px] py-2.5 rounded-lg font-semibold text-xs cursor-pointer"
                 >
                   画面与音效设置
                 </button>
+                <PWAInstallButton platform={device.platform} pwa={pwa} variant="menu" />
                 <button
                   onClick={handleBackToMainMenu}
-                  className="game-btn-wood w-full py-2.5 rounded-lg font-semibold text-xs text-[#FCA5A5] cursor-pointer"
+                  className="game-btn-wood w-full min-h-[44px] py-2.5 rounded-lg font-semibold text-xs text-[#FCA5A5] cursor-pointer"
                 >
                   返回主菜单
                 </button>
               </div>
               <div className="pt-2 border-t border-[#5a3b24]/65 text-[10px] text-[#B89E82] leading-relaxed">
-                WASD 移动 · 1–7 快捷调度 · M 切后场 · B 商战 · P 暂停 · 滚轮缩放 · 右键拖拽视角
+                {device.isTouchDevice
+                  ? '单指拖动平移地图 · 双指捏合缩放视野 · 点击工位或底部快捷栏即时调度'
+                  : 'WASD 移动 · 1–7 快捷调度 · M 切后场 · B 商战 · P 暂停 · 滚轮缩放 · 右键拖拽视角'}
               </div>
             </div>
           </div>
@@ -2237,6 +2924,12 @@ export default function App() {
           settings={settings}
           activeBgmTrack={desiredBgmTrack}
           actualCanvasSize={actualCanvasSize}
+          platform={device.platform}
+          platformLabel={device.platformLabel}
+          pwa={pwa}
+          canFullscreen={device.canFullscreen}
+          isFullscreen={device.isFullscreen}
+          onToggleFullscreen={device.toggleFullscreen}
           onChange={handleUpdateSettings}
           onClose={() => setActiveOverlay(null)}
         />

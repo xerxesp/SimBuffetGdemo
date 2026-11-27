@@ -298,29 +298,29 @@ export function StoreConfigModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-[#0d0604]/85 backdrop-blur-[3px] flex items-center justify-center p-2.5 md:p-4"
+      className="fixed inset-0 z-50 bg-[#0d0604]/85 backdrop-blur-[3px] flex items-center justify-center p-2 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="game-panel w-[96vw] max-w-[1220px] h-[90vh] rounded-xl overflow-hidden flex flex-col text-[#F7EFE2]">
+      <div className="game-panel w-[97vw] sm:w-[96vw] max-w-[1220px] h-[93dvh] sm:h-[90dvh] rounded-xl overflow-hidden flex flex-col text-[#F7EFE2]">
         {/* TOP BRASS & LACQUER HEADER */}
-        <header className="px-5 py-3 bg-gradient-to-b from-[#331f15] to-[#1d110c] border-b-2 border-[#b58942] flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-full border-2 border-[#e8c97a] bg-[#1a0f0a] flex items-center justify-center text-[#e8c97a] shrink-0">
+        <header className="px-3.5 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-b from-[#331f15] to-[#1d110c] border-b-2 border-[#b58942] flex items-center justify-between gap-2.5 sm:gap-4 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border-2 border-[#e8c97a] bg-[#1a0f0a] hidden sm:flex items-center justify-center text-[#e8c97a] shrink-0">
               <Layers className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="font-display text-lg font-bold text-[#FFF6E5] whitespace-nowrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-display text-base sm:text-lg font-bold text-[#FFF6E5] whitespace-nowrap">
                   门店配置中心
                 </h2>
-                <span className="text-xs font-mono-num text-[#E8C97A]">
+                <span className="text-[11px] sm:text-xs font-mono-num text-[#E8C97A]">
                   门店 Lv.{world.shopLevel} · 店长 Lv.{world.playerLevel}（升级点 {world.upgradePoints}）· 现金 ¥
                   {Math.round(world.cash).toLocaleString()}
                 </span>
               </div>
-              <p className="text-[11px] text-[#C5AE92] truncate">
+              <p className="text-[11px] text-[#C5AE92] truncate hidden sm:block">
                 {isPrep
                   ? '开店前筹备期：消耗升级点与资金启动天赋研发、购置装潢新店面类型、扩建 10 大区域位与特色分区、配置菜单与团队'
                   : '营业/闭店阶段：当前仅供查看进度；天赋研发、店面装潢、区域扩建与菜单配置均需在每日「开店前准备」阶段执行'}
@@ -328,19 +328,19 @@ export function StoreConfigModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {isPrep && (
               <button
                 onClick={onOpenShopAndClose}
-                className="game-btn-gold inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
+                className="game-btn-gold inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 min-h-[40px] rounded-lg text-xs font-bold cursor-pointer whitespace-nowrap"
               >
                 <Sun className="w-3.5 h-3.5" />
-                配置完成 · 正式开店
+                <span className="hidden sm:inline">配置完成 · </span>正式开店
               </button>
             )}
             <button
               onClick={onClose}
-              className="game-btn-wood inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer whitespace-nowrap"
+              className="game-btn-wood inline-flex items-center gap-1 px-2.5 sm:px-3 py-2 min-h-[40px] rounded-lg text-xs font-semibold cursor-pointer whitespace-nowrap"
             >
               <X className="w-4 h-4" />
               返回
@@ -349,7 +349,7 @@ export function StoreConfigModal({
         </header>
 
         {/* CLEAN 4-TAB NAVIGATION */}
-        <nav className="px-5 bg-[#190e0a] border-b border-[#593b25] flex items-center gap-2 shrink-0 overflow-x-auto">
+        <nav className="px-3 sm:px-5 bg-[#190e0a] border-b border-[#593b25] flex items-center gap-1.5 sm:gap-2 shrink-0 overflow-x-auto no-scrollbar touch-scroll">
           {[
             {
               id: 'POLICY' as const,
@@ -381,7 +381,7 @@ export function StoreConfigModal({
               <button
                 key={item.id}
                 onClick={() => handleSwitchTab(item.id)}
-                className={`px-4 py-2.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
+                className={`px-3 sm:px-4 py-2.5 min-h-[42px] text-xs font-bold flex items-center gap-1.5 sm:gap-2 border-b-2 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                   active
                     ? 'border-[#e8c97a] text-[#FFF6E5] bg-[#2f1d14]/85'
                     : 'border-transparent text-[#B59876] hover:text-[#F0E3CF]'
@@ -389,13 +389,13 @@ export function StoreConfigModal({
               >
                 <span className={active ? 'text-[#E8C97A]' : 'text-[#8C6E52]'}>{item.icon}</span>
                 <span>{item.label}</span>
-                <span className="font-mono-num text-[10px] text-[#C5AE92]">{item.sub}</span>
+                <span className="font-mono-num text-[10px] text-[#C5AE92] hidden sm:inline">{item.sub}</span>
               </button>
             );
           })}
 
           {world.pendingOrders.length > 0 && (
-            <div className="ml-auto flex items-center gap-1.5 text-[11px] font-mono-num text-[#FCD34D] whitespace-nowrap">
+            <div className="ml-auto flex items-center gap-1.5 text-[11px] font-mono-num text-[#FCD34D] whitespace-nowrap shrink-0 pl-2">
               <CalendarClock className="w-3.5 h-3.5" />
               在办排期 {world.pendingOrders.length} 项
             </div>

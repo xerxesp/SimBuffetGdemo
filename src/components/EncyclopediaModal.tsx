@@ -21,17 +21,17 @@ export function EncyclopediaModal({ encyclopedia, onClose }: EncyclopediaModalPr
   const totalAchCount = ACHIEVEMENTS_CATALOG.length;
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="game-panel w-full max-w-4xl rounded-xl p-5 md:p-6 text-[#F7EFE2] flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-[#0d0604]/82 backdrop-blur-[2px] flex items-center justify-center p-2.5 sm:p-4">
+      <div className="game-panel w-full max-w-4xl rounded-xl p-4 sm:p-6 text-[#F7EFE2] flex flex-col max-h-[92dvh]">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-[#593b25]">
-          <div className="flex items-center gap-2.5">
-            <Trophy className="w-5 h-5 text-[#E8C97A]" />
-            <div>
-              <h2 className="font-display text-xl font-bold text-[#FFF6E5]">
+        <div className="flex items-start sm:items-center justify-between gap-3 pb-3 sm:pb-3.5 border-b border-[#593b25]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Trophy className="w-5 h-5 text-[#E8C97A] shrink-0" />
+            <div className="min-w-0">
+              <h2 className="font-display text-lg sm:text-xl font-bold text-[#FFF6E5] truncate">
                 跨周目图鉴与成就馆
               </h2>
-              <p className="text-xs text-[#C5AE92]">
+              <p className="text-[11px] sm:text-xs text-[#C5AE92]">
                 跨存档永久累积 · 成就 {unlockedAchCount}/{totalAchCount} · 菜品{' '}
                 {encyclopedia.discoveredSeafoodIds.length}/{SEAFOOD_CATALOG.length} · 锅底{' '}
                 {encyclopedia.discoveredBrothIds.length}/{BROTH_CATALOG.length} · 最高排名第{' '}
@@ -42,7 +42,7 @@ export function EncyclopediaModal({ encyclopedia, onClose }: EncyclopediaModalPr
 
           <button
             onClick={onClose}
-            className="game-btn-wood p-1.5 rounded cursor-pointer"
+            className="game-btn-wood min-w-[40px] min-h-[40px] p-2 rounded-lg flex items-center justify-center cursor-pointer shrink-0"
             aria-label="关闭图鉴与成就馆"
           >
             <X className="w-4 h-4" />
@@ -50,7 +50,7 @@ export function EncyclopediaModal({ encyclopedia, onClose }: EncyclopediaModalPr
         </div>
 
         {/* Summary Metrics Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 mt-3 sm:mt-3.5 shrink-0">
           <div className="game-inset rounded-lg px-3 py-2">
             <div className="text-[11px] text-[#C5AE92]">勋章解锁率</div>
             <div className="font-mono-num text-sm font-bold text-[#F6DA8D]">
@@ -78,10 +78,10 @@ export function EncyclopediaModal({ encyclopedia, onClose }: EncyclopediaModalPr
         </div>
 
         {/* Tabs */}
-        <div className="flex flex-wrap gap-2 mt-3.5 pb-3 border-b border-[#4a2f1d]">
+        <div className="flex flex-nowrap sm:flex-wrap gap-2 mt-3 pb-3 border-b border-[#4a2f1d] overflow-x-auto no-scrollbar touch-scroll shrink-0">
           <button
             onClick={() => setTab('ACHIEVEMENTS')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
               tab === 'ACHIEVEMENTS' ? 'game-btn-gold' : 'game-btn-wood text-[#DFCDB6]'
             }`}
           >
@@ -90,7 +90,7 @@ export function EncyclopediaModal({ encyclopedia, onClose }: EncyclopediaModalPr
           </button>
           <button
             onClick={() => setTab('CATALOG')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
               tab === 'CATALOG' ? 'game-btn-gold' : 'game-btn-wood text-[#DFCDB6]'
             }`}
           >
@@ -99,7 +99,7 @@ export function EncyclopediaModal({ encyclopedia, onClose }: EncyclopediaModalPr
           </button>
           <button
             onClick={() => setTab('LORE')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3.5 py-2 min-h-[40px] rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
               tab === 'LORE' ? 'game-btn-gold' : 'game-btn-wood text-[#DFCDB6]'
             }`}
           >
@@ -109,7 +109,7 @@ export function EncyclopediaModal({ encyclopedia, onClose }: EncyclopediaModalPr
         </div>
 
         {/* Content */}
-        <div className="mt-4 overflow-y-auto pr-1 flex-1 space-y-4">
+        <div className="mt-3.5 sm:mt-4 overflow-y-auto touch-scroll pr-1 flex-1 space-y-4">
           {tab === 'ACHIEVEMENTS' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {ACHIEVEMENTS_CATALOG.map((ach) => {
