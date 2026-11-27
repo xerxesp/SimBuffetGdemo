@@ -1,4 +1,5 @@
 import { Monitor, Music, Sliders, Volume2, VolumeX, X } from 'lucide-react';
+import { SeasonId, WeatherId } from '../types/game';
 import {
   AspectRatioMode,
   BGM_TRACK_META,
@@ -8,6 +9,7 @@ import {
   ResolutionPreset,
 } from '../types/settings';
 import { sound } from '../utils/sound';
+import { SeasonSvgIcon, WeatherSvgIcon } from './VintageIcons';
 
 interface SettingsModalProps {
   settings: GameSettings;
@@ -168,6 +170,59 @@ export function SettingsModal({
                 <span className="font-mono-num text-xs font-semibold text-[#6EE7B7] w-10 text-right">
                   {settings.sfxVolume}%
                 </span>
+              </div>
+
+              {/* Season & Weather Soundscape Preview */}
+              <div className="pt-2 border-t border-[#4a2f1d] space-y-2">
+                <div className="text-[11px] text-[#C5AE92]">
+                  节气更迭与天气变化音效试听（营业期间自动随四季与天气切换环境声）
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      { id: 'SPRING', label: '春汛' },
+                      { id: 'SUMMER', label: '夏潮' },
+                      { id: 'AUTUMN', label: '秋丰' },
+                      { id: 'WINTER', label: '暖冬' },
+                    ] as Array<{ id: SeasonId; label: string }>
+                  ).map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        if (settings.muted) update({ muted: false });
+                        sound.playSeasonChange(s.id);
+                      }}
+                      className="game-btn-wood inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold cursor-pointer whitespace-nowrap"
+                    >
+                      <SeasonSvgIcon season={s.id} className="w-3.5 h-3.5 shrink-0" />
+                      {s.label}
+                    </button>
+                  ))}
+                  <span className="w-px h-5 bg-[#593b25] self-center mx-0.5" aria-hidden="true" />
+                  {(
+                    [
+                      { id: 'SUNNY', label: '晴朗' },
+                      { id: 'RAINY', label: '细雨' },
+                      { id: 'TYPHOON', label: '台风' },
+                      { id: 'HEATWAVE', label: '酷暑' },
+                      { id: 'SNOWY', label: '初雪' },
+                    ] as Array<{ id: WeatherId; label: string }>
+                  ).map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => {
+                        if (settings.muted) update({ muted: false });
+                        sound.playWeatherChange(w.id);
+                      }}
+                      className="game-btn-wood inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold cursor-pointer whitespace-nowrap"
+                    >
+                      <WeatherSvgIcon weather={w.id} className="w-3.5 h-3.5 shrink-0" />
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </section>

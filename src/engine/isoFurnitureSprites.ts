@@ -71,7 +71,7 @@ export interface ProcessedFurnitureSprite {
 
 export interface FurnitureSpriteSpec {
   url: string;
-  /** Standardized architectural 3D height in world Z units (characters ≈ 42z, walls = 74z) */
+  /** Standardized architectural 3D height in world Z units (canonical standing characters ≈ 48z, walls = 74z) */
   canonicalHeightZ: number;
   /** Standardized footprint width fill ratio (0.84..1.00) */
   widthScale: number;
@@ -90,7 +90,7 @@ interface SpriteEntry {
 }
 
 const FURNITURE_SPECS: Record<FurnitureSpriteKey, FurnitureSpriteSpec> = {
-  // Front-Hall Stations & Entrance (unified waist/cabinet heights relative to 42z characters)
+  // Front-Hall Stations & Entrance (unified waist/cabinet heights relative to 48z canonical characters)
   RECEPTION: {
     url: receptionUrl,
     canonicalHeightZ: 25,
@@ -130,9 +130,9 @@ const FURNITURE_SPECS: Record<FurnitureSpriteKey, FurnitureSpriteSpec> = {
   // Front-Hall 10 Buffet Islands (harmonized architectural proportions)
   LIVE_AQUARIUM: {
     url: liveAquariumUrl,
-    canonicalHeightZ: 40,
-    widthScale: 0.96,
-    maxAspectStretch: 1.08,
+    canonicalHeightZ: 38,
+    widthScale: 0.94,
+    maxAspectStretch: 1.07,
     defaultOffsetY: 2,
   },
   ICE_BUFFET: {
@@ -202,12 +202,12 @@ const FURNITURE_SPECS: Record<FurnitureSpriteKey, FurnitureSpriteSpec> = {
     defaultOffsetY: 2,
   },
 
-  // Front-Hall Dining Table (burner center aligns to z=21.5)
+  // Front-Hall Dining Table (burner center aligns to z=21.5, waist-level for 48z standing / elbow-level for seated)
   HOTPOT_TABLE: {
     url: hotpotTableUrl,
-    canonicalHeightZ: 23,
-    widthScale: 0.98,
-    maxAspectStretch: 1.05,
+    canonicalHeightZ: 21.5,
+    widthScale: 0.93,
+    maxAspectStretch: 1.04,
     defaultOffsetY: 2,
   },
 
@@ -228,9 +228,9 @@ const FURNITURE_SPECS: Record<FurnitureSpriteKey, FurnitureSpriteSpec> = {
   },
   OFFICE_DESK: {
     url: officeDeskUrl,
-    canonicalHeightZ: 28,
-    widthScale: 0.98,
-    maxAspectStretch: 1.08,
+    canonicalHeightZ: 27,
+    widthScale: 0.94,
+    maxAspectStretch: 1.07,
     punchInteriorHoles: true,
     defaultOffsetY: 2,
   },
@@ -275,8 +275,8 @@ const FURNITURE_SPECS: Record<FurnitureSpriteKey, FurnitureSpriteSpec> = {
   DORM_TEA_TABLE: {
     url: dormTeaTableUrl,
     canonicalHeightZ: 15,
-    widthScale: 0.98,
-    maxAspectStretch: 1.06,
+    widthScale: 0.92,
+    maxAspectStretch: 1.05,
     defaultOffsetY: 2,
   },
 };

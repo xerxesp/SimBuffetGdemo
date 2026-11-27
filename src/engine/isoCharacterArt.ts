@@ -15,6 +15,30 @@ function w2i(wx: number, wy: number, wz = 0): { x: number; y: number } {
   };
 }
 
+/**
+ * Canonical standing character height in world-iso Z units (calibrated to 74z cutaway walls,
+ * 21.5z dining tabletops, and 25–40z buffet counters). Future redrawn character sprites will
+ * anchor directly to this exact height and foot-center pivot for drop-in replacement.
+ */
+export const CANONICAL_ISO_CHARACTER_HEIGHT_Z = 48;
+/** Vector rig crown height at scale=1.0 is ~35.8z; 1.32x lifts standing characters cleanly to ~47.3z */
+export const ISO_CHARACTER_BASE_SCALE = 1.32;
+/** Subtle horizontal silhouette fullness (+9%) harmonizing vector figures with hand-drawn furniture volume */
+export const ISO_CHARACTER_WIDTH_RATIO = 1.09;
+
+export const ISO_CHARACTER_ROLE_SCALE = {
+  MANAGER: 1.05,
+  STAFF: 1.0,
+  BACKSTAGE_NPC: 1.02,
+  QUEUE_GUEST: 0.98,
+  SEATED_GUEST: 0.96,
+} as const;
+
+/** Computes world-iso Z anchor above a character's crown for name tags, patience bars & chat bubbles. */
+export function getIsoCharacterHeadAnchorZ(roleScale = 1.0, extraZ = 8): number {
+  return Math.round(CANONICAL_ISO_CHARACTER_HEIGHT_Z * roleScale + extraZ);
+}
+
 export type IsoCharacterArchetype =
   | 'MANAGER'
   | 'CHEF'
@@ -697,7 +721,8 @@ export function drawIsoCharacter(
   ctx: CanvasRenderingContext2D,
   opts: IsoCharacterDrawOpts
 ) {
-  const s = opts.scale ?? 1;
+  const roleScale = opts.scale ?? 1;
+  const s = roleScale * ISO_CHARACTER_BASE_SCALE;
   const archetype: IsoCharacterArchetype =
     opts.archetype ??
     (opts.isManager
@@ -741,7 +766,9 @@ export function drawIsoCharacter(
       : 0);
 
   const pose = sampleIsoPose(resolvedAnimState, animTime);
-  const p = w2i(opts.wx, opts.wy, opts.seated ? 8.5 : 0);
+  // Seated characters drop pelvis neatly onto the 11.7z chair cushion so elbows align with 21.5z tabletop
+  // and shoulders/head rise cleanly above the 23.7z slatted backrest (seated crown ≈ 41z vs standing ≈ 47.3z)
+  const p = w2i(opts.wx, opts.wy, opts.seated ? -4.5 : 0);
 
   const bob = opts.seated ? pose.bodyBob * 0.55 * s : pose.bodyBob * s;
   const leanX = dirX * pose.torsoLean * s;
@@ -778,6 +805,7 @@ export function drawIsoCharacter(
 
   ctx.save();
   ctx.translate(p.x, p.y);
+  ctx.scale(ISO_CHARACTER_WIDTH_RATIO, 1);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
@@ -790,16 +818,39 @@ export function drawIsoCharacter(
     ctx.stroke();
   }
 
-  // Soft elliptical ambient contact shadow (expands subtly with stride)
+  // Dual-layer grounded contact shadow (soft ambient penumbra + crisp underfoot core)
   if (!opts.seated) {
     const strideSpread = Math.abs(pose.frontLegStride - pose.backLegStride) * 0.55;
-    ctx.fillStyle = 'rgba(20, 14, 10, 0.28)';
+    ctx.fillStyle = 'rgba(28, 18, 12, 0.15)';
     ctx.beginPath();
-    ctx.ellipse(0, 0.8, (7.0 + strideSpread) * s, 3.3 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(0.6 * s, 1.0, (8.6 + strideSpread) * s, 4.1 * s, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = 'rgba(18, 12, 8, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0.8, (6.0 + strideSpread * 0.7) * s, 2.7 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Subtle animated footstep dust puffs trailing behind actively walking characters
+    const isMoving =
+      resolvedAnimState === 'WALK' ||
+      ((resolvedAnimState === 'CARRY_POT' ||
+        resolvedAnimState === 'CARRY_TRAY' ||
+        resolvedAnimState === 'CARRY_DISHES') &&
+        (opts.walkCycle ?? 0) > 0.02);
+    if (isMoving && strideSpread > 0.45) {
+      const puffT = (animTime * 2.4) % 1;
+      const puffAlpha = (1 - puffT) * 0.36;
+      const trailX = -dirX * (4.5 + puffT * 7.5) * s;
+      const trailY = (1.4 - puffT * 2.6) * s;
+      ctx.fillStyle = `rgba(232, 218, 196, ${puffAlpha.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(trailX, trailY, (1.4 + puffT * 1.9) * s, 0, Math.PI * 2);
+      ctx.arc(trailX - dirX * 2.4 * s, trailY - 0.8 * s, (1.0 + puffT * 1.4) * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
-  const lw = Math.max(0.7, 0.88 * s);
+  const lw = Math.max(0.85, 0.94 * s);
   const torsoTop = -26.8 * s - bob;
   const torsoBot = -13.6 * s - bob;
 
@@ -997,15 +1048,27 @@ export function drawIsoCharacter(
   ctx.fill();
   ctx.stroke();
 
-  // Subtle shaded side for crisp architectural 3D form (shadow away from top-left light)
-  ctx.fillStyle = 'rgba(24, 16, 12, 0.12)';
+  // Painterly ligne-claire directional watercolor volume (warm top-left key light + sepia shadow side)
+  const torsoGrad = ctx.createLinearGradient(-4.2 * s, torsoTop, 4.2 * s, torsoBot);
+  torsoGrad.addColorStop(0, 'rgba(255, 246, 224, 0.24)');
+  torsoGrad.addColorStop(0.45, 'rgba(255, 246, 224, 0)');
+  torsoGrad.addColorStop(1, 'rgba(28, 16, 10, 0.22)');
+  ctx.fillStyle = torsoGrad;
   ctx.beginPath();
-  ctx.moveTo(0.4 * s + leanX * 0.9, torsoTop + 0.5 * s);
-  ctx.lineTo(4.3 * s + leanX, torsoTop + 1.2 * s);
+  ctx.moveTo(-4.3 * s + leanX, torsoTop + 1.2 * s);
+  ctx.quadraticCurveTo(leanX, torsoTop - 0.3 * s, 4.3 * s + leanX, torsoTop + 1.2 * s);
   ctx.lineTo(3.7 * s + leanX * 0.35, torsoBot);
-  ctx.lineTo(0.4 * s + leanX * 0.35, torsoBot);
+  ctx.lineTo(-3.7 * s + leanX * 0.35, torsoBot);
   ctx.closePath();
   ctx.fill();
+
+  // Crisp sunlit rim accent along upper-left shoulder edge
+  ctx.strokeStyle = 'rgba(255, 248, 228, 0.32)';
+  ctx.lineWidth = lw * 0.72;
+  ctx.beginPath();
+  ctx.moveTo(-3.9 * s + leanX, torsoTop + 1.8 * s);
+  ctx.quadraticCurveTo(-1.2 * s + leanX, torsoTop + 0.1 * s, 1.2 * s + leanX, torsoTop + 0.5 * s);
+  ctx.stroke();
 
   if (isBackView) {
     // BACK 3/4 VIEW GARMENT DETAILS (matches back-facing staff & diners in style_isometric_tycoon!)
@@ -1092,13 +1155,19 @@ export function drawIsoCharacter(
       ctx.closePath();
       ctx.fill();
 
-      // 3 tiny brass vest buttons
-      ctx.fillStyle = '#E8C97A';
+      // 3 tiny brass vest buttons + antique gold pocket-watch chain arc
+      ctx.fillStyle = '#F2CF78';
       for (let i = 0; i < 3; i++) {
         ctx.beginPath();
-        ctx.arc(cx, torsoTop + 5.6 * s + i * 2.4 * s, 0.55 * s, 0, Math.PI * 2);
+        ctx.arc(cx, torsoTop + 5.6 * s + i * 2.3 * s, 0.58 * s, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.strokeStyle = '#E8C568';
+      ctx.lineWidth = 0.72 * s;
+      ctx.beginPath();
+      ctx.moveTo(cx, torsoBot - 3.6 * s);
+      ctx.quadraticCurveTo(cx + 1.8 * dirX * s, torsoBot - 1.6 * s, cx + 3.0 * dirX * s, torsoBot - 3.2 * s);
+      ctx.stroke();
     } else if (archetype === 'CHEF' || archetype === 'SUSHI_CHEF') {
       ctx.strokeStyle = INK_LIGHT;
       ctx.lineWidth = lw * 0.75;
@@ -1108,9 +1177,18 @@ export function drawIsoCharacter(
       ctx.lineTo(cx + 1.1 * dirX * s, torsoBot - 1.5 * s);
       ctx.stroke();
 
+      // Crisp chef neckerchief accent at collar
+      ctx.fillStyle = archetype === 'SUSHI_CHEF' ? '#305468' : '#A8382B';
+      ctx.beginPath();
+      ctx.moveTo(cx - 1.8 * s, torsoTop + 0.5 * s);
+      ctx.lineTo(cx + 1.8 * s, torsoTop + 0.5 * s);
+      ctx.lineTo(cx, torsoTop + 2.4 * s);
+      ctx.closePath();
+      ctx.fill();
+
       ctx.fillStyle = '#3B3430';
       for (let i = 0; i < 3; i++) {
-        const by = torsoTop + 3.8 * s + i * 2.2 * s;
+        const by = torsoTop + 4.1 * s + i * 2.1 * s;
         ctx.beginPath();
         ctx.arc(cx - 1.1 * s, by, 0.48 * s, 0, Math.PI * 2);
         ctx.arc(cx + 1.2 * s, by, 0.48 * s, 0, Math.PI * 2);
@@ -1125,18 +1203,28 @@ export function drawIsoCharacter(
         ctx.rect(-3.4 * s + leanX * 0.35, torsoBot - 1.8 * s, 6.8 * s, 7.6 * s);
         ctx.fill();
         ctx.stroke();
+        // Folded white kitchen towel tucked cleanly into waist sash
+        ctx.fillStyle = '#FAF8F2';
+        ctx.fillRect(1.2 * dirX * s + leanX * 0.35, torsoBot - 1.5 * s, 1.7 * s, 3.6 * s);
+        ctx.strokeRect(1.2 * dirX * s + leanX * 0.35, torsoBot - 1.5 * s, 1.7 * s, 3.6 * s);
       }
     } else if (archetype === 'HOST') {
-      // Mandarin collar & diagonal frog clasp + tiny gold name tag
+      // Mandarin collar & ornate diagonal gold frog clasps (盘扣) + name tag
       ctx.strokeStyle = opts.trimColor;
-      ctx.lineWidth = 0.85 * s;
+      ctx.lineWidth = 0.9 * s;
       ctx.beginPath();
       ctx.moveTo(cx - 1.7 * dirX * s, torsoTop + 0.8 * s);
       ctx.quadraticCurveTo(cx, torsoTop + 1.8 * s, cx + 2.3 * dirX * s, torsoTop + 3.8 * s);
       ctx.stroke();
 
+      ctx.fillStyle = '#F2CE72';
+      for (let k = 0; k < 3; k++) {
+        ctx.beginPath();
+        ctx.arc(cx + (0.2 + k * 0.65) * dirX * s, torsoTop + (1.8 + k * 0.85) * s, 0.45 * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.fillStyle = '#E8C97A';
-      ctx.fillRect(cx + 0.8 * dirX * s, torsoTop + 4.3 * s, 1.8 * s, 0.9 * s);
+      ctx.fillRect(cx + 0.8 * dirX * s, torsoTop + 4.8 * s, 1.9 * s, 0.95 * s);
     } else if (archetype === 'SERVER') {
       ctx.strokeStyle = INK_LIGHT;
       ctx.lineWidth = lw * 0.8;
@@ -1146,18 +1234,22 @@ export function drawIsoCharacter(
       ctx.lineTo(cx + 2.0 * dirX * s, torsoBot - 0.4 * s);
       ctx.stroke();
 
-      if (
-        !opts.seated &&
-        (opts.staffRole === 'DISHWASHER' ||
+      if (!opts.seated) {
+        // Tailored bistro waist apron with stitched order-pad pocket
+        const apronCol =
+          opts.staffRole === 'DISHWASHER' ||
           opts.staffRole === 'BUSSER' ||
           opts.staffRole === 'STOCKER' ||
-          opts.staffRole === 'LIVE_MASTER')
-      ) {
-        ctx.fillStyle = opts.trimColor;
+          opts.staffRole === 'LIVE_MASTER'
+            ? opts.trimColor
+            : '#8F4D32';
+        ctx.fillStyle = apronCol;
         ctx.strokeStyle = INK;
         ctx.lineWidth = lw * 0.75;
-        ctx.fillRect(-3.1 * s + leanX * 0.35, torsoBot - 2.0 * s, 6.2 * s, 5.4 * s);
-        ctx.strokeRect(-3.1 * s + leanX * 0.35, torsoBot - 2.0 * s, 6.2 * s, 5.4 * s);
+        ctx.fillRect(-3.1 * s + leanX * 0.35, torsoBot - 2.0 * s, 6.2 * s, 5.6 * s);
+        ctx.strokeRect(-3.1 * s + leanX * 0.35, torsoBot - 2.0 * s, 6.2 * s, 5.6 * s);
+        ctx.fillStyle = 'rgba(255, 246, 232, 0.65)';
+        ctx.fillRect(-1.4 * s + leanX * 0.35, torsoBot - 0.4 * s, 2.8 * s, 2.0 * s);
       }
     } else if (archetype === 'VIP') {
       ctx.fillStyle = '#F7F5F0';
@@ -1383,9 +1475,32 @@ export function drawIsoCharacter(
       ctx.stroke();
     }
 
-    // Delicate facial features (subtle eyes, spectacles for ELDER/INSPECTOR)
-    ctx.fillStyle = INK;
+    // Subtle warm watercolor face shading & soft cheek warmth
+    const faceShade = ctx.createLinearGradient(headX - 3 * s, headY - 3 * s, headX + 3 * s, headY + 3 * s);
+    faceShade.addColorStop(0, 'rgba(255, 248, 236, 0.22)');
+    faceShade.addColorStop(0.65, 'rgba(255, 248, 236, 0)');
+    faceShade.addColorStop(1, 'rgba(184, 118, 84, 0.22)');
+    ctx.fillStyle = faceShade;
+    ctx.beginPath();
+    ctx.ellipse(headX, headY, 3.25 * s, 3.95 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Hair specular sheen arc matching top-left warm key light
+    ctx.strokeStyle = 'rgba(255, 248, 234, 0.28)';
+    ctx.lineWidth = 0.85 * s;
+    ctx.beginPath();
+    ctx.arc(headX - 0.6 * s, headY - 1.1 * s, 2.5 * s, Math.PI * 1.15, Math.PI * 1.72);
+    ctx.stroke();
+
+    // Delicate facial features (subtle eyes, warm cheek blush, spectacles for ELDER/INSPECTOR)
     const eyeX = headX + 0.65 * dirX * s;
+    ctx.fillStyle = 'rgba(232, 128, 110, 0.30)';
+    ctx.beginPath();
+    ctx.ellipse(eyeX - 1.6 * s, headY + 1.35 * s, 0.85 * s, 0.45 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(eyeX + 1.4 * s, headY + 1.35 * s, 0.85 * s, 0.45 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = INK;
     ctx.fillRect(eyeX - 1.55 * s, headY + 0.1 * s, 0.85 * s, 1.05 * s);
     ctx.fillRect(eyeX + 0.75 * s, headY + 0.1 * s, 0.85 * s, 1.05 * s);
 
@@ -1472,13 +1587,115 @@ export function drawIsoCharacter(
     );
   }
 
-  // Subtle VIP / Heiress golden ground halo accent
-  if (opts.isVip || archetype === 'HEIRESS') {
-    ctx.strokeStyle = 'rgba(232, 201, 122, 0.85)';
-    ctx.lineWidth = 1.0 * s;
+  // Animated pulsing double antique-gold shimmer aura for VIP / Special Guests
+  if ((opts.isVip || archetype === 'HEIRESS') && !opts.seated) {
+    const vipPulse = 0.78 + Math.sin(animTime * 3.4) * 0.22;
+    ctx.strokeStyle = `rgba(246, 212, 114, ${(0.88 * vipPulse).toFixed(2)})`;
+    ctx.lineWidth = 1.15 * s;
     ctx.beginPath();
     ctx.ellipse(0, 0.8, 9.2 * s, 4.5 * s, 0, 0, Math.PI * 2);
     ctx.stroke();
+
+    ctx.strokeStyle = `rgba(255, 236, 170, ${(0.42 * vipPulse).toFixed(2)})`;
+    ctx.lineWidth = 0.75 * s;
+    ctx.beginPath();
+    ctx.ellipse(0, 0.8, (11.2 + vipPulse * 1.1) * s, (5.5 + vipPulse * 0.5) * s, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Two tiny orbiting golden starlight motes around the VIP aura
+    for (let k = 0; k < 2; k++) {
+      const ang = animTime * 1.9 + k * Math.PI;
+      ctx.fillStyle = `rgba(255, 244, 196, ${(0.9 * vipPulse).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(Math.cos(ang) * 10.6 * s, 0.8 + Math.sin(ang) * 5.0 * s, 1.1 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Expressive Hand-Inked Vector Emotion Micro-Bubbles (no raw emojis!)
+  const emoY = headY - (archetype === 'CHEF' ? 12.5 : 7.5) * s;
+  if (opts.patienceRatio !== undefined && opts.patienceRatio < 0.35) {
+    const urgent = opts.patienceRatio < 0.22;
+    const pulse = 0.88 + Math.sin(animTime * (urgent ? 8.5 : 4.5)) * 0.16;
+    const ex = headX + dirX * 5.6 * s;
+    const ey = emoY + Math.sin(animTime * 4.0) * 1.0 * s;
+
+    if (urgent) {
+      // Crisp vector crimson anger cross-mark
+      ctx.save();
+      ctx.translate(ex, ey);
+      ctx.scale(pulse, pulse);
+      ctx.strokeStyle = '#DC2626';
+      ctx.lineWidth = 1.45 * s;
+      const r = 2.6 * s;
+      ctx.beginPath();
+      ctx.arc(-r, -r, r * 0.75, 0, Math.PI * 0.5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(r, -r, r * 0.75, Math.PI * 0.5, Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(r, r, r * 0.75, Math.PI, Math.PI * 1.5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(-r, r, r * 0.75, Math.PI * 1.5, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // Translucent sky-blue impatient sweat drop beside temple
+      const dropPhase = (animTime * 1.35) % 1;
+      const dy = ey + dropPhase * 3.0 * s;
+      const da = Math.sin(dropPhase * Math.PI) * 0.92;
+      ctx.fillStyle = `rgba(125, 211, 252, ${da.toFixed(2)})`;
+      ctx.strokeStyle = `rgba(30, 64, 102, ${(da * 0.85).toFixed(2)})`;
+      ctx.lineWidth = 0.65 * s;
+      ctx.beginPath();
+      ctx.moveTo(ex, dy - 2.6 * s);
+      ctx.quadraticCurveTo(ex + 2.0 * s, dy + 0.5 * s, ex, dy + 1.8 * s);
+      ctx.quadraticCurveTo(ex - 2.0 * s, dy + 0.5 * s, ex, dy - 2.6 * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  } else if (
+    resolvedAnimState === 'DINING_EAT' &&
+    (opts.patienceRatio === undefined || opts.patienceRatio > 0.68)
+  ) {
+    // Periodic delighted dining coral heart / golden star sparkle staggered deterministically per seat
+    const seatHash = Math.abs(Math.sin(opts.wx * 0.17 + opts.wy * 0.23)) * 5.2;
+    const cycle = (animTime * 0.28 + seatHash) % 1;
+    if (cycle < 0.34) {
+      const t = cycle / 0.34;
+      const alpha = Math.sin(t * Math.PI) * 0.9;
+      const fx = headX + dirX * 4.5 * s + Math.sin(t * Math.PI * 2) * 1.4 * s;
+      const fy = emoY - t * 8.5 * s;
+      const isStar = opts.isVip || Math.floor(seatHash * 10) % 2 === 0;
+      if (isStar) {
+        ctx.fillStyle = `rgba(253, 224, 71, ${alpha.toFixed(2)})`;
+        ctx.strokeStyle = `rgba(146, 64, 14, ${(alpha * 0.7).toFixed(2)})`;
+        ctx.lineWidth = 0.55 * s;
+        const r = 2.6 * s;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy - r);
+        ctx.quadraticCurveTo(fx, fy, fx + r, fy);
+        ctx.quadraticCurveTo(fx, fy, fx, fy + r);
+        ctx.quadraticCurveTo(fx, fy, fx - r, fy);
+        ctx.quadraticCurveTo(fx, fy, fx, fy - r);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = `rgba(244, 114, 152, ${alpha.toFixed(2)})`;
+        ctx.strokeStyle = `rgba(136, 19, 55, ${(alpha * 0.65).toFixed(2)})`;
+        ctx.lineWidth = 0.55 * s;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy + 2.2 * s);
+        ctx.bezierCurveTo(fx - 3.0 * s, fy - 0.5 * s, fx - 2.2 * s, fy - 3.0 * s, fx, fy - 1.1 * s);
+        ctx.bezierCurveTo(fx + 2.2 * s, fy - 3.0 * s, fx + 3.0 * s, fy - 0.5 * s, fx, fy + 2.2 * s);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
   }
 
   ctx.restore();

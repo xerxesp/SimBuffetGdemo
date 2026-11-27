@@ -69,6 +69,7 @@ import {
   RegimeId,
 } from '../types/game';
 import { sound } from '../utils/sound';
+import { BrothSvgIcon, SeafoodSvgIcon } from './VintageIcons';
 
 export type ConfigTab = 'POLICY' | 'ZONES' | 'TECH_TREE' | 'STAFF';
 
@@ -138,6 +139,11 @@ interface LibraryCardVM {
   accentColor: string;
   inSeason: boolean;
   equippedSlotId: string | null;
+  dishId?: string;
+  zoneId?: BuffetZoneId;
+  brothId?: string;
+  brothColor?: string;
+  brothSecondary?: string;
 }
 
 export function StoreConfigModal({
@@ -201,6 +207,8 @@ export function StoreConfigModal({
         accentColor: '#38B2AC',
         inSeason: isAvailableInSeason(d.seasons, world.season),
         equippedSlotId: slotMap.get(cardId) ?? null,
+        dishId: d.id,
+        zoneId: d.zone,
       });
     }
 
@@ -217,6 +225,9 @@ export function StoreConfigModal({
         accentColor: '#EA7A3A',
         inSeason: isAvailableInSeason(b.seasons, world.season),
         equippedSlotId: slotMap.get(cardId) ?? null,
+        brothId: b.id,
+        brothColor: b.color,
+        brothSecondary: b.secondaryColor,
       });
     }
 
@@ -634,10 +645,26 @@ export function StoreConfigModal({
                       </div>
                       {card ? (
                         <div className="p-2 flex-1 flex flex-col justify-between">
-                          <div>
+                          <div className="flex items-start gap-1.5">
+                            {card.category === 'DISH' && (
+                              <SeafoodSvgIcon
+                                itemId={card.dishId}
+                                zoneId={card.zoneId}
+                                className="w-5 h-5 shrink-0 mt-0.5"
+                              />
+                            )}
+                            {card.category === 'BROTH' && (
+                              <BrothSvgIcon
+                                brothId={card.brothId}
+                                color={card.brothColor}
+                                secondaryColor={card.brothSecondary}
+                                className="w-5 h-5 shrink-0 mt-0.5"
+                              />
+                            )}
                             <div className="font-display text-xs font-bold text-[#FFF6E5] leading-tight">
                               {card.title}
                             </div>
+                          </div>
                             <div className="text-[10px] text-[#C5AE92] mt-0.5 flex items-center justify-between gap-1">
                               <span>{card.subtitle}</span>
                               {card.warehouseStock !== undefined && (
@@ -652,7 +679,6 @@ export function StoreConfigModal({
                                 </span>
                               )}
                             </div>
-                          </div>
                           <div className="text-[10px] font-semibold text-[#E8C97A] leading-tight mt-1">
                             {card.effect}
                           </div>
@@ -793,9 +819,26 @@ export function StoreConfigModal({
                         </div>
 
                         <div className="p-2.5 space-y-1 flex-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <div className="font-display text-sm font-bold text-[#FFF6E5] leading-snug truncate">
-                              {card.title}
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {card.category === 'DISH' && (
+                                <SeafoodSvgIcon
+                                  itemId={card.dishId}
+                                  zoneId={card.zoneId}
+                                  className="w-6 h-6 shrink-0"
+                                />
+                              )}
+                              {card.category === 'BROTH' && (
+                                <BrothSvgIcon
+                                  brothId={card.brothId}
+                                  color={card.brothColor}
+                                  secondaryColor={card.brothSecondary}
+                                  className="w-6 h-6 shrink-0"
+                                />
+                              )}
+                              <div className="font-display text-sm font-bold text-[#FFF6E5] leading-snug truncate">
+                                {card.title}
+                              </div>
                             </div>
                             {card.warehouseStock !== undefined && (
                               <span

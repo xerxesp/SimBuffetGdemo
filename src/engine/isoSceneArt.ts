@@ -8,7 +8,12 @@ import {
   BACKSTAGE_ROOMS,
   FRONT_BACK_ARCHWAYS,
 } from '../data/policyAndTechConfig';
-import { FacilitySceneId, GamePhase, GameWorld, SeasonId, WeatherId } from '../types/game';
+import { FacilitySceneId, GamePhase, GameWorld, HolidayId, SeasonId, WeatherId } from '../types/game';
+import {
+  drawIsoPropSprite,
+  getPaintedSurfaceCanvas,
+  PaintedSurfaceKey,
+} from './isoEnvironmentAssets';
 
 export interface SceneAtmosphere {
   season: SeasonId;
@@ -16,6 +21,8 @@ export interface SceneAtmosphere {
   phase: GamePhase;
   dayProgress: number; // 0..1 across business hours
   timeSec: number;
+  holiday?: HolidayId;
+  rushHourActive?: boolean;
 }
 
 // Shared 45° 2:1 Architectural Isometric basis (matches isoRenderer.ts exactly)
@@ -56,9 +63,16 @@ function computeAtmosphereWeights(atmo?: SceneAtmosphere): {
 
   const baseSun = isClosing ? 0 : isRain ? 0.08 : isSnow ? 0.22 : isPrep ? 0.65 : Math.max(0.15, 1 - eveningness * 0.82);
   const sunStrength = atmo.weather === 'HEATWAVE' ? Math.min(1, baseSun * 1.25) : baseSun;
+  const isRush = Boolean(atmo.rushHourActive);
+  const isHoliday = Boolean(atmo.holiday && atmo.holiday !== 'NONE');
   const lanternGlow = Math.min(
-    1.55,
-    0.72 + eveningness * 0.72 + (isRain ? 0.24 : 0) + (isSnow ? 0.2 : 0)
+    1.85,
+    0.72 +
+      eveningness * 0.72 +
+      (isRain ? 0.24 : 0) +
+      (isSnow ? 0.2 : 0) +
+      (isRush ? 0.28 : 0) +
+      (isHoliday ? 0.18 : 0)
   );
   return { eveningness, sunStrength, lanternGlow, isRain, isSnow, isWarmDusk };
 }
@@ -167,7 +181,26 @@ type TextureKey =
   | 'wall_celadon_s'
   | 'wall_celadon_e'
   | 'wall_cold_s'
-  | 'wall_cold_e';
+  | 'wall_cold_e'
+  | 'harbor_stone'
+  | 'harbor_stone_rain'
+  | 'harbor_stone_snow';
+
+const PAINTED_SURFACE_KEYS = new Set<TextureKey>([
+  'parquet_classic',
+  'parquet_mahogany',
+  'parquet_obsidian',
+  'parquet_azure',
+  'terrazzo_stone',
+  'kitchen_quarry',
+  'office_walnut',
+  'dorm_oak',
+  'wall_wainscot_s',
+  'wall_wainscot_e',
+  'harbor_stone',
+  'harbor_stone_rain',
+  'harbor_stone_snow',
+]);
 
 const textureCache = new Map<TextureKey, HTMLCanvasElement>();
 
@@ -471,6 +504,11 @@ function buildColdWallTexture(shaded: boolean): HTMLCanvasElement {
 }
 
 function getTextureCanvas(key: TextureKey): HTMLCanvasElement {
+  if (PAINTED_SURFACE_KEYS.has(key)) {
+    const painted = getPaintedSurfaceCanvas(key as PaintedSurfaceKey);
+    if (painted) return painted;
+  }
+
   const cached = textureCache.get(key);
   if (cached) return cached;
 
@@ -588,6 +626,23 @@ function getTextureCanvas(key: TextureKey): HTMLCanvasElement {
       break;
     case 'wall_cold_e':
       canvas = buildColdWallTexture(true);
+      break;
+    case 'harbor_stone':
+      canvas = buildStoneTileTexture(['#B4AB99', '#AAA08E', '#BCB3A1'], 'rgba(56, 48, 38, 0.36)', 32, 208, {
+        speckles: true,
+        highlightAlpha: 0.1,
+      });
+      break;
+    case 'harbor_stone_rain':
+      canvas = buildStoneTileTexture(['#586E78', '#4F656F', '#617782'], 'rgba(28, 38, 44, 0.42)', 32, 209, {
+        glossy: true,
+        highlightAlpha: 0.14,
+      });
+      break;
+    case 'harbor_stone_snow':
+      canvas = buildStoneTileTexture(['#DDEBF2', '#D2E2EB', '#E4F1F8'], 'rgba(120, 148, 166, 0.42)', 32, 210, {
+        highlightAlpha: 0.18,
+      });
       break;
   }
 
@@ -767,10 +822,31 @@ export function drawIsoArchitecturalBackdrop(
     ctx.stroke();
   }
 
-  // Distinct seasonal ambient glow & drafting accents in outer harbor void
+  // Distinct seasonal & weather ambient glow, coastal mist, and shimmer accents in outer harbor void
   if (atmo) {
     const t = atmo.timeSec;
-    if (atmo.season === 'SPRING' && !isRain && !isSnow) {
+    const isTyphoon = atmo.weather === 'TYPHOON';
+    const isHeat = atmo.weather === 'HEATWAVE';
+
+    if (isRain) {
+      // Drifting harbor rain-cloud haze & coastal sea-spray ribbons in outer backdrop
+      const mistCount = isTyphoon ? 6 : 4;
+      for (let m = 0; m < mistCount; m++) {
+        const speed = isTyphoon ? 56 + m * 12 : 24 + m * 7;
+        const mx =
+          ((m * 317 + t * speed) % (backingWidth + backingWidth * 0.6)) - backingWidth * 0.3;
+        const my = backingHeight * (0.14 + (m % 4) * 0.22) + Math.sin(t * 0.7 + m) * 16;
+        const mw = backingWidth * (isTyphoon ? 0.34 : 0.26);
+        const mh = backingHeight * 0.14;
+        const mistGrad = ctx.createRadialGradient(mx, my, 12, mx, my, mw);
+        mistGrad.addColorStop(0, isTyphoon ? 'rgba(148, 198, 224, 0.085)' : 'rgba(156, 206, 226, 0.05)');
+        mistGrad.addColorStop(1, 'rgba(120, 176, 204, 0)');
+        ctx.fillStyle = mistGrad;
+        ctx.beginPath();
+        ctx.ellipse(mx, my, mw, mh, isTyphoon ? -0.18 : -0.08, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (atmo.season === 'SPRING' && !isSnow) {
       const springGlow = ctx.createRadialGradient(
         backingWidth * 0.22,
         backingHeight * 0.25,
@@ -779,11 +855,25 @@ export function drawIsoArchitecturalBackdrop(
         backingHeight * 0.25,
         backingWidth * 0.65
       );
-      springGlow.addColorStop(0, 'rgba(249, 168, 212, 0.085)');
+      springGlow.addColorStop(0, 'rgba(249, 168, 212, 0.095)');
+      springGlow.addColorStop(0.55, 'rgba(167, 243, 208, 0.04)');
       springGlow.addColorStop(1, 'rgba(249, 168, 212, 0)');
       ctx.fillStyle = springGlow;
       ctx.fillRect(0, 0, backingWidth, backingHeight);
-    } else if (atmo.season === 'AUTUMN' && !isRain && !isSnow) {
+
+      // Gentle drifting spring coastal harbor morning mist ribbons
+      for (let m = 0; m < 3; m++) {
+        const mx = ((m * 380 + t * (14 + m * 5)) % (backingWidth + 320)) - 160;
+        const my = backingHeight * (0.2 + m * 0.28);
+        const mhGrad = ctx.createRadialGradient(mx, my, 10, mx, my, backingWidth * 0.24);
+        mhGrad.addColorStop(0, 'rgba(232, 250, 244, 0.055)');
+        mhGrad.addColorStop(1, 'rgba(232, 250, 244, 0)');
+        ctx.fillStyle = mhGrad;
+        ctx.beginPath();
+        ctx.ellipse(mx, my, backingWidth * 0.24, backingHeight * 0.1, -0.05, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (atmo.season === 'AUTUMN' && !isSnow) {
       const autumnGlow = ctx.createRadialGradient(
         backingWidth * 0.78,
         backingHeight * 0.22,
@@ -792,7 +882,8 @@ export function drawIsoArchitecturalBackdrop(
         backingHeight * 0.22,
         backingWidth * 0.7
       );
-      autumnGlow.addColorStop(0, 'rgba(245, 158, 11, 0.11)');
+      autumnGlow.addColorStop(0, 'rgba(245, 158, 11, 0.12)');
+      autumnGlow.addColorStop(0.6, 'rgba(217, 119, 6, 0.045)');
       autumnGlow.addColorStop(1, 'rgba(245, 158, 11, 0)');
       ctx.fillStyle = autumnGlow;
       ctx.fillRect(0, 0, backingWidth, backingHeight);
@@ -805,11 +896,24 @@ export function drawIsoArchitecturalBackdrop(
         backingHeight * 0.15,
         backingWidth * 0.75
       );
-      winterGlow.addColorStop(0, 'rgba(186, 230, 253, 0.09)');
+      winterGlow.addColorStop(0, isSnow ? 'rgba(206, 238, 255, 0.12)' : 'rgba(186, 230, 253, 0.09)');
       winterGlow.addColorStop(1, 'rgba(186, 230, 253, 0)');
       ctx.fillStyle = winterGlow;
       ctx.fillRect(0, 0, backingWidth, backingHeight);
-    } else if (atmo.season === 'SUMMER' && !isRain) {
+
+      // Subtle icy winter harbor frost-mist hugging the outer perimeter
+      for (let m = 0; m < 3; m++) {
+        const mx = ((m * 360 + t * (isSnow ? 22 : 11)) % (backingWidth + 320)) - 160;
+        const my = backingHeight * (0.16 + m * 0.34);
+        const fGrad = ctx.createRadialGradient(mx, my, 12, mx, my, backingWidth * 0.26);
+        fGrad.addColorStop(0, isSnow ? 'rgba(220, 242, 255, 0.08)' : 'rgba(196, 232, 250, 0.045)');
+        fGrad.addColorStop(1, 'rgba(196, 232, 250, 0)');
+        ctx.fillStyle = fGrad;
+        ctx.beginPath();
+        ctx.ellipse(mx, my, backingWidth * 0.26, backingHeight * 0.11, 0.06, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (atmo.season === 'SUMMER' || isHeat) {
       const summerGlow = ctx.createRadialGradient(
         backingWidth * 0.85,
         backingHeight * 0.12,
@@ -818,10 +922,28 @@ export function drawIsoArchitecturalBackdrop(
         backingHeight * 0.12,
         backingWidth * 0.72
       );
-      summerGlow.addColorStop(0, 'rgba(253, 224, 71, 0.10)');
+      summerGlow.addColorStop(0, isHeat ? 'rgba(255, 210, 88, 0.15)' : 'rgba(253, 224, 71, 0.11)');
       summerGlow.addColorStop(1, 'rgba(56, 189, 248, 0)');
       ctx.fillStyle = summerGlow;
       ctx.fillRect(0, 0, backingWidth, backingHeight);
+
+      // Coastal summer sea-water shimmer glints in outer harbor void
+      const glintCount = isHeat ? 22 : 14;
+      for (let g = 0; g < glintCount; g++) {
+        const pulse = Math.max(0, Math.sin(t * (2.1 + (g % 3) * 0.5) + g * 1.9));
+        if (pulse < 0.25) continue;
+        const gx = ((g * 239 + 64) % Math.max(200, backingWidth - 80)) + 40;
+        const gy = ((g * 163 + 48) % Math.max(160, backingHeight - 80)) + 40;
+        const len = (10 + (g % 4) * 5) * pulse;
+        ctx.strokeStyle = isHeat
+          ? `rgba(255, 236, 168, ${(0.22 * pulse).toFixed(2)})`
+          : `rgba(148, 238, 245, ${(0.16 * pulse).toFixed(2)})`;
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(gx - len, gy);
+        ctx.lineTo(gx + len, gy);
+        ctx.stroke();
+      }
     }
 
     if (!isRain && !isSnow && (atmo.season === 'SPRING' || atmo.season === 'AUTUMN')) {
@@ -837,10 +959,10 @@ export function drawIsoArchitecturalBackdrop(
         ctx.rotate(rot);
         ctx.fillStyle =
           atmo.season === 'SPRING'
-            ? 'rgba(251, 207, 232, 0.32)'
+            ? 'rgba(251, 207, 232, 0.34)'
             : i % 3 === 0
-              ? 'rgba(239, 68, 68, 0.28)'
-              : 'rgba(245, 186, 86, 0.30)';
+              ? 'rgba(239, 68, 68, 0.30)'
+              : 'rgba(245, 186, 86, 0.32)';
         ctx.beginPath();
         ctx.ellipse(0, 0, 4.6, 2.5, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -977,16 +1099,26 @@ function drawWovenWelcomeCarpet(
   wx: number,
   wy: number,
   w: number,
-  d: number
+  d: number,
+  decorId = 'harbor_warm'
 ) {
+  const palette =
+    decorId === 'retro_mahogany'
+      ? { outer: '#5E1818', outerStroke: '#380C0C', mid: '#7E2120', gold: '#F2C96B', inner: '#6D1A1A', medFill: 'rgba(242, 201, 107, 0.2)', medStroke: 'rgba(250, 218, 128, 0.56)' }
+      : decorId === 'obsidian_sushi'
+        ? { outer: '#222831', outerStroke: '#12161B', mid: '#2F3845', gold: '#E8927C', inner: '#262E38', medFill: 'rgba(232, 146, 124, 0.16)', medStroke: 'rgba(244, 178, 162, 0.48)' }
+        : decorId === 'azure_luxury'
+          ? { outer: '#1C5662', outerStroke: '#0E323A', mid: '#266C78', gold: '#E8D2A0', inner: '#205D68', medFill: 'rgba(182, 240, 232, 0.18)', medStroke: 'rgba(232, 210, 160, 0.54)' }
+          : { outer: '#7D2820', outerStroke: '#4A1510', mid: '#963228', gold: '#D9B166', inner: '#8A2B22', medFill: 'rgba(217, 177, 102, 0.14)', medStroke: 'rgba(232, 201, 122, 0.42)' };
+
   // Subtle carpet drop shadow
   drawIsoQuadFlat(ctx, wx + 2, wy + 2, w, d, 0.2, 'rgba(24, 12, 8, 0.24)');
-  // Deep lacquered burgundy outer border
-  drawIsoQuadFlat(ctx, wx, wy, w, d, 0.42, '#7D2820', '#4A1510', 1.15);
-  // Antique gold inner trim line
-  drawIsoQuadFlat(ctx, wx + 5, wy + 5, w - 10, d - 10, 0.48, '#963228', '#D9B166', 1.0);
-  // Subtle geometric corner fret accents
-  drawIsoQuadFlat(ctx, wx + 11, wy + 11, w - 22, d - 22, 0.52, '#8A2B22', 'rgba(232, 201, 122, 0.55)', 0.75);
+  // Outer border
+  drawIsoQuadFlat(ctx, wx, wy, w, d, 0.42, palette.outer, palette.outerStroke, 1.15);
+  // Inner trim line
+  drawIsoQuadFlat(ctx, wx + 5, wy + 5, w - 10, d - 10, 0.48, palette.mid, palette.gold, 1.0);
+  // Geometric corner fret accents
+  drawIsoQuadFlat(ctx, wx + 11, wy + 11, w - 22, d - 22, 0.52, palette.inner, palette.medStroke, 0.75);
 
   // Subtle woven diamond center medallions along runner length
   for (let cy = wy + 48; cy < wy + d - 34; cy += 68) {
@@ -997,7 +1129,7 @@ function drawWovenWelcomeCarpet(
       w2i(cx, cy + 15, 0.56),
       w2i(cx - 15, cy, 0.56),
     ];
-    drawPoly(ctx, pts, 'rgba(217, 177, 102, 0.14)', 'rgba(232, 201, 122, 0.42)', 0.8);
+    drawPoly(ctx, pts, palette.medFill, palette.medStroke, 0.8);
   }
 }
 
@@ -1187,7 +1319,7 @@ export function drawIsoSceneFloors(
   // Main Dining Hall Honey-Cedar Parquet Floor (y = 124..frontH, x = 0..frontW)
   fillIsoFloorTextured(ctx, 0, 124, frontW, frontH - 124, parquetKey, 0);
 
-  // Subtle polished timber specular sheen across center dining hall
+  // Theme-distinct floor sheen & decorative architectural floor overlay across center dining hall
   const hallCenter = w2i(frontW * 0.48, frontH * 0.54, 0.12);
   ctx.save();
   const floorSheen = ctx.createRadialGradient(
@@ -1198,10 +1330,44 @@ export function drawIsoSceneFloors(
     hallCenter.y,
     Math.max(frontW, frontH) * 0.42
   );
-  floorSheen.addColorStop(0, 'rgba(255, 240, 206, 0.09)');
-  floorSheen.addColorStop(0.6, 'rgba(255, 232, 190, 0.02)');
-  floorSheen.addColorStop(1, 'rgba(18, 10, 6, 0.08)');
+  if (decorId === 'retro_mahogany') {
+    floorSheen.addColorStop(0, 'rgba(246, 190, 108, 0.13)');
+    floorSheen.addColorStop(0.6, 'rgba(138, 42, 24, 0.08)');
+    floorSheen.addColorStop(1, 'rgba(24, 8, 6, 0.16)');
+  } else if (decorId === 'obsidian_sushi') {
+    floorSheen.addColorStop(0, 'rgba(238, 172, 152, 0.09)');
+    floorSheen.addColorStop(0.55, 'rgba(24, 32, 42, 0.14)');
+    floorSheen.addColorStop(1, 'rgba(8, 12, 18, 0.24)');
+  } else if (decorId === 'azure_luxury') {
+    floorSheen.addColorStop(0, 'rgba(164, 242, 232, 0.13)');
+    floorSheen.addColorStop(0.6, 'rgba(42, 118, 128, 0.08)');
+    floorSheen.addColorStop(1, 'rgba(10, 32, 42, 0.14)');
+  } else {
+    floorSheen.addColorStop(0, 'rgba(255, 240, 206, 0.09)');
+    floorSheen.addColorStop(0.6, 'rgba(255, 232, 190, 0.02)');
+    floorSheen.addColorStop(1, 'rgba(18, 10, 6, 0.08)');
+  }
   drawIsoQuadFlat(ctx, 0, 124, frontW, frontH - 124, 0.14, floorSheen);
+
+  // Subtle theme-signature inlaid floor ornament frame inside the dining hall
+  if (decorId === 'retro_mahogany') {
+    drawIsoQuadFlat(ctx, 26, 144, frontW - 52, frontH - 170, 0.2, 'rgba(0,0,0,0)', 'rgba(232, 184, 86, 0.42)', 1.25);
+  } else if (decorId === 'obsidian_sushi') {
+    // Minimalist Zen tatami-stone linear seam lines
+    for (let zx = 180; zx < frontW - 80; zx += 220) {
+      const a = w2i(zx, 132, 0.22);
+      const b = w2i(zx, frontH - 18, 0.22);
+      ctx.strokeStyle = 'rgba(232, 146, 124, 0.18)';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+  } else if (decorId === 'azure_luxury') {
+    // Champagne-gold & seafoam pearl perimeter inlay framing the oceanfront hall
+    drawIsoQuadFlat(ctx, 22, 140, frontW - 44, frontH - 162, 0.2, 'rgba(130, 224, 214, 0.05)', 'rgba(176, 240, 232, 0.48)', 1.2);
+  }
   ctx.restore();
 
   // Expanded Lv.2+ East Wing North Parquet Floor (x = 960..frontW, y = 0..124)
@@ -1216,14 +1382,69 @@ export function drawIsoSceneFloors(
     drawIsoQuadFlat(ctx, 12, CANVAS_HEIGHT - 2.5, frontW - 24, 5, 0.35, '#9A7843', '#523A1C', 0.7);
   }
 
-  // Crisp walnut & brass threshold divider between Kitchen Terrazzo Strip and Dining Parquet!
-  drawIsoQuadFlat(ctx, 0, 121.5, CANVAS_WIDTH, 5, 0.32, '#7C5332', INK, 0.8);
-  drawIsoQuadFlat(ctx, 0, 123.5, CANVAS_WIDTH, 1.4, 0.38, '#C9A15A');
+  // Crisp themed threshold divider between Kitchen Terrazzo Strip and Dining Parquet!
+  const threshWood =
+    decorId === 'retro_mahogany'
+      ? '#641F1B'
+      : decorId === 'obsidian_sushi'
+        ? '#2B313B'
+        : decorId === 'azure_luxury'
+          ? '#245863'
+          : '#7C5332';
+  const threshInlay =
+    decorId === 'obsidian_sushi'
+      ? '#E8927C'
+      : decorId === 'azure_luxury'
+        ? '#A8EFE4'
+        : '#C9A15A';
+  drawIsoQuadFlat(ctx, 0, 121.5, CANVAS_WIDTH, 5, 0.32, threshWood, INK, 0.8);
+  drawIsoQuadFlat(ctx, 0, 123.5, CANVAS_WIDTH, 1.4, 0.38, threshInlay);
 
   // Signature Linear Stainless Floor Drainage Grates along the wet prep / aquarium service aisle
   drawFloorDrainGrate(ctx, 74, 108, 178, 10, true);
   drawFloorDrainGrate(ctx, 290, 108, 185, 10, true);
   drawFloorDrainGrate(ctx, 520, 108, 195, 10, true);
+
+  // Lv.2..Lv.5 Architectural Floor Trim & Gilded Border Progression
+  const shopLvl = _world.shopLevel;
+  if (shopLvl >= 2) {
+    // Carved walnut perimeter floor border framing main dining area
+    drawIsoQuadFlat(
+      ctx,
+      14,
+      132,
+      frontW - 28,
+      frontH - 146,
+      0.26,
+      'rgba(0,0,0,0)',
+      shopLvl >= 4 ? 'rgba(218, 174, 86, 0.62)' : 'rgba(116, 76, 40, 0.48)',
+      shopLvl >= 4 ? 1.6 : 1.15
+    );
+  }
+  if (shopLvl >= 3) {
+    // Inner antique-brass double inlay trim & corner medallions for grand hall ambiance
+    drawIsoQuadFlat(
+      ctx,
+      20,
+      138,
+      frontW - 40,
+      frontH - 158,
+      0.28,
+      'rgba(0,0,0,0)',
+      shopLvl >= 4 ? 'rgba(244, 210, 122, 0.52)' : 'rgba(196, 152, 74, 0.44)',
+      1.0
+    );
+    const corners: Array<[number, number]> = [
+      [20, 138],
+      [frontW - 34, 138],
+      [20, frontH - 34],
+      [frontW - 34, frontH - 34],
+    ];
+    for (const [cx, cy] of corners) {
+      drawIsoQuadFlat(ctx, cx, cy, 14, 14, 0.3, 'rgba(214, 168, 78, 0.24)', '#C99A44', 0.9);
+      drawIsoQuadFlat(ctx, cx + 3.5, cy + 3.5, 7, 7, 0.32, 'rgba(246, 218, 138, 0.34)', '#9A6D2A', 0.7);
+    }
+  }
 
   // Exterior Harbor-Stone Waiting Veranda directly outside the Front Entrance Gate!
   const entrance = getFrontHallEntranceLayout(_world.shopLevel);
@@ -1248,38 +1469,23 @@ export function drawIsoSceneFloors(
     },
     -12
   );
-  // Subtle flagstone paver grid on exterior waiting veranda
-  drawIsoQuadFlat(
+  // Hand-painted weathered coastal harbor flagstone texture across the exterior waiting veranda
+  const verandaTexKey: TextureKey = isSnowVer
+    ? 'harbor_stone_snow'
+    : isRainVer
+      ? 'harbor_stone_rain'
+      : 'harbor_stone';
+  fillIsoFloorTextured(
     ctx,
-    ver.x + 4,
-    ver.y + 4,
-    ver.w - 8,
-    ver.h - 8,
+    ver.x + 3,
+    ver.y + 3,
+    ver.w - 6,
+    ver.h - 6,
+    verandaTexKey,
     0.25,
-    isSnowVer ? '#DDEBF2' : isRainVer ? '#586E78' : '#B4AB99',
-    'rgba(46, 38, 30, 0.45)',
-    0.9
+    'rgba(46, 38, 30, 0.5)',
+    0.95
   );
-  ctx.save();
-  ctx.strokeStyle = isSnowVer ? 'rgba(130, 158, 176, 0.45)' : 'rgba(56, 48, 38, 0.32)';
-  ctx.lineWidth = 0.85;
-  for (let px = ver.x + 36; px < ver.x + ver.w - 10; px += 36) {
-    const a = w2i(px, ver.y + 4, 0.35);
-    const b = w2i(px, ver.y + ver.h - 4, 0.35);
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-  }
-  for (let py = ver.y + 30; py < ver.y + ver.h - 8; py += 28) {
-    const a = w2i(ver.x + 4, py, 0.35);
-    const b = w2i(ver.x + ver.w - 4, py, 0.35);
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-  }
-  ctx.restore();
 
   // Weather & seasonal surface details distributed across the full length of the exterior entrance veranda!
   const verTime = atmo?.timeSec ?? 0;
@@ -1341,15 +1547,32 @@ export function drawIsoSceneFloors(
       ctx.ellipse(lp.x, lp.y, 2.8, 1.5, (l * 0.9) % Math.PI, 0, Math.PI * 2);
       ctx.fill();
     }
+  } else if (atmo?.weather === 'HEATWAVE' || atmo?.season === 'SUMMER') {
+    // Warm golden sunlit patches & coastal glare glints across the summer flagstone veranda
+    const isHeatVer = atmo?.weather === 'HEATWAVE';
+    const patchCount = 3 + lengthFactor * 2;
+    for (let p = 0; p < patchCount; p++) {
+      const px = ver.x + 28 + ((p * 89) % Math.max(40, ver.w - 56));
+      const py = ver.y + 14 + ((p * 27) % Math.max(20, ver.h - 28));
+      const sp = w2i(px, py, 0.55);
+      const pulse = 0.72 + Math.sin(verTime * 2.2 + p * 1.4) * 0.28;
+      ctx.fillStyle = isHeatVer
+        ? `rgba(255, 224, 128, ${(0.2 * pulse).toFixed(2)})`
+        : `rgba(255, 240, 188, ${(0.12 * pulse).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.ellipse(sp.x, sp.y, isHeatVer ? 22 : 16, isHeatVer ? 9.5 : 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
-  // Woven Crimson & Gold Welcome Carpet Runner leading seamlessly from outdoor veranda through gate to Reception Desk!
+  // Woven Themed Welcome Carpet Runner leading seamlessly from outdoor veranda through gate to Reception Desk!
   drawWovenWelcomeCarpet(
     ctx,
     entrance.carpet.x,
     entrance.carpet.y,
     entrance.carpet.w,
-    entrance.carpet.h
+    entrance.carpet.h,
+    decorId
   );
 
   // Brass queue stanchion posts & burgundy velvet rope spaced evenly along the full exterior waiting veranda
@@ -1431,10 +1654,12 @@ export function drawIsoSceneFloors(
   // 6. Soft Warm Interior Lantern Floor Pools (intensifies during dusk, evening & rain/snow!)
   const poolTint =
     decorId === 'azure_luxury'
-      ? '172, 238, 226'
+      ? '158, 240, 228'
       : decorId === 'obsidian_sushi'
-        ? '255, 188, 162'
-        : '255, 210, 126';
+        ? '255, 168, 146'
+        : decorId === 'retro_mahogany'
+          ? '255, 192, 104'
+          : '255, 210, 126';
   const poolScale = lanternGlow * 0.85;
   drawFloorLightPool(ctx, 165, 36, 95, poolScale, poolTint);
   drawFloorLightPool(ctx, 510, 36, 105, poolScale, poolTint);
@@ -1505,20 +1730,51 @@ function drawWallLatticeWindowSouth(
   }
   drawPoly(ctx, [g0, g1, g2, g3], grad, '#4A2C18', 0.85);
 
-  // Subtle exterior rain streaks on wet window panes
+  // Dynamic weather & seasonal pane details: sliding rain streaks, winter frost corners, or summer sun glints
   if (isRain) {
+    const wt = atmo?.timeSec ?? 0;
+    const speed = atmo?.weather === 'TYPHOON' ? 2.6 : 1.5;
     ctx.save();
-    ctx.strokeStyle = 'rgba(220, 244, 255, 0.42)';
-    ctx.lineWidth = 0.75;
-    for (let r = 0; r < 4; r++) {
-      const rx = wx + pad + 8 + r * ((w - pad * 2 - 12) / 3.5);
-      const ra = w2i(rx, wy, zBottom + zHeight - pad - 2);
-      const rb = w2i(rx - 5, wy, zBottom + pad + 2);
+    ctx.strokeStyle = 'rgba(220, 244, 255, 0.5)';
+    ctx.lineWidth = 0.8;
+    for (let r = 0; r < 5; r++) {
+      const slide = (wt * speed + r * 0.27) % 1;
+      const rx = wx + pad + 6 + r * ((w - pad * 2 - 10) / 4.2);
+      const zStart = zBottom + zHeight - pad - 1 - slide * (zHeight * 0.45);
+      const zEnd = Math.max(zBottom + pad + 1, zStart - zHeight * 0.42);
+      const ra = w2i(rx, wy, zStart);
+      const rb = w2i(rx - (atmo?.weather === 'TYPHOON' ? 6.5 : 3.8), wy, zEnd);
       ctx.beginPath();
       ctx.moveTo(ra.x, ra.y);
       ctx.lineTo(rb.x, rb.y);
       ctx.stroke();
     }
+    ctx.restore();
+  } else if (isSnow || atmo?.season === 'WINTER') {
+    // Delicate frosted-glass corner ice sheen on cold winter panes
+    ctx.save();
+    const frostGrad = ctx.createLinearGradient(g3.x, g3.y, g1.x, g1.y);
+    frostGrad.addColorStop(0, isSnow ? 'rgba(240, 250, 255, 0.56)' : 'rgba(232, 246, 255, 0.34)');
+    frostGrad.addColorStop(0.38, 'rgba(224, 244, 255, 0.06)');
+    frostGrad.addColorStop(1, 'rgba(240, 250, 255, 0.24)');
+    drawPoly(ctx, [g0, g1, g2, g3], frostGrad);
+    ctx.restore();
+  } else if (atmo?.weather === 'HEATWAVE' || atmo?.season === 'SUMMER' || atmo?.season === 'AUTUMN') {
+    // Crisp diagonal sunlit glass reflection band
+    ctx.save();
+    const gl0 = w2i(wx + pad + w * 0.18, wy, zBottom + zHeight - pad - 1);
+    const gl1 = w2i(wx + pad + w * 0.38, wy, zBottom + zHeight - pad - 1);
+    const gl2 = w2i(wx + pad + w * 0.12, wy, zBottom + pad + 1);
+    const gl3 = w2i(wx + pad + 1, wy, zBottom + pad + 1);
+    drawPoly(
+      ctx,
+      [gl0, gl1, gl2, gl3],
+      atmo?.weather === 'HEATWAVE'
+        ? 'rgba(255, 248, 206, 0.32)'
+        : atmo?.season === 'AUTUMN'
+          ? 'rgba(255, 224, 152, 0.22)'
+          : 'rgba(255, 252, 232, 0.22)'
+    );
     ctx.restore();
   }
 
@@ -1785,18 +2041,42 @@ export function drawIsoSceneWalls(
   unifiedMinY: number,
   unifiedMaxX: number,
   backstageOffsetY: number,
-  _decorId: string,
+  decorId: string,
   atmo?: SceneAtmosphere
 ) {
   const WALL_H = 74;
   const WALL_T = 14;
+  const wallCapColor =
+    decorId === 'retro_mahogany'
+      ? '#641F1B'
+      : decorId === 'obsidian_sushi'
+        ? '#262C36'
+        : decorId === 'azure_luxury'
+          ? '#224F5A'
+          : '#4E3220';
+  const pilasterPalette =
+    decorId === 'retro_mahogany'
+      ? { top: '#782620', left: '#601C18', right: '#421210' }
+      : decorId === 'obsidian_sushi'
+        ? { top: '#353E4A', left: '#272E38', right: '#1B2028' }
+        : decorId === 'azure_luxury'
+          ? { top: '#2E6975', left: '#22535E', right: '#163B44' }
+          : { top: '#5A3922', left: '#4B2E1A', right: '#382213' };
+  const trimAccent =
+    decorId === 'retro_mahogany'
+      ? '#E8C46A'
+      : decorId === 'obsidian_sushi'
+        ? '#E8927C'
+        : decorId === 'azure_luxury'
+          ? '#9AEBE0'
+          : null;
 
   // ==========================================
   // 1. TALL BACK-RIGHT OUTER WALL (wy = UNIFIED_MIN_Y - WALL_T, wx = -WALL_T..960)
   // ==========================================
-  // Solid wall shell & top walnut cap
+  // Solid wall shell & top themed cap
   drawIsoBoxFlat(ctx, -WALL_T, unifiedMinY - WALL_T, unifiedMaxX + WALL_T, WALL_T, WALL_H, {
-    top: '#4E3220',
+    top: wallCapColor,
     left: '#D6BE97',
     right: '#644028',
     stroke: INK,
@@ -1813,8 +2093,8 @@ export function drawIsoSceneWalls(
   // Manager Office (708..960): refined plaster & cedar wainscoting!
   fillIsoWallFaceSouth(ctx, 708, unifiedMinY, 252, WALL_H, 0, 'wall_wainscot_s');
 
-  // Subtle top walnut coping trim over the back-right wall
-  drawIsoQuadFlat(ctx, -WALL_T, unifiedMinY - WALL_T, unifiedMaxX + WALL_T, WALL_T, WALL_H, '#4E3220', INK, 1.1);
+  // Subtle top themed coping trim over the back-right wall
+  drawIsoQuadFlat(ctx, -WALL_T, unifiedMinY - WALL_T, unifiedMaxX + WALL_T, WALL_T, WALL_H, wallCapColor, INK, 1.1);
 
   // Wall details mounted cleanly on the tall back-right wall:
   drawWallScrollSouth(ctx, 775, unifiedMinY + 0.5, 68, 34, 28); // Office calligraphy scroll
@@ -1824,7 +2104,7 @@ export function drawIsoSceneWalls(
   // 2. TALL BACK-LEFT OUTER WALL (wx = -WALL_T, wy = UNIFIED_MIN_Y..frontH)
   // ==========================================
   drawIsoBoxFlat(ctx, -WALL_T, unifiedMinY, WALL_T, frontH - unifiedMinY, WALL_H, {
-    top: '#4E3220',
+    top: wallCapColor,
     left: '#644028',
     right: '#C5AC84',
     stroke: INK,
@@ -1841,8 +2121,34 @@ export function drawIsoSceneWalls(
   // Front Hall left wall (0..frontH): warm plaster + carved cedar wainscoting!
   fillIsoWallFaceEast(ctx, 0, 0, frontH, WALL_H, 0, 'wall_wainscot_e');
 
-  // Top walnut cap for back-left outer wall
-  drawIsoQuadFlat(ctx, -WALL_T, unifiedMinY, WALL_T, frontH - unifiedMinY, WALL_H, '#4E3220', INK, 1.1);
+  // Subtle theme-specific wash & brass/coral/jade dado molding along front-hall west wall!
+  if (trimAccent) {
+    const washCol =
+      decorId === 'retro_mahogany'
+        ? 'rgba(116, 30, 24, 0.22)'
+        : decorId === 'obsidian_sushi'
+          ? 'rgba(20, 26, 34, 0.34)'
+          : 'rgba(26, 98, 108, 0.22)';
+    const w0 = w2i(0.2, 0, WALL_H);
+    const w1 = w2i(0.2, frontH, WALL_H);
+    const w2 = w2i(0.2, frontH, 0);
+    const w3 = w2i(0.2, 0, 0);
+    drawPoly(ctx, [w0, w1, w2, w3], washCol);
+    // Horizontal decorative molding strip along mid-wall height
+    const m0 = w2i(0.3, 0, 31);
+    const m1 = w2i(0.3, frontH, 31);
+    ctx.save();
+    ctx.strokeStyle = trimAccent;
+    ctx.lineWidth = 1.65;
+    ctx.beginPath();
+    ctx.moveTo(m0.x, m0.y);
+    ctx.lineTo(m1.x, m1.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Top themed cap for back-left outer wall
+  drawIsoQuadFlat(ctx, -WALL_T, unifiedMinY, WALL_T, frontH - unifiedMinY, WALL_H, wallCapColor, INK, 1.1);
 
   // Wall-mounted features along Back-Left outer wall:
   drawRestroomWallMirrorEast(ctx, 0.6, unifiedMinY + 425); // Restroom wall mirror
@@ -1853,170 +2159,36 @@ export function drawIsoSceneWalls(
     drawWallLatticeWindowEast(ctx, 0.5, CANVAS_HEIGHT + 34, 86, 36, 26, atmo);
   }
 
-  // Structural Timber Pilasters along both exterior back walls
+  // Structural Timber Pilasters along both exterior back walls (themed per decorId!)
   for (let px = 0; px <= unifiedMaxX; px += 240) {
     drawIsoBoxFlat(ctx, px - 6, unifiedMinY - 13, 14, 15, WALL_H + 3, {
-      top: '#5A3922',
-      left: '#4B2E1A',
-      right: '#382213',
+      ...pilasterPalette,
       stroke: INK,
       lineWidth: 1.0,
     });
+    if (trimAccent) {
+      drawIsoQuadFlat(ctx, px - 6, unifiedMinY - 13, 14, 15, WALL_H + 3.2, trimAccent, INK, 0.65);
+    }
   }
   for (let py = unifiedMinY + 220; py <= frontH; py += 220) {
     drawIsoBoxFlat(ctx, -13, py - 6, 15, 14, WALL_H + 3, {
-      top: '#5A3922',
-      left: '#4B2E1A',
-      right: '#382213',
+      ...pilasterPalette,
       stroke: INK,
       lineWidth: 1.0,
     });
-  }
-
-  // ==========================================
-  // 3. INTERIOR BACKSTAGE CUTAWAY PARTITION WALLS
-  // ==========================================
-  const PART_H = 38;
-  // Vertical dividers between top-row backstage rooms
-  const topDividers: Array<{ x: number; celadon?: boolean }> = [
-    { x: 246 },
-    { x: 476, celadon: true },
-    { x: 706 },
-  ];
-  for (const div of topDividers) {
-    drawIsoBoxFlat(ctx, div.x, unifiedMinY + 20, 8, 256, PART_H, {
-      top: div.celadon ? '#46746E' : '#583821',
-      left: div.celadon ? '#559E94' : '#855A38',
-      right: div.celadon ? '#71BFB4' : '#C5AA83',
-      stroke: INK,
-      lineWidth: 0.95,
-    });
-    if (div.celadon) {
-      fillIsoWallFaceEast(ctx, div.x + 8, unifiedMinY + 20, 256, PART_H, 0, 'wall_celadon_e');
-    } else {
-      fillIsoWallFaceEast(ctx, div.x + 8, unifiedMinY + 20, 256, PART_H, 0, 'wall_wainscot_e');
+    if (trimAccent) {
+      drawIsoQuadFlat(ctx, -13, py - 6, 15, 14, WALL_H + 3.2, trimAccent, INK, 0.65);
     }
-    drawIsoQuadFlat(ctx, div.x, unifiedMinY + 20, 8, 256, PART_H, div.celadon ? '#46746E' : '#583821', INK, 0.9);
   }
 
-  // Horizontal wall along top of Backstage Corridor with framed doorways into top 4 rooms
+  // Flat brass doorway saddle thresholds along Backstage Corridor (floor-level z=0.55 so characters walk over them)
   const topWallY = 278 + backstageOffsetY;
-  const topWallSegs: Array<[number, number]> = [
-    [24, 108],
-    [164, 336],
-    [394, 566],
-    [624, 796],
-    [854, 936],
-  ];
-  for (const [x1, x2] of topWallSegs) {
-    drawIsoBoxFlat(ctx, x1, topWallY, x2 - x1, 7, 26, {
-      top: '#583821',
-      left: '#AA8862',
-      right: '#694428',
-      stroke: INK,
-      lineWidth: 0.9,
-    });
-    // Subtle cedar dado line along corridor wall
-    const a = w2i(x1 + 1, topWallY + 7, 11);
-    const b = w2i(x2 - 1, topWallY + 7, 11);
-    ctx.save();
-    ctx.strokeStyle = '#6B4326';
-    ctx.lineWidth = 1.1;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.restore();
-  }
   for (const doorX of [135, 365, 595, 825]) {
     drawIsoQuadFlat(ctx, doorX - 26, topWallY - 1, 52, 10, 0.55, '#B99254', '#5C3D1C', 0.85);
   }
-
-  // Horizontal wall along bottom of Backstage Corridor (Restroom / Equipment / Dormitory)
   const bottomWallY = 355 + backstageOffsetY;
-  const bottomWallSegs: Array<{ x1: number; x2: number; jade?: boolean }> = [
-    { x1: 24, x2: 144, jade: true },
-    { x1: 200, x2: 324, jade: true },
-    { x1: 324, x2: 452 },
-    { x1: 508, x2: 636 },
-    { x1: 636, x2: 760 },
-    { x1: 816, x2: 936 },
-  ];
-  for (const seg of bottomWallSegs) {
-    drawIsoBoxFlat(
-      ctx,
-      seg.x1,
-      bottomWallY,
-      seg.x2 - seg.x1,
-      7,
-      26,
-      seg.jade
-        ? { top: '#46746E', left: '#60B3A8', right: '#80CEC3', stroke: INK, lineWidth: 0.9 }
-        : { top: '#583821', left: '#AA8862', right: '#694428', stroke: INK, lineWidth: 0.9 }
-    );
-  }
   for (const doorX of [172, 480, 788]) {
     drawIsoQuadFlat(ctx, doorX - 26, bottomWallY - 1, 52, 10, 0.55, '#B99254', '#5C3D1C', 0.85);
-  }
-
-  // Vertical dividers between bottom-row backstage rooms
-  drawIsoBoxFlat(ctx, 320, 355 + backstageOffsetY, 8, 287, PART_H, {
-    top: '#46746E',
-    left: '#559E94',
-    right: '#72C2B7',
-    stroke: INK,
-    lineWidth: 0.95,
-  });
-  fillIsoWallFaceEast(ctx, 328, 355 + backstageOffsetY, 287, PART_H, 0, 'wall_celadon_e');
-  drawIsoQuadFlat(ctx, 320, 355 + backstageOffsetY, 8, 287, PART_H, '#46746E', INK, 0.9);
-
-  drawIsoBoxFlat(ctx, 632, 355 + backstageOffsetY, 8, 287, PART_H, {
-    top: '#583821',
-    left: '#855A38',
-    right: '#C5AA83',
-    stroke: INK,
-    lineWidth: 0.95,
-  });
-  fillIsoWallFaceEast(ctx, 640, 355 + backstageOffsetY, 287, PART_H, 0, 'wall_wainscot_e');
-  drawIsoQuadFlat(ctx, 632, 355 + backstageOffsetY, 8, 287, PART_H, '#583821', INK, 0.9);
-
-  // ==========================================
-  // 4. GRAND PARTITION WALL SEPARATING BACKSTAGE & FRONT DINING HALL
-  // ==========================================
-  const divFrontBackSegs: Array<[number, number]> = [
-    [0, 196],
-    [246, 378],
-    [434, 652],
-    [712, 960],
-  ];
-  for (const [x1, x2] of divFrontBackSegs) {
-    drawIsoBoxFlat(ctx, x1, -20, x2 - x1, 14, 44, {
-      top: '#54351F',
-      left: '#D6BC93',
-      right: '#764B2C',
-      stroke: INK,
-      lineWidth: 1.0,
-    });
-    // Left half behind wet sink/dishwash gets celadon tile face; right half gets refined wainscoting!
-    if (x2 <= 380) {
-      fillIsoWallFaceSouth(ctx, x1, -6, x2 - x1, 44, 0, 'wall_celadon_s');
-    } else {
-      fillIsoWallFaceSouth(ctx, x1, -6, x2 - x1, 44, 0, 'wall_wainscot_s');
-    }
-    drawIsoQuadFlat(ctx, x1, -20, x2 - x1, 14, 44, '#54351F', INK, 1.0);
-  }
-
-  // Carved Chinese Timber Archway Transom Headers across all 3 front-back passages!
-  for (const arch of FRONT_BACK_ARCHWAYS) {
-    drawArchwayTransomHeader(
-      ctx,
-      arch.x - arch.halfWidth - 2,
-      arch.x + arch.halfWidth + 2,
-      -20,
-      14,
-      34,
-      10
-    );
   }
 
   // ==========================================
@@ -2049,6 +2221,288 @@ export function drawIsoSceneWalls(
   }
 }
 
+/**
+ * Draws one seamless slice of a north-south interior partition wall so it can be depth-sorted
+ * individually against rooms, furniture, and walking characters with zero visible internal seams.
+ */
+function drawSeamlessVerticalPartitionSlice(
+  ctx: CanvasRenderingContext2D,
+  wx: number,
+  wy: number,
+  thickness: number,
+  len: number,
+  height: number,
+  topColor: string,
+  southFaceColor: string,
+  eastTexId: 'wall_celadon_e' | 'wall_wainscot_e',
+  isFirst: boolean,
+  isLast: boolean
+) {
+  const b0 = w2i(wx, wy, 0);
+  const b1 = w2i(wx + thickness, wy, 0);
+  const b2 = w2i(wx + thickness, wy + len, 0);
+  const b3 = w2i(wx, wy + len, 0);
+  const t0 = w2i(wx, wy, height);
+  const t1 = w2i(wx + thickness, wy, height);
+  const t2 = w2i(wx + thickness, wy + len, height);
+  const t3 = w2i(wx, wy + len, height);
+
+  // 1. East-facing textured wall face (facing into the eastern adjacent room)
+  fillIsoWallFaceEast(ctx, wx + thickness, wy, len, height, 0, eastTexId);
+
+  // 2. South end cap (only on the southernmost slice!)
+  if (isLast) {
+    ctx.fillStyle = southFaceColor;
+    ctx.beginPath();
+    ctx.moveTo(t3.x, t3.y);
+    ctx.lineTo(t2.x, t2.y);
+    ctx.lineTo(b2.x, b2.y);
+    ctx.lineTo(b3.x, b3.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 3. Top cap polygon (filled cleanly without cross-seam strokes)
+  ctx.fillStyle = topColor;
+  ctx.beginPath();
+  ctx.moveTo(t0.x, t0.y);
+  ctx.lineTo(t1.x, t1.y);
+  ctx.lineTo(t2.x, t2.y);
+  ctx.lineTo(t3.x, t3.y);
+  ctx.closePath();
+  ctx.fill();
+
+  // 4. Crisp architectural ink edges (outer rails only, zero slice cross-lines)
+  ctx.save();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.92;
+  ctx.beginPath();
+  // Top cap west & east rails + bottom east base rail
+  ctx.moveTo(t0.x, t0.y);
+  ctx.lineTo(t3.x, t3.y);
+  ctx.moveTo(t1.x, t1.y);
+  ctx.lineTo(t2.x, t2.y);
+  ctx.moveTo(b1.x, b1.y);
+  ctx.lineTo(b2.x, b2.y);
+  if (isFirst) {
+    // North outer cap edge & north-east vertical corner
+    ctx.moveTo(t0.x, t0.y);
+    ctx.lineTo(t1.x, t1.y);
+    ctx.moveTo(t1.x, t1.y);
+    ctx.lineTo(b1.x, b1.y);
+  }
+  if (isLast) {
+    // South outer cap edge & south-west/south-east vertical corners + south base edge
+    ctx.moveTo(t3.x, t3.y);
+    ctx.lineTo(t2.x, t2.y);
+    ctx.moveTo(b3.x, b3.y);
+    ctx.lineTo(b2.x, b2.y);
+    ctx.moveTo(t3.x, t3.y);
+    ctx.lineTo(b3.x, b3.y);
+    ctx.moveTo(t2.x, t2.y);
+    ctx.lineTo(b2.x, b2.y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Collects all interior backstage cutaway partition walls and the front/back grand partition wall
+ * as depth-sorted isometric draw items so rooms & furniture behind a wall are cleanly occluded
+ * while rooms, props & characters in front of the wall draw cleanly ahead of it.
+ */
+export function collectIsoInteriorWallDepthItems(
+  ctx: CanvasRenderingContext2D,
+  unifiedMinY: number,
+  backstageOffsetY: number
+): Array<{ depth: number; draw: () => void }> {
+  const out: Array<{ depth: number; draw: () => void }> = [];
+  const PART_H = 38;
+
+  // 1. Vertical dividers between top-row backstage rooms (4 seamless slices each)
+  const topDividers: Array<{ x: number; celadon?: boolean }> = [
+    { x: 246 },
+    { x: 476, celadon: true },
+    { x: 706 },
+  ];
+  const topStartY = unifiedMinY + 20;
+  const topSlices = 4;
+  const topSliceLen = 256 / topSlices;
+  for (const div of topDividers) {
+    for (let s = 0; s < topSlices; s++) {
+      const sy = topStartY + s * topSliceLen;
+      const isFirst = s === 0;
+      const isLast = s === topSlices - 1;
+      out.push({
+        depth: div.x + 4 + (sy + topSliceLen * 0.5),
+        draw: () =>
+          drawSeamlessVerticalPartitionSlice(
+            ctx,
+            div.x,
+            sy,
+            8,
+            topSliceLen,
+            PART_H,
+            div.celadon ? '#46746E' : '#583821',
+            div.celadon ? '#559E94' : '#855A38',
+            div.celadon ? 'wall_celadon_e' : 'wall_wainscot_e',
+            isFirst,
+            isLast
+          ),
+      });
+    }
+  }
+
+  // 2. Horizontal wall along top of Backstage Corridor (split cleanly at vertical divider junctions)
+  const topWallY = 278 + backstageOffsetY;
+  const topWallSegs: Array<[number, number]> = [
+    [24, 108],
+    [164, 250],
+    [250, 336],
+    [394, 480],
+    [480, 566],
+    [624, 710],
+    [710, 796],
+    [854, 936],
+  ];
+  for (const [x1, x2] of topWallSegs) {
+    out.push({
+      depth: (x1 + x2) * 0.5 + (topWallY + 3.5),
+      draw: () => {
+        drawIsoBoxFlat(ctx, x1, topWallY, x2 - x1, 7, 26, {
+          top: '#583821',
+          left: '#AA8862',
+          right: '#694428',
+          stroke: INK,
+          lineWidth: 0.9,
+        });
+        const a = w2i(x1 + 1, topWallY + 7, 11);
+        const b = w2i(x2 - 1, topWallY + 7, 11);
+        ctx.save();
+        ctx.strokeStyle = '#6B4326';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.restore();
+      },
+    });
+  }
+
+  // 3. Horizontal wall along bottom of Backstage Corridor (Restroom / Equipment / Dormitory)
+  const bottomWallY = 355 + backstageOffsetY;
+  const bottomWallSegs: Array<{ x1: number; x2: number; jade?: boolean }> = [
+    { x1: 24, x2: 144, jade: true },
+    { x1: 200, x2: 324, jade: true },
+    { x1: 324, x2: 452 },
+    { x1: 508, x2: 636 },
+    { x1: 636, x2: 760 },
+    { x1: 816, x2: 936 },
+  ];
+  for (const seg of bottomWallSegs) {
+    out.push({
+      depth: (seg.x1 + seg.x2) * 0.5 + (bottomWallY + 3.5),
+      draw: () => {
+        drawIsoBoxFlat(
+          ctx,
+          seg.x1,
+          bottomWallY,
+          seg.x2 - seg.x1,
+          7,
+          26,
+          seg.jade
+            ? { top: '#46746E', left: '#60B3A8', right: '#80CEC3', stroke: INK, lineWidth: 0.9 }
+            : { top: '#583821', left: '#AA8862', right: '#694428', stroke: INK, lineWidth: 0.9 }
+        );
+      },
+    });
+  }
+
+  // 4. Vertical dividers between bottom-row backstage rooms (4 seamless slices each)
+  const bottomDividers: Array<{ x: number; celadon?: boolean }> = [
+    { x: 320, celadon: true },
+    { x: 632 },
+  ];
+  const botStartY = 355 + backstageOffsetY;
+  const botSlices = 4;
+  const botSliceLen = 287 / botSlices;
+  for (const div of bottomDividers) {
+    for (let s = 0; s < botSlices; s++) {
+      const sy = botStartY + s * botSliceLen;
+      const isFirst = s === 0;
+      const isLast = s === botSlices - 1;
+      out.push({
+        depth: div.x + 4 + (sy + botSliceLen * 0.5),
+        draw: () =>
+          drawSeamlessVerticalPartitionSlice(
+            ctx,
+            div.x,
+            sy,
+            8,
+            botSliceLen,
+            PART_H,
+            div.celadon ? '#46746E' : '#583821',
+            div.celadon ? '#559E94' : '#855A38',
+            div.celadon ? 'wall_celadon_e' : 'wall_wainscot_e',
+            isFirst,
+            isLast
+          ),
+      });
+    }
+  }
+
+  // 5. Grand Partition Wall separating Backstage & Front Dining Hall (split cleanly at room junctions)
+  const divFrontBackSegs: Array<[number, number]> = [
+    [0, 196],
+    [246, 324],
+    [324, 378],
+    [434, 636],
+    [636, 652],
+    [712, 960],
+  ];
+  for (const [x1, x2] of divFrontBackSegs) {
+    out.push({
+      depth: (x1 + x2) * 0.5 - 13,
+      draw: () => {
+        drawIsoBoxFlat(ctx, x1, -20, x2 - x1, 14, 44, {
+          top: '#54351F',
+          left: '#D6BC93',
+          right: '#764B2C',
+          stroke: INK,
+          lineWidth: 1.0,
+        });
+        if (x2 <= 380) {
+          fillIsoWallFaceSouth(ctx, x1, -6, x2 - x1, 44, 0, 'wall_celadon_s');
+        } else {
+          fillIsoWallFaceSouth(ctx, x1, -6, x2 - x1, 44, 0, 'wall_wainscot_s');
+        }
+        drawIsoQuadFlat(ctx, x1, -20, x2 - x1, 14, 44, '#54351F', INK, 1.0);
+      },
+    });
+  }
+
+  // 6. Carved Chinese Timber Archway Transom Headers across all 3 front-back passages
+  for (const arch of FRONT_BACK_ARCHWAYS) {
+    out.push({
+      depth: arch.x - 13,
+      draw: () => {
+        drawArchwayTransomHeader(
+          ctx,
+          arch.x - arch.halfWidth - 2,
+          arch.x + arch.halfWidth + 2,
+          -20,
+          14,
+          34,
+          10
+        );
+      },
+    });
+  }
+
+  return out;
+}
+
 // ==========================================
 // 4. FOREGROUND CUTAWAY RIM, TIMBER ENTRY GATE, POTTED BAMBOO & WARM LANTERNS
 // ==========================================
@@ -2064,10 +2518,11 @@ export function drawStyle3Lantern(
   wz: number,
   timeSec: number,
   tint = '#F6C96E',
-  glowMult = 1.0
+  glowMult = 1.0,
+  windSway = 1.0
 ) {
   const pos = w2i(wx, wy, wz);
-  const sway = Math.sin(timeSec * 1.7 + wx * 0.018 + wy * 0.018) * 1.1;
+  const sway = Math.sin(timeSec * (1.7 * windSway) + wx * 0.018 + wy * 0.018) * (1.1 * windSway);
   const flicker = 0.94 + Math.sin(timeSec * 5.2 + wx * 0.13) * 0.06;
   const lx = pos.x + sway;
   const ly = pos.y;
@@ -2141,13 +2596,59 @@ function drawPottedEntranceBamboo(
   wx: number,
   wy: number,
   timeSec: number,
-  atmo?: SceneAtmosphere
+  atmo?: SceneAtmosphere,
+  sizeScale = 1.0
 ) {
   const season = atmo?.season ?? 'SPRING';
   const isSnow = atmo?.weather === 'SNOWY' || season === 'WINTER';
-  // Subtle contact shadow
-  drawIsoQuadFlat(ctx, wx - 6, wy - 5, 16, 16, 0.15, 'rgba(18, 12, 8, 0.25)');
-  // Glazed celadon octagonal planter pot
+  // Subtle grounded contact shadow
+  const shadowP = w2i(wx + 1, wy + 2, 0.15);
+  ctx.save();
+  ctx.fillStyle = 'rgba(18, 12, 8, 0.28)';
+  ctx.beginPath();
+  ctx.ellipse(shadowP.x, shadowP.y + 1, 11 * sizeScale, 5.2 * sizeScale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Prefer unified hand-painted celadon octagonal kumquat & lucky bamboo planter sprite
+  const drewPlanter = drawIsoPropSprite(ctx, 'POTTED_PLANTER', {
+    anchorX: shadowP.x,
+    anchorY: shadowP.y + 2,
+    targetHeight: 37 * sizeScale,
+    maxWidth: 32 * sizeScale,
+  });
+
+  if (drewPlanter) {
+    // Subtle seasonal canopy accents layered cleanly over the hand-painted foliage
+    const canopyP = w2i(wx + 1, wy + 1, 25 * sizeScale);
+    const windBoost = atmo?.weather === 'TYPHOON' ? 2.4 : atmo?.weather === 'RAINY' ? 1.4 : 1.0;
+    const sway = Math.sin(timeSec * (1.7 * windBoost) + wx * 0.05) * (1.1 * windBoost);
+    ctx.save();
+    if (season === 'SPRING') {
+      ctx.fillStyle = 'rgba(251, 182, 206, 0.88)';
+      for (const [dx, dy] of [[-5, -3], [4, -5], [-1, 2], [6, 1]]) {
+        ctx.beginPath();
+        ctx.arc(canopyP.x + dx * sizeScale + sway * 0.5, canopyP.y + dy * sizeScale, 1.7 * sizeScale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (season === 'AUTUMN') {
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.78)';
+      for (const [dx, dy] of [[-4, -2], [3, -4], [0, 3], [-6, 1]]) {
+        ctx.beginPath();
+        ctx.ellipse(canopyP.x + dx * sizeScale + sway * 0.5, canopyP.y + dy * sizeScale, 2.2 * sizeScale, 1.3 * sizeScale, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (isSnow) {
+      ctx.fillStyle = 'rgba(240, 250, 255, 0.86)';
+      ctx.beginPath();
+      ctx.ellipse(canopyP.x - 1, canopyP.y - 4 * sizeScale, 7.5 * sizeScale, 3.2 * sizeScale, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    return;
+  }
+
+  // Fallback procedural celadon planter while image decodes
   drawIsoBoxFlat(
     ctx,
     wx - 5,
@@ -2164,7 +2665,6 @@ function drawPottedEntranceBamboo(
   const sway = Math.sin(timeSec * (1.6 * windBoost) + wx * 0.05) * (1.2 * windBoost);
   const base = w2i(wx + 1, wy + 1, 11.5);
   ctx.save();
-  // 3 slender bamboo / seasonal branches
   ctx.strokeStyle = season === 'AUTUMN' ? '#6D4C2D' : '#4E7D44';
   ctx.lineWidth = 1.6;
   for (const [ox, h] of [
@@ -2177,8 +2677,6 @@ function drawPottedEntranceBamboo(
     ctx.quadraticCurveTo(base.x + ox + sway * 0.5, base.y - h * 0.55, base.x + ox + sway, base.y - h);
     ctx.stroke();
   }
-
-  // Season-tinted lush watercolor foliage clusters
   const foliageCols =
     season === 'SPRING'
       ? ['#6BA65B', '#F9A8D4', '#FBCFE8', '#5D9850']
@@ -2187,7 +2685,6 @@ function drawPottedEntranceBamboo(
         : isSnow
           ? ['#3E6B58', '#E2F1F8', '#52806A', '#F0F9FF']
           : ['#5F9650', '#4D8241', '#6FA85D', '#5B8F4B'];
-
   const foliage = [
     [-4.5, -18, 5.4, foliageCols[0]],
     [2.8, -22, 5.8, foliageCols[1]],
@@ -2203,14 +2700,6 @@ function drawPottedEntranceBamboo(
     ctx.fill();
     ctx.stroke();
   }
-
-  // Seasonal accents: golden kumquats (Summer/Autumn), pink petals (Spring), snow caps (Winter)
-  ctx.fillStyle =
-    season === 'SPRING' ? '#F472B6' : isSnow ? '#FFFFFF' : '#F59E0B';
-  ctx.beginPath();
-  ctx.arc(base.x - 2 + sway, base.y - 19, 1.5, 0, Math.PI * 2);
-  ctx.arc(base.x + 3 + sway, base.y - 21, 1.45, 0, Math.PI * 2);
-  ctx.fill();
   ctx.restore();
 }
 
@@ -2225,45 +2714,201 @@ function drawEntranceTimberGate(
   spanW: number,
   timeSec: number,
   glowMult: number,
-  atmo?: SceneAtmosphere
+  atmo?: SceneAtmosphere,
+  shopLevel = 1
 ) {
-  const postW = 7;
-  const h = 52;
+  const postW = shopLevel >= 4 ? 8 : 7;
+  const h = shopLevel >= 4 ? 58 : shopLevel >= 2 ? 55 : 52;
   const isSnow = atmo?.weather === 'SNOWY' || atmo?.season === 'WINTER';
   // Twin flanking celadon seasonal planters outside the timber posts
-  drawPottedEntranceBamboo(ctx, wx - 13, wy + 2, timeSec, atmo);
-  drawPottedEntranceBamboo(ctx, wx + spanW + 8, wy + 2, timeSec + 1.4, atmo);
+  drawPottedEntranceBamboo(ctx, wx - 16, wy + 4, timeSec, atmo, shopLevel >= 3 ? 1.12 : 1.0);
+  drawPottedEntranceBamboo(ctx, wx + spanW + 10, wy + 4, timeSec + 1.4, atmo, shopLevel >= 3 ? 1.12 : 1.0);
 
-  // Left & right cedar posts
-  drawIsoBoxFlat(ctx, wx, wy, postW, postW, h, {
-    top: '#754C2E',
-    left: '#9B6B44',
-    right: '#694326',
-    stroke: INK,
-    lineWidth: 0.95,
-  });
-  drawIsoBoxFlat(ctx, wx + spanW - postW, wy, postW, postW, h, {
-    top: '#754C2E',
-    left: '#9B6B44',
-    right: '#694326',
-    stroke: INK,
-    lineWidth: 0.95,
-  });
+  // Carved stone/brass pillar plinths (upgrades to carved antique bronze-gold at Lv.3+)
+  const plinthColors =
+    shopLevel >= 3
+      ? { top: '#D9B166', left: '#A47834', right: '#785522', stroke: INK, lineWidth: 0.9 }
+      : { top: '#9B9485', left: '#787164', right: '#595348', stroke: INK, lineWidth: 0.85 };
+  drawIsoBoxFlat(ctx, wx - 2, wy - 2, postW + 4, postW + 4, 7, plinthColors, 0);
+  drawIsoBoxFlat(ctx, wx + spanW - postW - 2, wy - 2, postW + 4, postW + 4, 7, plinthColors, 0);
+
+  // Left & right lacquered/cedar posts (progresses from cedar to rich rosewood-crimson lacquer at Lv.3+)
+  const postColors =
+    shopLevel >= 3
+      ? { top: '#78221A', left: '#922A21', right: '#611914', stroke: INK, lineWidth: 0.95 }
+      : { top: '#754C2E', left: '#9B6B44', right: '#694326', stroke: INK, lineWidth: 0.95 };
+  drawIsoBoxFlat(ctx, wx, wy, postW, postW, h, postColors);
+  drawIsoBoxFlat(ctx, wx + spanW - postW, wy, postW, postW, h, postColors);
+
+  // Lv.2+ Decorative carved golden collar bands & brackets (雀替) on posts
+  if (shopLevel >= 2) {
+    const goldTrim = { top: '#E8C574', left: '#C99B45', right: '#966E29', stroke: INK, lineWidth: 0.75 };
+    drawIsoBoxFlat(ctx, wx - 0.8, wy - 0.8, postW + 1.6, postW + 1.6, 3.5, goldTrim, h - 16);
+    drawIsoBoxFlat(ctx, wx + spanW - postW - 0.8, wy - 0.8, postW + 1.6, postW + 1.6, 3.5, goldTrim, h - 16);
+  }
+
   // Overhanging upper cross-beam lintel
   drawIsoBoxFlat(
     ctx,
-    wx - 9,
-    wy - 1,
-    spanW + 18,
-    postW + 2,
-    7,
-    { top: isSnow ? '#E6F2F8' : '#8B5B37', left: '#A57249', right: '#6B4426', stroke: INK, lineWidth: 1.0 },
+    wx - 10,
+    wy - 1.5,
+    spanW + 20,
+    postW + 3,
+    7.5,
+    {
+      top: isSnow ? '#E6F2F8' : shopLevel >= 3 ? '#7D221B' : '#8B5B37',
+      left: shopLevel >= 3 ? '#9A2E24' : '#A57249',
+      right: shopLevel >= 3 ? '#5E1812' : '#6B4426',
+      stroke: INK,
+      lineWidth: 1.0,
+    },
     h - 3
   );
-  // Crisp snow blanket draped along top of entrance gate beam in Winter/Snowy weather
-  if (isSnow) {
-    drawIsoQuadFlat(ctx, wx - 9, wy - 1, spanW + 18, postW + 2, h + 4.3, '#F2FAFF', '#94B8CE', 0.75);
+
+  // Lv.3+ Second-tier upturned tiled grand archway roof crown (牌坊飞檐)
+  if (shopLevel >= 3) {
+    drawIsoBoxFlat(
+      ctx,
+      wx - 14,
+      wy - 3,
+      spanW + 28,
+      postW + 6,
+      5,
+      {
+        top: isSnow ? '#EDF7FC' : '#3C6A64',
+        left: '#2E544F',
+        right: '#1E3C38',
+        stroke: INK,
+        lineWidth: 1.0,
+      },
+      h + 4.2
+    );
+    // Antique gold ridge crest along top of celadon-tiled archway roof
+    drawIsoBoxFlat(
+      ctx,
+      wx - 8,
+      wy - 1,
+      spanW + 16,
+      3.5,
+      3.2,
+      { top: '#F5D684', left: '#D4A448', right: '#9B7228', stroke: INK, lineWidth: 0.8 },
+      h + 9.2
+    );
   }
+
+  // Seasonal Entrance Gate Eaves Decorations (Snow + Crimson Tassels in Winter, Blossoms in Spring,
+  // Swaying Bamboo Wind-Chimes in Summer, Golden Maple Sprigs in Autumn)
+  const gateSeason = atmo?.season ?? 'SPRING';
+  const eavesSway = Math.sin(timeSec * (atmo?.weather === 'TYPHOON' ? 6.5 : 2.6));
+  const eavesTopZ = shopLevel >= 3 ? h + 9.4 : h + 4.8;
+  if (isSnow) {
+    drawIsoQuadFlat(ctx, wx - 11, wy - 2, spanW + 22, postW + 4, eavesTopZ, '#F2FAFF', '#94B8CE', 0.75);
+    // Cozy festive crimson-gold silk tassels hanging at both eaves corners for winter hotpot warmth
+    ctx.save();
+    for (const tx of [wx - 8, wx + spanW + 8]) {
+      const topP = w2i(tx, wy + 2, h - 1);
+      const swayX = eavesSway * 2.2;
+      ctx.strokeStyle = '#F5C451';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(topP.x, topP.y);
+      ctx.lineTo(topP.x + swayX, topP.y + 8);
+      ctx.stroke();
+      ctx.fillStyle = '#C83226';
+      ctx.beginPath();
+      ctx.arc(topP.x + swayX, topP.y + 9.5, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#DC2626';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(topP.x + swayX, topP.y + 11.5);
+      ctx.lineTo(topP.x + swayX * 1.3, topP.y + 18);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (gateSeason === 'SPRING') {
+    // Delicate pink peach-blossom clusters framing the eaves corners
+    ctx.save();
+    for (const [bx, dir] of [
+      [wx - 7, -1],
+      [wx + spanW + 7, 1],
+    ] as Array<[number, number]>) {
+      const bp = w2i(bx, wy + 1, eavesTopZ - 1);
+      ctx.strokeStyle = '#5C3A21';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(bp.x, bp.y + 1);
+      ctx.lineTo(bp.x + dir * 7, bp.y - 3 + eavesSway * 0.7);
+      ctx.stroke();
+      for (let k = 0; k < 4; k++) {
+        ctx.fillStyle = k % 2 === 0 ? '#F9A8D4' : '#FCE7F3';
+        ctx.beginPath();
+        ctx.arc(
+          bp.x + dir * (2 + k * 2.1),
+          bp.y - (k % 2 === 0 ? 2.4 : 0.4) + eavesSway * 0.6,
+          2.1,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  } else if (gateSeason === 'SUMMER') {
+    // Cool celadon glass wind-chime strips swaying gently under the summer eaves
+    ctx.save();
+    for (const [cx, phase] of [
+      [wx - 7, 0],
+      [wx + spanW + 7, 1.3],
+    ]) {
+      const cp = w2i(cx, wy + 2, h - 1);
+      const sw = Math.sin(timeSec * (atmo?.weather === 'TYPHOON' ? 7 : 3.2) + phase) * 2.8;
+      ctx.strokeStyle = '#BAE6FD';
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(cp.x, cp.y);
+      ctx.lineTo(cp.x + sw * 0.6, cp.y + 6);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(103, 232, 249, 0.85)';
+      ctx.beginPath();
+      ctx.arc(cp.x + sw * 0.6, cp.y + 7.2, 2.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#38BDF8';
+      ctx.beginPath();
+      ctx.moveTo(cp.x + sw * 0.6 - 1.5, cp.y + 9.5);
+      ctx.lineTo(cp.x + sw * 0.6 + 1.5, cp.y + 9.5);
+      ctx.lineTo(cp.x + sw * 1.4 + 1.2, cp.y + 17.5);
+      ctx.lineTo(cp.x + sw * 1.4 - 1.2, cp.y + 17.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  } else if (gateSeason === 'AUTUMN') {
+    // Warm golden-persimmon autumn maple sprigs perched on both eaves corners
+    ctx.save();
+    for (const [ax, dir] of [
+      [wx - 7, -1],
+      [wx + spanW + 7, 1],
+    ] as Array<[number, number]>) {
+      const ap = w2i(ax, wy + 1, eavesTopZ - 0.8);
+      for (let k = 0; k < 4; k++) {
+        ctx.fillStyle = k % 3 === 0 ? '#DC2626' : k % 2 === 0 ? '#F59E0B' : '#EAB308';
+        ctx.beginPath();
+        ctx.ellipse(
+          ap.x + dir * (1.8 + k * 2.0),
+          ap.y - (k % 2 === 0 ? 2.2 : 0.2) + eavesSway * 0.6,
+          2.6,
+          1.7,
+          dir * 0.4 + k * 0.3,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
   // Subtle lower tie-beam
   drawIsoBoxFlat(
     ctx,
@@ -2277,14 +2922,13 @@ function drawEntranceTimberGate(
   );
 
   // Grand carved lacquered crimson & gold entrance signboard plaque (牌匾) mounted flush on the upper lintel!
-  const plaqueW = Math.min(spanW - 14, 86);
+  const plaqueW = Math.min(spanW - 14, shopLevel >= 4 ? 96 : 86);
   const plaqueD = 4;
-  const plaqueH = 22;
+  const plaqueH = shopLevel >= 4 ? 24 : 22;
   const plaqueBaseZ = h - 7;
   const px = wx + (spanW - plaqueW) * 0.5;
   const plaqueY = wy + postW - 1;
 
-  // Twin dark bronze hanging brackets linking plaque cleanly to lintel
   for (const bx of [px + 12, px + plaqueW - 15]) {
     drawIsoBoxFlat(
       ctx,
@@ -2298,7 +2942,6 @@ function drawEntranceTimberGate(
     );
   }
 
-  // Outer carved gold-framed lacquered signboard box
   drawIsoBoxFlat(
     ctx,
     px,
@@ -2310,8 +2953,6 @@ function drawEntranceTimberGate(
     plaqueBaseZ
   );
 
-  // Isometric plane-locked inner gold filigree border & calligraphy text ('沸鼎海鲜')
-  // Local (u, v) maps directly onto the South-facing front face (y = plaqueY + plaqueD) via [ISO_COS, ISO_SIN, 0, 1]
   const plaqueCenter = w2i(
     px + plaqueW * 0.5,
     plaqueY + plaqueD,
@@ -2320,7 +2961,6 @@ function drawEntranceTimberGate(
   ctx.save();
   ctx.transform(ISO_COS, ISO_SIN, 0, 1, plaqueCenter.x, plaqueCenter.y);
 
-  // Deep crimson lacquer face wash
   const faceGrad = ctx.createLinearGradient(0, -plaqueH * 0.5, 0, plaqueH * 0.5);
   faceGrad.addColorStop(0, '#8E231C');
   faceGrad.addColorStop(0.5, '#781B15');
@@ -2328,7 +2968,6 @@ function drawEntranceTimberGate(
   ctx.fillStyle = faceGrad;
   ctx.fillRect(-plaqueW * 0.5 + 1.2, -plaqueH * 0.5 + 1.2, plaqueW - 2.4, plaqueH - 2.4);
 
-  // Double carved antique-gold inner frame & brass corner studs
   ctx.strokeStyle = '#F2CA6B';
   ctx.lineWidth = 1.25;
   ctx.strokeRect(-plaqueW * 0.5 + 3, -plaqueH * 0.5 + 2.6, plaqueW - 6, plaqueH - 5.2);
@@ -2345,7 +2984,6 @@ function drawEntranceTimberGate(
     ctx.fill();
   }
 
-  // Crisp gold-leaf Chinese calligraphy characters centered cleanly inside the plaque
   const chars = ['沸', '鼎', '海', '鲜'];
   const charStep = (plaqueW - 24) / 3.2;
   ctx.font = '900 13px "Noto Serif SC", "Songti SC", "PingFang SC", serif';
@@ -2360,9 +2998,117 @@ function drawEntranceTimberGate(
   });
   ctx.restore();
 
-  // Warm twin entrance welcoming lanterns suspended beneath gate eaves
-  drawStyle3Lantern(ctx, wx + 12, wy + 5, h - 15, timeSec + 0.4, '#F5B553', glowMult * 1.05);
-  drawStyle3Lantern(ctx, wx + spanW - 12, wy + 5, h - 15, timeSec + 1.9, '#F5B553', glowMult * 1.05);
+  const windSway =
+    atmo?.weather === 'TYPHOON' ? 2.75 : atmo?.weather === 'RAINY' ? 1.45 : 1.0;
+  const isHoliday = Boolean(atmo?.holiday && atmo.holiday !== 'NONE');
+
+  // Festive Chaoshan crimson-and-gold pennant bunting draped gracefully beneath the gate lintel on Holidays!
+  if (isHoliday) {
+    const leftBeam = w2i(wx + 6, wy + postW + 1, h - 10);
+    const rightBeam = w2i(wx + spanW - 6, wy + postW + 1, h - 10);
+    const midX = (leftBeam.x + rightBeam.x) * 0.5;
+    const midY = (leftBeam.y + rightBeam.y) * 0.5 + 9;
+    const breeze = Math.sin(timeSec * (2.6 * windSway)) * (1.6 * windSway);
+
+    ctx.save();
+    // Gold silk cord
+    ctx.strokeStyle = '#F2C96B';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(leftBeam.x, leftBeam.y);
+    ctx.quadraticCurveTo(midX + breeze * 0.4, midY + 4, rightBeam.x, rightBeam.y);
+    ctx.stroke();
+
+    // Alternating vermilion & antique gold silk pennants along the arch curve
+    const flagCount = 9;
+    for (let f = 1; f < flagCount; f++) {
+      const t = f / flagCount;
+      const omt = 1 - t;
+      const fx = omt * omt * leftBeam.x + 2 * omt * t * (midX + breeze * 0.4) + t * t * rightBeam.x;
+      const fy = omt * omt * leftBeam.y + 2 * omt * t * (midY + 4) + t * t * rightBeam.y;
+      const flutter = Math.sin(timeSec * (4.2 * windSway) + f * 0.9) * (1.2 * windSway);
+      const isRed =
+        atmo?.holiday === 'MID_AUTUMN'
+          ? f % 2 === 1
+          : f % 2 === 0;
+      ctx.fillStyle = isRed ? '#C83226' : '#F3C653';
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.moveTo(fx - 3.6, fy);
+      ctx.lineTo(fx + 3.6, fy + 1.4);
+      ctx.lineTo(fx + flutter, fy + 8.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Warm twin entrance welcoming lanterns suspended beneath gate eaves (+ extra crimson cluster at Lv.4+ or Holidays)
+  const mainLanternTint = isHoliday
+    ? atmo?.holiday === 'MID_AUTUMN'
+      ? '#FDE073'
+      : '#E9503E'
+    : '#F5B553';
+  drawStyle3Lantern(ctx, wx + 12, wy + 5, h - 15, timeSec + 0.4, mainLanternTint, glowMult * 1.08, windSway);
+  drawStyle3Lantern(ctx, wx + spanW - 12, wy + 5, h - 15, timeSec + 1.9, mainLanternTint, glowMult * 1.08, windSway);
+  if (shopLevel >= 4 || isHoliday) {
+    drawStyle3Lantern(ctx, wx - 4, wy + 6, h - 11, timeSec + 1.1, '#E05A47', glowMult * 1.18, windSway * 1.1);
+    drawStyle3Lantern(ctx, wx + spanW + 4, wy + 6, h - 11, timeSec + 2.5, '#E05A47', glowMult * 1.18, windSway * 1.1);
+  }
+}
+
+function drawHarborStreetLampProp(
+  ctx: CanvasRenderingContext2D,
+  wx: number,
+  wy: number,
+  timeSec: number,
+  glowMult: number,
+  flipX = false
+) {
+  const base = w2i(wx, wy, 0.4);
+  ctx.save();
+  ctx.fillStyle = 'rgba(14, 10, 8, 0.30)';
+  ctx.beginPath();
+  ctx.ellipse(base.x, base.y + 1, 9, 4.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  const drew = drawIsoPropSprite(ctx, 'HARBOR_LAMP', {
+    anchorX: base.x,
+    anchorY: base.y + 2,
+    targetHeight: 68,
+    maxWidth: 42,
+    flipX,
+  });
+
+  // Warm amber lantern glow halo around top streetlamp head
+  const lampHead = w2i(wx, wy, 53);
+  const flicker = 0.94 + Math.sin(timeSec * 4.1 + wx * 0.09) * 0.06;
+  const r = 46 * Math.min(1.3, 0.85 + glowMult * 0.25);
+  ctx.save();
+  const halo = ctx.createRadialGradient(lampHead.x + (flipX ? 6 : -6), lampHead.y, 2, lampHead.x, lampHead.y, r);
+  halo.addColorStop(0, `rgba(255, 224, 138, ${Math.min(0.46, 0.28 * glowMult * flicker).toFixed(3)})`);
+  halo.addColorStop(0.5, `rgba(244, 168, 68, ${Math.min(0.18, 0.1 * glowMult * flicker).toFixed(3)})`);
+  halo.addColorStop(1, 'rgba(244, 168, 68, 0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(lampHead.x, lampHead.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  if (!drew) {
+    ctx.strokeStyle = '#33524A';
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(base.x, base.y);
+    ctx.lineTo(lampHead.x, lampHead.y);
+    ctx.stroke();
+    ctx.fillStyle = '#FCE29A';
+    ctx.beginPath();
+    ctx.arc(lampHead.x, lampHead.y, 4.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 export function drawIsoSceneForegroundRimAndLights(
@@ -2379,8 +3125,9 @@ export function drawIsoSceneForegroundRimAndLights(
   const { lanternGlow } = computeAtmosphereWeights(atmo);
   const isSnow = atmo?.weather === 'SNOWY' || atmo?.season === 'WINTER';
   const entrance = getFrontHallEntranceLayout(shopLevel);
+  const ver = entrance.veranda;
   const rimColors = {
-    top: isSnow ? '#E2F1F8' : '#523420',
+    top: isSnow ? '#E2F1F8' : shopLevel >= 3 ? '#653A22' : '#523420',
     left: '#402718',
     right: '#2E1B10',
     stroke: INK,
@@ -2404,7 +3151,39 @@ export function drawIsoSceneForegroundRimAndLights(
     drawIsoQuadFlat(ctx, -14, unifiedMinY - 14, 14, frontH - unifiedMinY + 14, 72.4, 'rgba(240, 250, 255, 0.82)');
   }
 
-  // Adaptive wooden entrance gate with plaque & seasonal potted plants anchored cleanly at frontH!
+  // Hand-painted interior decorative folding lacquer screens & corner kumquat planters scaling with Shop Level
+  if (shopLevel >= 2) {
+    const screenAnchor = w2i(Math.min(frontW - 34, rightRimStart + 44), frontH - 12, 0.5);
+    ctx.save();
+    ctx.fillStyle = 'rgba(18, 12, 8, 0.24)';
+    ctx.beginPath();
+    ctx.ellipse(screenAnchor.x, screenAnchor.y + 1, 24, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    drawIsoPropSprite(ctx, 'LACQUER_SCREEN', {
+      anchorX: screenAnchor.x,
+      anchorY: screenAnchor.y + 3,
+      targetHeight: 46,
+      maxWidth: 60,
+    });
+  }
+  if (shopLevel >= 3) {
+    // Extra celadon potted kumquat trees at southeast gallery corner
+    drawPottedEntranceBamboo(ctx, frontW - 22, frontH - 18, timeSec + 2.2, atmo, 1.05);
+  }
+  if (shopLevel >= 4) {
+    // Second matching carved lacquer screen framing the grand east banquet corridor
+    const eastScreen = w2i(frontW - 14, frontH * 0.52, 0.5);
+    drawIsoPropSprite(ctx, 'LACQUER_SCREEN', {
+      anchorX: eastScreen.x,
+      anchorY: eastScreen.y + 2,
+      targetHeight: 44,
+      maxWidth: 56,
+      flipX: true,
+    });
+  }
+
+  // Adaptive wooden entrance gate with plaque, Lv.1..Lv.5 roof/trim progression & seasonal potted plants
   drawEntranceTimberGate(
     ctx,
     entrance.gateLeftX,
@@ -2412,23 +3191,217 @@ export function drawIsoSceneForegroundRimAndLights(
     entrance.gateSpan,
     timeSec,
     lanternGlow,
-    atmo
+    atmo,
+    shopLevel
   );
 
+  // Hand-painted Exterior Harbor Props flanking the waiting veranda (kept clear of the queue lane!)
+  // 1. Vintage carved wooden waiting bench with velvet rope stanchion near the far east veranda rest bay
+  const benchPos = w2i(ver.x + ver.w - 38, ver.y + 20, 0.5);
+  ctx.save();
+  ctx.fillStyle = 'rgba(14, 10, 8, 0.24)';
+  ctx.beginPath();
+  ctx.ellipse(benchPos.x, benchPos.y + 1, 22, 9.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  drawIsoPropSprite(ctx, 'WAITING_BENCH', {
+    anchorX: benchPos.x,
+    anchorY: benchPos.y + 4,
+    targetHeight: 38,
+    maxWidth: 54,
+  });
+
+  // 2. Coastal harbor fish-market crates & Chaoshan ceramic sauce urn neatly beside veranda edge
+  const cratePos = w2i(ver.x + ver.w + 32, ver.y + 34, 0.4);
+  ctx.save();
+  ctx.fillStyle = 'rgba(12, 10, 8, 0.26)';
+  ctx.beginPath();
+  ctx.ellipse(cratePos.x, cratePos.y + 1, 20, 9.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  drawIsoPropSprite(ctx, 'SEAFOOD_CRATES', {
+    anchorX: cratePos.x,
+    anchorY: cratePos.y + 3,
+    targetHeight: 36,
+    maxWidth: 48,
+  });
+
+  // 3. Vintage coastal harbor cast-iron streetlamp(s) with warm glowing amber lantern heads
+  drawHarborStreetLampProp(ctx, ver.x + 12, ver.y + ver.h - 4, timeSec, lanternGlow, false);
+  if (shopLevel >= 2) {
+    drawHarborStreetLampProp(ctx, ver.x + ver.w - 10, ver.y + ver.h - 4, timeSec + 1.5, lanternGlow, true);
+  }
+
+  // Interactive Weather Ground, Reflections & Eaves Effects on Exterior Waiting Veranda
+  const isRain = atmo?.weather === 'RAINY' || atmo?.weather === 'TYPHOON';
+  const isTyphoon = atmo?.weather === 'TYPHOON';
+  const isHeatwave = atmo?.weather === 'HEATWAVE';
+  const isWinterOrSnow = atmo?.weather === 'SNOWY' || atmo?.season === 'WINTER';
+  const isRushOrNight =
+    Boolean(atmo?.rushHourActive) ||
+    atmo?.phase === 'CLOSING' ||
+    (atmo ? atmo.dayProgress > 0.62 : false);
+
+  if (isRushOrNight || isWinterOrSnow) {
+    // Warm luminous lantern & hearth ground pools spilling across the front doorway veranda
+    // (Extra cozy hearth warmth pouring out in Winter/Snowy weather to contrast with outdoor frost!)
+    const gatePool = w2i(entrance.gateLeftX + entrance.gateSpan * 0.5, entrance.gateY + 26, 0.3);
+    const hearthBoost = isWinterOrSnow ? 1.25 : 1.0;
+    ctx.save();
+    const gpGrad = ctx.createRadialGradient(gatePool.x, gatePool.y, 4, gatePool.x, gatePool.y, 74);
+    gpGrad.addColorStop(
+      0,
+      `rgba(255, 206, 108, ${Math.min(0.32, 0.16 * lanternGlow * hearthBoost).toFixed(3)})`
+    );
+    gpGrad.addColorStop(
+      0.55,
+      `rgba(244, 152, 54, ${Math.min(0.15, 0.075 * lanternGlow * hearthBoost).toFixed(3)})`
+    );
+    gpGrad.addColorStop(1, 'rgba(244, 152, 54, 0)');
+    ctx.fillStyle = gpGrad;
+    ctx.beginPath();
+    ctx.ellipse(gatePool.x, gatePool.y, 74, 33, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  if (isRain) {
+    // Shimmering wet-stone amber lantern reflections beneath entrance gate & harbor streetlamps!
+    ctx.save();
+    const reflectAnchors = [
+      { wx: entrance.gateLeftX + entrance.gateSpan * 0.5, wy: entrance.gateY + 28, r: 34 },
+      { wx: ver.x + 16, wy: ver.y + ver.h - 2, r: 22 },
+      ...(shopLevel >= 2 ? [{ wx: ver.x + ver.w - 12, wy: ver.y + ver.h - 2, r: 22 }] : []),
+    ];
+    for (let ri = 0; ri < reflectAnchors.length; ri++) {
+      const a = reflectAnchors[ri];
+      const rp = w2i(a.wx, a.wy, 0.4);
+      const shimmer = 0.72 + Math.sin(timeSec * 4.4 + ri * 1.9) * 0.28;
+      const rGrad = ctx.createRadialGradient(rp.x, rp.y, 2, rp.x, rp.y, a.r);
+      rGrad.addColorStop(0, `rgba(255, 208, 114, ${(0.28 * shimmer).toFixed(2)})`);
+      rGrad.addColorStop(0.55, `rgba(240, 152, 62, ${(0.12 * shimmer).toFixed(2)})`);
+      rGrad.addColorStop(1, 'rgba(240, 152, 62, 0)');
+      ctx.fillStyle = rGrad;
+      ctx.beginPath();
+      ctx.ellipse(rp.x, rp.y, a.r, a.r * 0.44, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Animated rain puddle ripples across the exterior stone waiting veranda + eaves rain drips
+    const rippleCount = isTyphoon ? 14 : 9;
+    for (let r = 0; r < rippleCount; r++) {
+      const cycle = (timeSec * (isTyphoon ? 1.85 : 1.3) + r * 0.37) % 1;
+      const rx = ver.x + 18 + ((r * 83) % Math.max(40, ver.w - 36));
+      const ry = ver.y + 10 + ((r * 37) % Math.max(18, ver.h - 18));
+      const rp = w2i(rx, ry, 0.45);
+      const rad = 2.2 + cycle * (isTyphoon ? 10.5 : 7.8);
+      const alpha = (1 - cycle) * (isTyphoon ? 0.56 : 0.42);
+      ctx.strokeStyle = `rgba(196, 232, 250, ${alpha.toFixed(2)})`;
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.ellipse(rp.x, rp.y, rad, rad * 0.48, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Glistening water drops falling off the entrance gate eaves
+    for (let d = 0; d < 5; d++) {
+      const dripT = (timeSec * (isTyphoon ? 2.4 : 1.8) + d * 0.23) % 1;
+      const dx = entrance.gateLeftX - 4 + ((d + 0.5) / 5) * (entrance.gateSpan + 8);
+      const dz = (shopLevel >= 4 ? 54 : 48) * (1 - dripT * dripT);
+      const dp = w2i(dx, entrance.gateY + 8, dz);
+      ctx.strokeStyle = `rgba(210, 240, 255, ${(0.55 * (1 - dripT * 0.6)).toFixed(2)})`;
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(dp.x, dp.y - 3.5);
+      ctx.lineTo(dp.x - (isTyphoon ? 2.2 : 0.6), dp.y + 2.5);
+      ctx.stroke();
+    }
+
+    // Wind-whipped coastal sea-spray mist streaks sweeping across veranda during TYPHOON
+    if (isTyphoon) {
+      for (let s = 0; s < 5; s++) {
+        const st = (timeSec * 1.4 + s * 0.21) % 1;
+        const sx = ver.x + ver.w - st * (ver.w + 40);
+        const sy = ver.y + 10 + (s / 4) * (ver.h - 16);
+        const sp = w2i(sx, sy, 6 + s * 2);
+        const alpha = Math.sin(st * Math.PI) * 0.3;
+        ctx.strokeStyle = `rgba(202, 234, 250, ${alpha.toFixed(2)})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(sp.x, sp.y);
+        ctx.lineTo(sp.x - 28, sp.y + 8);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  } else if (isHeatwave) {
+    // Rising translucent shimmering heat-mirage ripples along the hot sunlit veranda flagstones
+    ctx.save();
+    for (let hIdx = 0; hIdx < 6; hIdx++) {
+      const cycle = (timeSec * 0.9 + hIdx * 0.19) % 1;
+      const hx = ver.x + 24 + ((hIdx * 79) % Math.max(40, ver.w - 48));
+      const hy = ver.y + 14 + ((hIdx * 23) % Math.max(16, ver.h - 24));
+      const hp = w2i(hx, hy, 4 + cycle * 18);
+      const alpha = Math.sin(cycle * Math.PI) * 0.34;
+      ctx.strokeStyle = `rgba(255, 236, 174, ${alpha.toFixed(2)})`;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(hp.x - 9, hp.y);
+      ctx.quadraticCurveTo(hp.x - 3, hp.y - 3 + Math.sin(timeSec * 6 + hIdx) * 1.8, hp.x + 3, hp.y);
+      ctx.quadraticCurveTo(hp.x + 9, hp.y + 3 - Math.sin(timeSec * 6 + hIdx) * 1.8, hp.x + 15, hp.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (atmo?.weather === 'SNOWY') {
+    // Shimmering crystalline frost sparkles along the snow-dusted veranda rim
+    ctx.save();
+    for (let s = 0; s < 10; s++) {
+      const glint = Math.max(0, Math.sin(timeSec * 2.9 + s * 1.73));
+      if (glint > 0.35) {
+        const sx = ver.x + 14 + ((s * 67) % Math.max(40, ver.w - 28));
+        const sy = ver.y + 8 + ((s * 29) % Math.max(16, ver.h - 14));
+        const sp = w2i(sx, sy, 0.8);
+        const sz = (glint - 0.3) * 3.4;
+        ctx.strokeStyle = `rgba(242, 252, 255, ${(glint * 0.85).toFixed(2)})`;
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(sp.x - sz, sp.y);
+        ctx.lineTo(sp.x + sz, sp.y);
+        ctx.moveTo(sp.x, sp.y - sz);
+        ctx.lineTo(sp.x, sp.y + sz);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   // Warm cylindrical paper lanterns along back walls, dividing wall, and side walls
-  const lanternTint =
+  // Subtly modulated by seasonal warmth when using default lantern palette
+  const baseLanternTint =
     decorId === 'obsidian_sushi'
       ? '#F4978E'
       : decorId === 'azure_luxury'
         ? '#8CE5D8'
-        : '#F7CC72';
+        : decorId === 'retro_mahogany'
+          ? '#F27D52'
+          : atmo?.season === 'WINTER' || atmo?.weather === 'SNOWY'
+            ? '#FFAD5C'
+            : atmo?.season === 'AUTUMN'
+              ? '#F5B553'
+              : atmo?.season === 'SPRING'
+                ? '#FDE096'
+                : '#F7CC72';
+  const lanternTint = baseLanternTint;
+  const effectiveLanternGlow =
+    isWinterOrSnow || isRain ? Math.min(1.6, lanternGlow * 1.18) : lanternGlow;
+  const interiorSway = isTyphoon ? 1.45 : 1.0;
 
-  drawStyle3Lantern(ctx, 180, unifiedMinY + 8, 56, timeSec, lanternTint, lanternGlow);
-  drawStyle3Lantern(ctx, 560, unifiedMinY + 8, 56, timeSec, lanternTint, lanternGlow);
-  drawStyle3Lantern(ctx, 840, unifiedMinY + 8, 56, timeSec, lanternTint, lanternGlow);
-  drawStyle3Lantern(ctx, 160, -6, 42, timeSec, lanternTint, lanternGlow);
-  drawStyle3Lantern(ctx, 505, -6, 42, timeSec, lanternTint, lanternGlow);
-  drawStyle3Lantern(ctx, 830, -6, 42, timeSec, lanternTint, lanternGlow);
+  drawStyle3Lantern(ctx, 180, unifiedMinY + 8, 56, timeSec, lanternTint, effectiveLanternGlow, interiorSway);
+  drawStyle3Lantern(ctx, 560, unifiedMinY + 8, 56, timeSec, lanternTint, effectiveLanternGlow, interiorSway);
+  drawStyle3Lantern(ctx, 840, unifiedMinY + 8, 56, timeSec, lanternTint, effectiveLanternGlow, interiorSway);
+  drawStyle3Lantern(ctx, 160, -6, 42, timeSec, lanternTint, effectiveLanternGlow, interiorSway);
+  drawStyle3Lantern(ctx, 505, -6, 42, timeSec, lanternTint, effectiveLanternGlow, interiorSway);
+  drawStyle3Lantern(ctx, 830, -6, 42, timeSec, lanternTint, effectiveLanternGlow, interiorSway);
   if (frontW > CANVAS_WIDTH) {
     drawStyle3Lantern(
       ctx,
@@ -2437,11 +3410,12 @@ export function drawIsoSceneForegroundRimAndLights(
       46,
       timeSec,
       lanternTint,
-      lanternGlow
+      effectiveLanternGlow,
+      interiorSway
     );
   }
-  drawStyle3Lantern(ctx, 10, 210, 56, timeSec, lanternTint, lanternGlow);
-  drawStyle3Lantern(ctx, 10, 440, 56, timeSec, lanternTint, lanternGlow);
+  drawStyle3Lantern(ctx, 10, 210, 56, timeSec, lanternTint, effectiveLanternGlow, interiorSway);
+  drawStyle3Lantern(ctx, 10, 440, 56, timeSec, lanternTint, effectiveLanternGlow, interiorSway);
   if (frontH > CANVAS_HEIGHT) {
     drawStyle3Lantern(
       ctx,
@@ -2450,7 +3424,8 @@ export function drawIsoSceneForegroundRimAndLights(
       56,
       timeSec,
       lanternTint,
-      lanternGlow
+      effectiveLanternGlow,
+      interiorSway
     );
   }
 }

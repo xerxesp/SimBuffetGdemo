@@ -1,5 +1,5 @@
 import { getCharacterDef } from './storyConfig';
-import { GameWorld, StoryModalEvent } from '../types/game';
+import { GameWorld, SeasonId, StoryModalEvent } from '../types/game';
 
 let incUid = 50000;
 function nextIncidentUid(prefix: string): string {
@@ -18,8 +18,18 @@ export interface SideQuestSummaryItem {
   summaryText: string;
 }
 
+export interface SeasonalEventSummaryItem {
+  id: string;
+  season: SeasonId;
+  seasonLabel: string;
+  title: string;
+  accentColor: string;
+  outcomeLabel: string;
+  summaryText: string;
+}
+
 // ============================================================================
-// 1. SIDE-QUEST BRANCHING ARCHIVE SUMMARIES (FOR STORY CHRONICLE MODAL)
+// 1. SIDE-QUEST & SEASONAL ARCHIVE SUMMARIES (FOR STORY CHRONICLE MODAL)
 // ============================================================================
 
 export function getDiscoveredSideQuestSummaries(world: GameWorld): SideQuestSummaryItem[] {
@@ -935,6 +945,707 @@ function buildStandaloneIncident(id: string, mgrName: string): StoryModalEvent {
 }
 
 // ============================================================================
+// 3.5 SEASONAL LIMITED EVENTS (8 EVENTS: 2 PER SEASON — SPRING / SUMMER / AUTUMN / WINTER)
+// ============================================================================
+
+interface SeasonalEventMeta {
+  id: string;
+  flagKey: string;
+  season: SeasonId;
+  seasonLabel: string;
+  title: string;
+  accentColor: string;
+  outcomes: Record<string, { label: string; summary: string }>;
+}
+
+const SEASONAL_EVENT_CATALOG: SeasonalEventMeta[] = [
+  {
+    id: 'season_spring_sakura_tea',
+    flagKey: 'season_ev_spring_1',
+    season: 'SPRING',
+    seasonLabel: '春季',
+    title: '春日樱影 · 码头花朝游船客',
+    accentColor: '#F9A8D4',
+    outcomes: {
+      tea_feast: {
+        label: '樱茶鲜蛤宴',
+        summary: '以现泡樱花乌龙与春蛤鲜盘款待花朝游船团，满堂春意大受赞誉。',
+      },
+      cruise_deal: {
+        label: '花朝游船联票',
+        summary: '与港湾游船社签下春季赏鲜联票分成协议，为小店带来源源不断的观光客流。',
+      },
+      photo_spot: {
+        label: '樱檐留影角',
+        summary: '在店门樱花灯檐下搭起留影打卡角并赠春笋试吃，成了老街最火春日背景墙。',
+      },
+    },
+  },
+  {
+    id: 'season_spring_first_catch',
+    flagKey: 'season_ev_spring_2',
+    season: 'SPRING',
+    seasonLabel: '春季',
+    title: '开春第一网 · 春汛活鲜直抵',
+    accentColor: '#6EE7B7',
+    outcomes: {
+      premium_buy: {
+        label: '包圆头茬春鲜',
+        summary: '果断收下开春第一网小管鱿与活皮皮虾，鲜甜嫩滑的口感惊艳全厅食客。',
+      },
+      contract: {
+        label: '春汛平价包船',
+        summary: '与年轻渔民敲定整个春季的直采包船协议，稳住了活鲜供货与利润率。',
+      },
+      share_alley: {
+        label: '邻里分鲜共富',
+        summary: '留半数上台并帮渔民把余货分销给老街坊摊位，整条码头街都记着你的仗义。',
+      },
+    },
+  },
+  {
+    id: 'season_summer_heatwave_ice',
+    flagKey: 'season_ev_summer_1',
+    season: 'SUMMER',
+    seasonLabel: '夏季',
+    title: '酷夏热浪 · 冰台保鲜与解暑凉茶',
+    accentColor: '#38BDF8',
+    outcomes: {
+      herbal_cool: {
+        label: '草粿凉茶解暑',
+        summary: '在酷暑午市免费奉上冰镇草粿与荷叶冬瓜茶并加铺碎冰，食客直呼贴心至极。',
+      },
+      beer_promo: {
+        label: '冰爽精酿套餐',
+        summary: '顺势推出精酿冰啤配现捞活鲜的酷夏特惠，晚市翻台与客单双双飙升。',
+      },
+      micro_rotate: {
+        label: '小盘高频锁鲜',
+        summary: '改用小盘高频现切补货严守冷链温度，在烈日高温下仍守住零异味口碑。',
+      },
+    },
+  },
+  {
+    id: 'season_summer_moratorium',
+    flagKey: 'season_ev_summer_2',
+    season: 'SUMMER',
+    seasonLabel: '夏季',
+    title: '伏季休渔 · 近海货紧突围',
+    accentColor: '#F59E0B',
+    outcomes: {
+      deepsea_aqua: {
+        label: '深海网箱直供',
+        summary: '紧急调配合规深海生态网箱活鲜与冷库备货，休渔期依旧维持顶级鲜度。',
+      },
+      hotdish_pivot: {
+        label: '热卤烤贝突围',
+        summary: '灵活主推蒜蓉烤生蚝与秘制热卤熟食，巧避原料暴涨并收获亮眼盈利。',
+      },
+      ocean_pledge: {
+        label: '护海科普之夜',
+        summary: '联合老渔户举办休渔护海主题夜并赠送回头券，赢得满堂敬意与街坊力挺。',
+      },
+    },
+  },
+  {
+    id: 'season_autumn_crab_feast',
+    flagKey: 'season_ev_autumn_1',
+    season: 'AUTUMN',
+    seasonLabel: '秋季',
+    title: '秋风起蟹脚痒 · 膏蟹品鉴挑战',
+    accentColor: '#FB923C',
+    outcomes: {
+      live_showcase: {
+        label: '活缸现捞盲品',
+        summary: '当众从活氧缸现捞肥膏蟹上锅盲品，满膏流油的鲜美彻底折服美食俱乐部。',
+      },
+      crab_vip: {
+        label: '金秋蟹皇尊席',
+        summary: '趁势推出金秋蟹皇尊享席位，单晚便吸引城中老饕豪掷重金预订。',
+      },
+      ginger_tea: {
+        label: '古法姜醋驱寒',
+        summary: '免费为全厅配齐现熬姜醋与桂圆茶中和蟹寒，细致温情收获全网好评。',
+      },
+    },
+  },
+  {
+    id: 'season_autumn_lantern_gala',
+    flagKey: 'season_ev_autumn_2',
+    season: 'AUTUMN',
+    seasonLabel: '秋季',
+    title: '金秋港湾灯会 · 团圆夜宵长龙',
+    accentColor: '#FBBF24',
+    outcomes: {
+      osmanthus_gift: {
+        label: '桂花圆子赠团圆',
+        summary: '灯会之夜每桌加赠手作桂花酒酿圆子，欢声笑语伴着秋风飘满整个港湾。',
+      },
+      lantern_sponsor: {
+        label: '冠名码头花灯',
+        summary: '出资冠名港湾灯会主牌楼，“潮鲜沸鼎”红灯金匾一夜映入全城眼帘。',
+      },
+      autumn_broth: {
+        label: '秋梨菌菇润燥锅',
+        summary: '现熬秋梨鲜菌润燥金汤应节上桌，清甜解腻成为灯会夜最抢手的招牌锅底。',
+      },
+    },
+  },
+  {
+    id: 'season_winter_blizzard_hearth',
+    flagKey: 'season_ev_winter_1',
+    season: 'WINTER',
+    seasonLabel: '冬季',
+    title: '寒潮围炉 · 风雪夜归人',
+    accentColor: '#93C5FD',
+    outcomes: {
+      ginger_hearth: {
+        label: '门廊免费姜枣汤',
+        summary: '风雪夜在门廊支起滚烫红糖姜枣汤桶，暖透了候位食客与夜归路人的心。',
+      },
+      winter_tonic: {
+        label: '冬令花胶滋补锅',
+        summary: '现开慢熬花胶牛骨老汤迎战寒潮，一口暖胃鲜汤让食客甘愿冒雪排队。',
+      },
+      inn_bundle: {
+        label: '海景旅馆围炉票',
+        summary: '与周边海景旅馆联名推出风雪围炉套票，寒冬淡季反而迎来爆满收益。',
+      },
+    },
+  },
+  {
+    id: 'season_winter_yearend_banquet',
+    flagKey: 'season_ev_winter_2',
+    season: 'WINTER',
+    seasonLabel: '冬季',
+    title: '岁末尾牙 · 港城商帮压轴宴',
+    accentColor: '#E8C97A',
+    outcomes: {
+      grand_feast: {
+        label: '全员冲刺尾牙大单',
+        summary: '咬牙接下港城商帮整场尾牙宴，靠默契配合一举创下岁末单日营收新高！',
+      },
+      curated_table: {
+        label: '精品品鉴尾牙席',
+        summary: '坚持以质取胜仅接精品品鉴席，每一道活鲜火候精准，赢得商帮大佬盛赞。',
+      },
+      dock_warmth: {
+        label: '余汤暖赠守夜工',
+        summary: '承接平价家宴并将余下滚沸鲜汤分送码头守夜工人，岁末善举传为全城美谈。',
+      },
+    },
+  },
+];
+
+export function getDiscoveredSeasonalEventSummaries(world: GameWorld): SeasonalEventSummaryItem[] {
+  const f = world.storyFlags;
+  const list: SeasonalEventSummaryItem[] = [];
+  for (const meta of SEASONAL_EVENT_CATALOG) {
+    const val = f[meta.flagKey];
+    if (!val) continue;
+    const outcome = meta.outcomes[val] ?? {
+      label: '已完成',
+      summary: '这段应季海港见闻已收入店长纪略。',
+    };
+    list.push({
+      id: meta.id,
+      season: meta.season,
+      seasonLabel: meta.seasonLabel,
+      title: meta.title,
+      accentColor: meta.accentColor,
+      outcomeLabel: outcome.label,
+      summaryText: outcome.summary,
+    });
+  }
+  return list;
+}
+
+function buildSeasonalEvent(id: string, mgrName: string): StoryModalEvent {
+  switch (id) {
+    case 'season_spring_sakura_tea':
+      return {
+        id: nextIncidentUid('season_sp1'),
+        category: 'INCIDENT',
+        badge: '春季限定事件 · 花朝海港',
+        speakerName: '花朝游船领队·苏晴',
+        speakerTitle: '港湾赏樱观光团',
+        accentColor: '#F9A8D4',
+        headline: '春日樱影 · 码头花朝游船客',
+        body: '窗外樱瓣随春风漫天飘落，一艘花朝赏樱游船刚在码头靠岸，二十余名兴致勃勃的观光客涌到店门前。',
+        lines: [
+          {
+            speaker: '花朝游船领队·苏晴',
+            title: '港湾赏樱观光团',
+            text: `“${mgrName}店长您好！码头上的樱花开得正好，团里客人都被你们门口的鲜汤香味吸引过来了，想问问有没有应季的春日待客活动？”`,
+            accentColor: '#F9A8D4',
+            portraitSide: 'right',
+          },
+          {
+            speaker: mgrName,
+            title: '潮鲜沸鼎店长',
+            text: '“春风送客上门，这可是换季打响招牌的好机会！是现沏樱茶配春蛤做口碑，还是顺势和游船社签下联票合作？”',
+            accentColor: '#E8C97A',
+            portraitSide: 'left',
+          },
+        ],
+        choices: [
+          {
+            id: 'season_sp_sakura_tea',
+            label: '现泡樱花乌龙茶并加推现灼春蛤鲜盘招待全团',
+            hint: '花费 ¥55 · 口碑 +6 · 在座客满意 +12 · 匠心/烟火各 +1',
+            cashDelta: -55,
+            reputationDelta: 6,
+            philosophyDelta: { CRAFT: 1, WARMTH: 1 },
+            storyFlag: { key: 'season_ev_spring_1', value: 'tea_feast' },
+            outcomeText: '樱花茶香混着现灼春蛤的清甜令人陶醉，游船客纷纷拍图转发，口碑 +6！',
+          },
+          {
+            id: 'season_sp_sakura_ticket',
+            label: '与游船社当场签下「花朝赏鲜联票」合作分成',
+            hint: '立刻到账合作定金 +¥180 · 口碑 +3 · 商道 +2',
+            cashDelta: 180,
+            reputationDelta: 3,
+            philosophyDelta: { EMPIRE: 2 },
+            storyFlag: { key: 'season_ev_spring_1', value: 'cruise_deal' },
+            outcomeText: '双方一拍即合签下春季游船联票协议，定金 +¥180 立刻入账！',
+          },
+          {
+            id: 'season_sp_sakura_photo',
+            label: '在樱花红灯檐下布置免费留影角，顺带赠春笋试吃',
+            hint: '花费 ¥20 · 口碑 +4 · 卫生 +3 · 烟火 +2',
+            cashDelta: -20,
+            reputationDelta: 4,
+            philosophyDelta: { WARMTH: 2 },
+            storyFlag: { key: 'season_ev_spring_1', value: 'photo_spot' },
+            outcomeText: '游客们在檐下樱影前排起队拍照，老街春色与热锅烟火瞬间刷屏本地圈！',
+          },
+        ],
+      };
+
+    case 'season_spring_first_catch':
+      return {
+        id: nextIncidentUid('season_sp2'),
+        category: 'INCIDENT',
+        badge: '春季限定事件 · 开春春汛',
+        speakerName: '渔家小伙·阿浪',
+        speakerTitle: '码头早船渔民',
+        accentColor: '#6EE7B7',
+        headline: '开春第一网 · 春汛活鲜直抵',
+        body: '春潮涨起，年轻渔民阿浪挑着两筐晶莹剔透的春汛小管鱿与活蹦乱跳的皮皮虾快步来到后门。',
+        lines: [
+          {
+            speaker: '渔家小伙·阿浪',
+            title: '码头早船渔民',
+            text: '“店长！刚靠岸的开春第一网，个个还带着海水咸鲜味儿呢！大批发商还没赶到码头，我想先问问您要不要？”',
+            accentColor: '#6EE7B7',
+            portraitSide: 'right',
+          },
+          {
+            speaker: mgrName,
+            title: '潮鲜沸鼎店长',
+            text: '“好精神的春汛活货！这批鲜度千金难求，怎么收这批开春头茬鲜最划算？”',
+            accentColor: '#E8C97A',
+            portraitSide: 'left',
+          },
+        ],
+        choices: [
+          {
+            id: 'season_sp_catch_all',
+            label: '溢价包圆全部头茬活鲜，立刻补满冷库、供氧与前厅冰台',
+            hint: '花费 ¥110 · 原料 +18 · 冰台前两槽补满 · 供氧回满 · 口碑 +5',
+            cashDelta: -110,
+            reputationDelta: 5,
+            philosophyDelta: { CRAFT: 2 },
+            storyFlag: { key: 'season_ev_spring_2', value: 'premium_buy' },
+            outcomeText: '活鲜刚摆上冰台便引来满堂惊呼，食客们赞不绝口，口碑 +5！',
+          },
+          {
+            id: 'season_sp_catch_bargain',
+            label: '以实在价签下春季包船直供协议，先收一批稳住成本',
+            hint: '花费 ¥65 · 原料 +12 · 口碑 +2 · 商道 +2',
+            cashDelta: -65,
+            reputationDelta: 2,
+            philosophyDelta: { EMPIRE: 2 },
+            storyFlag: { key: 'season_ev_spring_2', value: 'contract' },
+            outcomeText: '阿浪爽快签下春季直供单，冷库一下充实了 12 份鲜货！',
+          },
+          {
+            id: 'season_sp_catch_share',
+            label: '留一半给自家后厨，另一半热心帮他分销给街坊老摊',
+            hint: '花费 ¥30 · 原料 +8 · 口碑 +5 · 全员士气 +10 · 烟火 +2',
+            cashDelta: -30,
+            reputationDelta: 5,
+            philosophyDelta: { WARMTH: 2 },
+            storyFlag: { key: 'season_ev_spring_2', value: 'share_alley' },
+            outcomeText: '整条街的商户都夸你厚道，阿浪感动不已，伙计们干活也更有劲了！',
+          },
+        ],
+      };
+
+    case 'season_summer_heatwave_ice':
+      return {
+        id: nextIncidentUid('season_su1'),
+        category: 'INCIDENT',
+        badge: '夏季限定事件 · 酷暑热浪',
+        speakerName: '大堂值班伙计',
+        speakerTitle: '前厅急报',
+        accentColor: '#38BDF8',
+        headline: '酷夏热浪 · 冰台保鲜与解暑凉茶',
+        body: '盛夏午后热浪翻涌，门外空气热得微微扭曲，进店避暑的食客个个汗流浃背，海鲜冰台的冷气负荷也在飙升！',
+        lines: [
+          {
+            speaker: '大堂值班伙计',
+            title: '前厅急报',
+            text: '“店长，外头气温破三十八度啦！刚进门的客人都喊热，冰台边缘碎冰融得比平时快了一倍，咱们怎么应对？”',
+            accentColor: '#38BDF8',
+            portraitSide: 'right',
+          },
+          {
+            speaker: mgrName,
+            title: '潮鲜沸鼎店长',
+            text: '“酷夏吃海鲜火锅，拼的就是冰火两重天的痛快！必须马上拿出消暑保鲜的绝招。”',
+            accentColor: '#E8C97A',
+            portraitSide: 'left',
+          },
+        ],
+        choices: [
+          {
+            id: 'season_su_heat_herbal',
+            label: '现煮冰镇潮汕草粿与冬瓜荷叶茶免费解暑，并加铺厚层碎冰',
+            hint: '花费 ¥50 · 口碑 +6 · 卫生 +5 · 全场客满意 +14 · 烟火 +2',
+            cashDelta: -50,
+            reputationDelta: 6,
+            philosophyDelta: { WARMTH: 2 },
+            storyFlag: { key: 'season_ev_summer_1', value: 'herbal_cool' },
+            outcomeText: '一杯冰爽凉茶下肚，满堂暑气顿消，食客纷纷点赞这份酷夏温柔！',
+          },
+          {
+            id: 'season_su_heat_beer',
+            label: '趁势推出「酷夏精酿配活鲜」冰爽宵夜套餐拉高创收',
+            hint: '增收 +¥210 · 口碑 +3 · 设备健康 -5 · 商道 +2',
+            cashDelta: 210,
+            reputationDelta: 3,
+            philosophyDelta: { EMPIRE: 2 },
+            storyFlag: { key: 'season_ev_summer_1', value: 'beer_promo' },
+            outcomeText: '冰啤碰杯声响彻大厅，单晚创收 +¥210！不过制冷机略微超负荷，记得抽空保养。',
+          },
+          {
+            id: 'season_su_heat_rotate',
+            label: '改为小盘高频现切现补，同时热厨加出清爽冷拌菜',
+            hint: '花费 ¥25 · 卫生 +6 · 熟食 +3 · 口碑 +5 · 匠心 +2',
+            cashDelta: -25,
+            reputationDelta: 5,
+            philosophyDelta: { CRAFT: 2 },
+            storyFlag: { key: 'season_ev_summer_1', value: 'micro_rotate' },
+            outcomeText: '每盘海鲜都保持最佳冷鲜脆嫩口感，酷暑高温下口碑不降反升！',
+          },
+        ],
+      };
+
+    case 'season_summer_moratorium':
+      return {
+        id: nextIncidentUid('season_su2'),
+        category: 'INCIDENT',
+        badge: '夏季限定事件 · 伏季休渔',
+        speakerName: '冷链调度员·老吴',
+        speakerTitle: '港城渔市线人',
+        accentColor: '#F59E0B',
+        headline: '伏季休渔 · 近海货紧突围',
+        body: '盛夏进入伏季休渔高峰，近海捕捞暂停，批发市场的活鲜行情一夜普涨，不少同行已悄悄缩减海鲜种类。',
+        lines: [
+          {
+            speaker: '冷链调度员·老吴',
+            title: '港城渔市线人',
+            text: `“${mgrName}店长，休渔期近海活鲜紧俏得很，外面好几家店都悄悄换冻货撑场面了。你这边准备怎么稳住夏市？”`,
+            accentColor: '#F59E0B',
+            portraitSide: 'right',
+          },
+          {
+            speaker: mgrName,
+            title: '潮鲜沸鼎店长',
+            text: '“休渔是为了大海生生不息，咱们绝不能偷工减料。办法总比困难多！”',
+            accentColor: '#E8C97A',
+            portraitSide: 'left',
+          },
+        ],
+        choices: [
+          {
+            id: 'season_su_mora_deepsea',
+            label: '高价调配合规深海生态网箱活鲜，绝不降低半分鲜度标准',
+            hint: '花费 ¥95 · 原料 +16 · 供氧回满 · 口碑 +6 · 匠心 +2',
+            cashDelta: -95,
+            reputationDelta: 6,
+            philosophyDelta: { CRAFT: 2 },
+            storyFlag: { key: 'season_ev_summer_2', value: 'deepsea_aqua' },
+            outcomeText: '深海生态网箱活鲜及时入缸，休渔期还能吃到活蹦乱跳的好货，全城食客慕名而来！',
+          },
+          {
+            id: 'season_su_mora_hotdish',
+            label: '趁机主推蒜蓉烤生蚝与招牌热卤熟食，巧避原料涨价峰谷',
+            hint: '增收 +¥140 · 熟食补满 · 口碑 +3 · 商道 +2',
+            cashDelta: 140,
+            reputationDelta: 3,
+            philosophyDelta: { EMPIRE: 2 },
+            storyFlag: { key: 'season_ev_summer_2', value: 'hotdish_pivot' },
+            outcomeText: '香飘十里的热卤与蒜蓉烤贝成了盛夏爆款，既避开了涨价潮又多赚 ¥140！',
+          },
+          {
+            id: 'season_su_mora_union',
+            label: '联合老渔户办「休渔护海科普夜」，并给老客送开海季优先券',
+            hint: '花费 ¥40 · 口碑 +6 · 全员士气 +12 · 烟火 +2',
+            cashDelta: -40,
+            reputationDelta: 6,
+            philosophyDelta: { WARMTH: 2 },
+            storyFlag: { key: 'season_ev_summer_2', value: 'ocean_pledge' },
+            outcomeText: '食客们为你的海洋环保格局热烈鼓掌，开海季还没到，预约名单已排满三页！',
+          },
+        ],
+      };
+
+    case 'season_autumn_crab_feast':
+      return {
+        id: nextIncidentUid('season_au1'),
+        category: 'INCIDENT',
+        badge: '秋季限定事件 · 金秋蟹季',
+        speakerName: '金秋饕客会会长',
+        speakerTitle: '港城品蟹名家',
+        accentColor: '#FB923C',
+        headline: '秋风起蟹脚痒 · 膏蟹品鉴挑战',
+        body: '秋风吹落檐前红枫，正是膏满黄肥的黄金蟹季。港城饕客会一行人慕名而来，点名要当场检验你家活鲜品质！',
+        lines: [
+          {
+            speaker: '金秋饕客会会长',
+            title: '港城品蟹名家',
+            text: `“秋风起，蟹脚痒！听闻${mgrName}店长的海鲜池养功一绝，我们品蟹会今晚专程登门，不知店长敢不敢亮出压箱底的秋蟹绝活？”`,
+            accentColor: '#FB923C',
+            portraitSide: 'right',
+          },
+          {
+            speaker: mgrName,
+            title: '潮鲜沸鼎店长',
+            text: '“既逢金秋丰获季，哪有怯场的道理！就让诸位见识见识什么叫真正的顶盖肥鲜。”',
+            accentColor: '#E8C97A',
+            portraitSide: 'left',
+          },
+        ],
+        choices: [
+          {
+            id: 'season_au_crab_live',
+            label: '当众从活氧缸现捞肥膏蟹现蒸盲品，以真功夫镇场',
+            hint: '花费 ¥75 · 口碑 +7 · 供氧回满 · 全场客满意 +15 · 匠心 +2',
+            cashDelta: -75,
+            reputationDelta: 7,
+            philosophyDelta: { CRAFT: 2 },
+            storyFlag: { key: 'season_ev_autumn_1', value: 'live_showcase' },
+            outcomeText: '掀盖瞬间金黄蟹膏满溢鲜香，会长连赞三声“绝品”，金秋口碑一飞冲天！',
+          },
+          {
+            id: 'season_au_crab_vip',
+            label: '顺势为饕客会加开「金秋蟹皇尊享席」高客单包桌',
+            hint: '立刻增收 +¥260 · 口碑 +4 · 商道 +2',
+            cashDelta: 260,
+            reputationDelta: 4,
+            philosophyDelta: { EMPIRE: 2 },
+            storyFlag: { key: 'season_ev_autumn_1', value: 'crab_vip' },
+            outcomeText: '一桌金秋蟹皇席气派非凡，老饕们爽快结账还留了丰厚赏钱，净增 +¥260！',
+          },
+          {
+            id: 'season_au_crab_ginger',
+            label: '为全厅宾客免费配齐古法紫苏姜醋与热桂圆茶驱蟹寒',
+            hint: '花费 ¥30 · 口碑 +5 · 卫生 +4 · 全场客满意 +12 · 烟火 +2',
+            cashDelta: -30,
+            reputationDelta: 5,
+            philosophyDelta: { WARMTH: 2 },
+            storyFlag: { key: 'season_ev_autumn_1', value: 'ginger_tea' },
+            outcomeText: '暖胃的姜茶与紫苏醋赢得满堂喝彩，品蟹会成员称赞你“既懂海味，更懂人心”。',
+          },
+        ],
+      };
+
+    case 'season_autumn_lantern_gala':
+      return {
+        id: nextIncidentUid('season_au2'),
+        category: 'INCIDENT',
+        badge: '秋季限定事件 · 港湾灯会',
+        speakerName: '灯会街坊会大姐',
+        speakerTitle: '港湾中秋灯会筹委',
+        accentColor: '#FBBF24',
+        headline: '金秋港湾灯会 · 团圆夜宵长龙',
+        body: '秋夜华灯初上，港湾游灯队伍浩浩荡荡经过门前，携老带幼的赏灯家庭在红灯笼下排起了暖洋洋的长龙。',
+        lines: [
+          {
+            speaker: '灯会街坊会大姐',
+            title: '港湾中秋灯会筹委',
+            text: `“${mgrName}老板！今晚港湾灯会游人如织，好多一家老小看完花灯都奔着你家热火锅来了，筹委会也想问问要不要一起添点彩头？”`,
+            accentColor: '#FBBF24',
+            portraitSide: 'right',
+          },
+          {
+            speaker: mgrName,
+            title: '潮鲜沸鼎店长',
+            text: '“明月照港湾，灯火映热锅，一年难得这样团圆热闹的秋夜！”',
+            accentColor: '#E8C97A',
+            portraitSide: 'left',
+          },
+        ],
+        choices: [
+          {
+            id: 'season_au_gala_osmanthus',
+            label: '每桌免费加赠手作桂花酒酿圆子，共庆灯火团圆夜',
+            hint: '花费 ¥45 · 口碑 +6 · 全场客满意 +16 · 全员士气 +10 · 烟火 +2',
+            cashDelta: -45,
+            reputationDelta: 6,
+            philosophyDelta: { WARMTH: 2 },
+            storyFlag: { key: 'season_ev_autumn_2', value: 'osmanthus_gift' },
+            outcomeText: '桂花甜香飘满厅堂，老少食客笑逐颜开，这一夜的团圆暖意久久不散！',
+          },
+          {
+            id: 'season_au_gala_sponsor',
+            label: '出资冠名码头灯会主牌楼，把「潮鲜沸鼎」挂上最高花灯',
+            hint: '花费 ¥90 · 口碑 +8 · 商道 +2',
+            cashDelta: -90,
+            reputationDelta: 8,
+            philosophyDelta: { EMPIRE: 2 },
+            storyFlag: { key: 'season_ev_autumn_2', value: 'lantern_sponsor' },
+            outcomeText: '整片港湾抬头皆见“潮鲜沸鼎”璀璨金匾，次日未开店门口便已排满慕名新客！',
+          },
+          {
+            id: 'season_au_gala_broth',
+            label: '现熬秋梨鲜菌润燥金汤与热厨应节小菜，以味惊艳灯会夜',
+            hint: '花费 ¥35 · 口碑 +5 · 熟食补满 · 原料 +8 · 匠心 +2',
+            cashDelta: -35,
+            reputationDelta: 5,
+            philosophyDelta: { CRAFT: 2 },
+            storyFlag: { key: 'season_ev_autumn_2', value: 'autumn_broth' },
+            outcomeText: '清润甘甜的秋梨菌汤成了灯会夜最大惊喜，老饕们连喝三碗仍意犹未尽！',
+          },
+        ],
+      };
+
+    case 'season_winter_blizzard_hearth':
+      return {
+        id: nextIncidentUid('season_wi1'),
+        category: 'INCIDENT',
+        badge: '冬季限定事件 · 寒潮飞雪',
+        speakerName: '冒雪赶来的食客',
+        speakerTitle: '港湾夜归人',
+        accentColor: '#93C5FD',
+        headline: '寒潮围炉 · 风雪夜归人',
+        body: '强冷空气突袭港城，细密雪花扑簌簌落满青石屋檐与门廊，推门而入的食客肩头挂着白霜，直搓着冻红的双手。',
+        lines: [
+          {
+            speaker: '冒雪赶来的食客',
+            title: '港湾夜归人',
+            text: '“嘶……好大的寒潮风雪！远远看见你们家这排红灯笼和窗里冒着的热气，就像看见救星一样，快冻僵啦！”',
+            accentColor: '#93C5FD',
+            portraitSide: 'right',
+          },
+          {
+            speaker: mgrName,
+            title: '潮鲜沸鼎店长',
+            text: '“风雪越紧，这口滚沸汤鼎就越要暖透人心！赶紧安排热饮和冬令硬菜上阵。”',
+            accentColor: '#E8C97A',
+            portraitSide: 'left',
+          },
+        ],
+        choices: [
+          {
+            id: 'season_wi_snow_ginger',
+            label: '在门廊支起滚烫红糖姜枣汤桶，免费给候位客与路人暖手',
+            hint: '花费 ¥35 · 口碑 +7 · 全场客满意 +15 · 全员士气 +12 · 烟火 +2',
+            cashDelta: -35,
+            reputationDelta: 7,
+            philosophyDelta: { WARMTH: 2 },
+            storyFlag: { key: 'season_ev_winter_1', value: 'ginger_hearth' },
+            outcomeText: '风雪夜一碗免费热姜汤感动了无数路人，有人拍下照片配文“港城最暖的灯火”，口碑 +7！',
+          },
+          {
+            id: 'season_wi_snow_stew',
+            label: '现开冬令滋补花胶牛骨老汤，主打慢熬浓鲜暖身锅',
+            hint: '花费 ¥70 · 口碑 +6 · 熟食补满 · 原料 +10 · 匠心 +2',
+            cashDelta: -70,
+            reputationDelta: 6,
+            philosophyDelta: { CRAFT: 2 },
+            storyFlag: { key: 'season_ev_winter_1', value: 'winter_tonic' },
+            outcomeText: '浓白醇厚的花胶老汤瞬间驱散全身寒气，满堂宾客吃得额头冒汗、连呼过瘾！',
+          },
+          {
+            id: 'season_wi_snow_inn',
+            label: '与周边海景旅馆火速联名，推出「风雪围炉暖冬套票」',
+            hint: '立刻增收 +¥240 · 口碑 +4 · 商道 +2',
+            cashDelta: 240,
+            reputationDelta: 4,
+            philosophyDelta: { EMPIRE: 2 },
+            storyFlag: { key: 'season_ev_winter_1', value: 'inn_bundle' },
+            outcomeText: '被大雪困在旅馆的游客们结伴涌来围炉涮海鲜，寒潮夜反而创下超高流水 +¥240！',
+          },
+        ],
+      };
+
+    case 'season_winter_yearend_banquet':
+    default:
+      return {
+        id: nextIncidentUid('season_wi2'),
+        category: 'INCIDENT',
+        badge: '冬季限定事件 · 岁末尾牙',
+        speakerName: '港城商帮执事',
+        speakerTitle: '岁末尾牙筹办人',
+        accentColor: '#E8C97A',
+        headline: '岁末尾牙 · 港城商帮压轴宴',
+        body: '岁末年关将至，港城商帮原定的尾牙酒楼暖气突然故障，执事急匆匆踏雪而来，想请你紧急接下这场压轴尾牙大宴！',
+        lines: [
+          {
+            speaker: '港城商帮执事',
+            title: '岁末尾牙筹办人',
+            text: `“${mgrName}店长救急！商帮几十号船东与掌柜今晚要吃尾牙团圆饭，全港城能临时稳住这阵仗的海鲜沸锅馆，我只信得过您这一家！”`,
+            accentColor: '#E8C97A',
+            portraitSide: 'right',
+          },
+          {
+            speaker: mgrName,
+            title: '潮鲜沸鼎店长',
+            text: '“岁末尾牙是港城人一年到头最看重的聚餐。是全员冲刺接下整场大单，还是精选接待守住火候，抑或顺带温暖守夜的码头兄弟？”',
+            accentColor: '#E8C97A',
+            portraitSide: 'left',
+          },
+        ],
+        choices: [
+          {
+            id: 'season_wi_banq_grand',
+            label: '全员咬牙齐心接下整场商帮尾牙包场，冲击岁末最大一单！',
+            hint: '巨额回款 +¥340 · 口碑 +5 · 设备健康 -8 · 员工略感疲惫 · 商道 +2',
+            cashDelta: 340,
+            reputationDelta: 5,
+            philosophyDelta: { EMPIRE: 2 },
+            storyFlag: { key: 'season_ev_winter_2', value: 'grand_feast' },
+            outcomeText: '满厅推杯换盏直到深夜，商帮掌柜们痛快结清 ¥340 大单并夸你调度如神！',
+          },
+          {
+            id: 'season_wi_banq_craft',
+            label: '量力而行只接核心精品品鉴席，确保每一口活鲜火候零失误',
+            hint: '增收 +¥180 · 口碑 +7 · 卫生 +5 · 匠心 +2',
+            cashDelta: 180,
+            reputationDelta: 7,
+            philosophyDelta: { CRAFT: 2 },
+            storyFlag: { key: 'season_ev_winter_2', value: 'curated_table' },
+            outcomeText: '不贪多只求精的克制反而赢得商帮大佬极高敬意，当场预订了来年的开春头宴！',
+          },
+          {
+            id: 'season_wi_banq_dock',
+            label: '平价承接尾牙家宴，并将余下滚沸鲜汤与热食打包送给守夜码头工',
+            hint: '增收 +¥90 · 口碑 +8 · 全员士气回满 · 烟火 +2',
+            cashDelta: 90,
+            reputationDelta: 8,
+            philosophyDelta: { WARMTH: 2 },
+            storyFlag: { key: 'season_ev_winter_2', value: 'dock_warmth' },
+            outcomeText: '雪夜码头上升起阵阵热汤白雾，全城都传颂起“潮鲜沸鼎”的岁末义举，口碑 +8！',
+          },
+        ],
+      };
+  }
+}
+
+// ============================================================================
 // 4. INCIDENT DISPATCHER & MECHANICAL EFFECT APPLIER
 // ============================================================================
 
@@ -979,6 +1690,24 @@ export function pickServiceIncident(world: GameWorld): StoryModalEvent | null {
     return buildStandaloneIncident('inc_table_dispute', mgrName);
   }
 
+  // Priority 2.5: Seasonal Limited Events matching current world.season!
+  // Guaranteed on Day 4-5 of a season if untriggered, and high priority (72%) earlier in the season.
+  const untriggeredSeasonal = SEASONAL_EVENT_CATALOG.filter(
+    (ev) => ev.season === world.season && !f[ev.flagKey]
+  );
+  if (untriggeredSeasonal.length > 0) {
+    const seasonalChance = world.dayInSeason >= 4 ? 1.0 : 0.72;
+    if (Math.random() < seasonalChance) {
+      const chosenSeasonal =
+        untriggeredSeasonal[Math.floor(Math.random() * untriggeredSeasonal.length)];
+      world.recentIncidentIds.push(chosenSeasonal.id);
+      if (world.recentIncidentIds.length > 8) {
+        world.recentIncidentIds = world.recentIncidentIds.slice(-8);
+      }
+      return buildSeasonalEvent(chosenSeasonal.id, mgrName);
+    }
+  }
+
   // Priority 3: Start a new branching side-quest when day threshold is reached
   const startableSides: Array<() => StoryModalEvent> = [];
   if (!f.side_journalist && world.day >= 2) {
@@ -991,12 +1720,12 @@ export function pickServiceIncident(world: GameWorld): StoryModalEvent | null {
     startableSides.push(() => buildRunawayAct1(mgrName));
   }
 
-  if (startableSides.length > 0 && Math.random() < 0.62) {
+  if (startableSides.length > 0 && Math.random() < 0.65) {
     const picked = startableSides[Math.floor(Math.random() * startableSides.length)];
     return picked();
   }
 
-  // Priority 4: Non-repeating standalone operational incident
+  // Priority 4: Non-repeating standalone operational incident (plus occasional seasonal revisit in Year 2+)
   const pool = ['inc_ice_melt', 'inc_table_dispute', 'inc_dock_peddler', 'inc_power_flicker'];
   const fresh = pool.filter((id) => !world.recentIncidentIds.slice(-2).includes(id));
   const chosenId = (fresh.length > 0 ? fresh : pool)[
@@ -1082,6 +1811,107 @@ export function applyIncidentChoiceEffects(world: GameWorld, choiceId: string): 
       break;
     case 'inc_power_reset':
       world.equipmentHealth = Math.max(10, world.equipmentHealth - 12);
+      break;
+
+    // --- Seasonal Event Choice Effects ---
+    case 'season_sp_sakura_tea':
+      world.tables.forEach((t) => {
+        if (t.customer) t.customer.satisfaction = Math.min(100, t.customer.satisfaction + 12);
+      });
+      break;
+    case 'season_sp_sakura_photo':
+      world.hygiene = Math.min(100, world.hygiene + 3);
+      break;
+    case 'season_sp_catch_all':
+      world.rawIngredients = Math.min(world.rawIngredientsMax, world.rawIngredients + 18);
+      world.oxygenLevel = 100;
+      world.buffetSlots.slice(0, 2).forEach((s) => {
+        s.stock = s.maxStock;
+      });
+      break;
+    case 'season_sp_catch_bargain':
+      world.rawIngredients = Math.min(world.rawIngredientsMax, world.rawIngredients + 12);
+      break;
+    case 'season_sp_catch_share':
+      world.rawIngredients = Math.min(world.rawIngredientsMax, world.rawIngredients + 8);
+      world.staff.forEach((s) => {
+        s.morale = Math.min(100, s.morale + 10);
+      });
+      break;
+    case 'season_su_heat_herbal':
+      world.hygiene = Math.min(100, world.hygiene + 5);
+      world.tables.forEach((t) => {
+        if (t.customer) t.customer.satisfaction = Math.min(100, t.customer.satisfaction + 14);
+      });
+      break;
+    case 'season_su_heat_beer':
+      world.equipmentHealth = Math.max(10, world.equipmentHealth - 5);
+      break;
+    case 'season_su_heat_rotate':
+      world.hygiene = Math.min(100, world.hygiene + 6);
+      world.cookedStock = Math.min(world.cookedMaxStock, world.cookedStock + 3);
+      break;
+    case 'season_su_mora_deepsea':
+      world.rawIngredients = Math.min(world.rawIngredientsMax, world.rawIngredients + 16);
+      world.oxygenLevel = 100;
+      break;
+    case 'season_su_mora_hotdish':
+      world.cookedStock = world.cookedMaxStock;
+      break;
+    case 'season_su_mora_union':
+      world.staff.forEach((s) => {
+        s.morale = Math.min(100, s.morale + 12);
+      });
+      break;
+    case 'season_au_crab_live':
+      world.oxygenLevel = 100;
+      world.tables.forEach((t) => {
+        if (t.customer) t.customer.satisfaction = Math.min(100, t.customer.satisfaction + 15);
+      });
+      break;
+    case 'season_au_crab_ginger':
+      world.hygiene = Math.min(100, world.hygiene + 4);
+      world.tables.forEach((t) => {
+        if (t.customer) t.customer.satisfaction = Math.min(100, t.customer.satisfaction + 12);
+      });
+      break;
+    case 'season_au_gala_osmanthus':
+      world.tables.forEach((t) => {
+        if (t.customer) t.customer.satisfaction = Math.min(100, t.customer.satisfaction + 16);
+      });
+      world.staff.forEach((s) => {
+        s.morale = Math.min(100, s.morale + 10);
+      });
+      break;
+    case 'season_au_gala_broth':
+      world.cookedStock = world.cookedMaxStock;
+      world.rawIngredients = Math.min(world.rawIngredientsMax, world.rawIngredients + 8);
+      break;
+    case 'season_wi_snow_ginger':
+      world.tables.forEach((t) => {
+        if (t.customer) t.customer.satisfaction = Math.min(100, t.customer.satisfaction + 15);
+      });
+      world.staff.forEach((s) => {
+        s.morale = Math.min(100, s.morale + 12);
+      });
+      break;
+    case 'season_wi_snow_stew':
+      world.cookedStock = world.cookedMaxStock;
+      world.rawIngredients = Math.min(world.rawIngredientsMax, world.rawIngredients + 10);
+      break;
+    case 'season_wi_banq_grand':
+      world.equipmentHealth = Math.max(10, world.equipmentHealth - 8);
+      world.staff.forEach((s) => {
+        s.fatigue = Math.min(100, s.fatigue + 8);
+      });
+      break;
+    case 'season_wi_banq_craft':
+      world.hygiene = Math.min(100, world.hygiene + 5);
+      break;
+    case 'season_wi_banq_dock':
+      world.staff.forEach((s) => {
+        s.morale = 100;
+      });
       break;
   }
 }

@@ -1085,13 +1085,49 @@ export function resolveStoryChoice(world: GameWorld, choice: StoryChoiceOption) 
   if (choice.id === 'ch1_craft' || choice.id === 'lin1_a') {
     world.hygiene = Math.min(100, world.hygiene + 6);
     world.rawIngredients = Math.min(world.rawIngredientsMax, world.rawIngredients + 10);
-  } else if (choice.id === 'ch2_warmth' || choice.id === 'ch4_warmth' || choice.id === 'dorm_treat') {
-    const delta = choice.id === 'ch2_warmth' ? 10 : choice.id === 'ch4_warmth' ? 8 : 6;
+  } else if (choice.id === 'ch2_craft') {
+    world.cookedStock = world.cookedMaxStock;
+    world.rawIngredients = Math.min(world.rawIngredientsMax, world.rawIngredients + 10);
+  } else if (choice.id === 'ch2_warmth') {
+    world.hygiene = Math.min(100, world.hygiene + 4);
+  } else if (choice.id === 'ch4_craft') {
+    world.hygiene = 100;
+    world.equipmentHealth = Math.min(100, world.equipmentHealth + 15);
+    world.oxygenLevel = Math.min(100, world.oxygenLevel + 15);
+  } else if (choice.id === 'ch6_craft') {
+    world.rawIngredients = world.rawIngredientsMax;
+  } else if (choice.id === 'ch7_craft') {
+    world.cookedStock = world.cookedMaxStock;
+    world.hygiene = Math.min(100, world.hygiene + 6);
+  } else if (choice.id === 'ch7_warmth') {
+    world.staff.forEach((s) => {
+      s.morale = 100;
+    });
+  } else if (choice.id === 'ch8_craft') {
+    world.rawIngredients = Math.min(world.rawIngredientsMax, world.rawIngredients + 16);
+  } else if (
+    choice.id === 'ch3_warmth' ||
+    choice.id === 'ch4_warmth' ||
+    choice.id === 'ch6_warmth' ||
+    choice.id === 'ch8_warmth' ||
+    choice.id === 'ch9_warmth' ||
+    choice.id === 'dorm_treat'
+  ) {
+    const delta =
+      choice.id === 'ch3_warmth' || choice.id === 'ch8_warmth' || choice.id === 'ch9_warmth'
+        ? 10
+        : choice.id === 'ch6_warmth'
+          ? 8
+          : 6;
     for (const def of SPECIAL_STAFF_CATALOG) {
       const b = world.specialStaffBonds[def.id];
       if (b.recruited) b.affection = Math.min(100, b.affection + delta);
     }
-    if (choice.id === 'dorm_treat') {
+    if (choice.id === 'ch3_warmth') {
+      world.staff.forEach((s) => {
+        s.morale = 100;
+      });
+    } else if (choice.id === 'dorm_treat') {
       world.staff.forEach((s) => {
         s.fatigue = 0;
         s.morale = 100;

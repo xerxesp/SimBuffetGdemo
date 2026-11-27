@@ -14,6 +14,36 @@ export type SeasonId = 'SPRING' | 'SUMMER' | 'AUTUMN' | 'WINTER';
 
 export type WeatherId = 'SUNNY' | 'RAINY' | 'TYPHOON' | 'HEATWAVE' | 'SNOWY';
 
+export type SeasonalParticleKind = 'SAKURA_PETAL' | 'HEAT_RIPPLE' | 'AUTUMN_LEAF' | 'SNOWFLAKE';
+
+export interface SeasonalVisualParticle {
+  kind: SeasonalParticleKind;
+  x: number; // Normalized 0..1 horizontal position
+  y: number; // Normalized 0..1 vertical position
+  vx: number; // Normalized horizontal drift per second
+  vy: number; // Normalized vertical drift per second
+  size: number; // Base visual radius/scale in logical px
+  rotation: number; // Radians
+  rotSpeed: number; // Radians per second
+  swayPhase: number; // Sinusoidal sway phase
+  swayAmp: number; // Normalized horizontal sway amplitude
+  depth: 0 | 1 | 2; // 0 = far, 1 = mid, 2 = foreground
+  color: string;
+  alpha: number;
+}
+
+export interface SeasonalVisualState {
+  activeSeason: SeasonId;
+  previousSeason: SeasonId | null;
+  transitionTimer: number; // Seconds remaining in cross-season visual sweep
+  transitionDuration: number;
+  snowCoverage: number; // 0..1 dynamic winter snow blanket coverage
+  heatDistortionIntensity: number; // 0..1 dynamic summer heatwave refraction distortion
+  sakuraDensity: number; // 0..1 spring sakura blossom layer opacity
+  autumnLeafDensity: number; // 0..1 autumn foliage layer opacity
+  particles: SeasonalVisualParticle[];
+}
+
 export type HolidayId =
   | 'NONE'
   | 'FISHING_OPEN'
@@ -761,7 +791,7 @@ export interface GameWorld {
 
   // Story, Choices, Multi-Ending & Special Staff Romance
   characterId: CharacterId;
-  mainChapter: number; // 1..5
+  mainChapter: number; // 1..10
   mainStoryCompleted: boolean;
   storyPhilosophy: Record<StoryPhilosophy, number>;
   storyFlags: Record<string, string>;
@@ -865,6 +895,7 @@ export interface GameWorld {
   // Dynamic Environment, Marketing, Finance, Decor, Analytics & Onboarding
   weather: WeatherId;
   holiday: HolidayId;
+  seasonalVisual?: SeasonalVisualState;
   activeRivalEvent: ActiveRivalEvent | null;
   activeMarketing: ActiveMarketingCampaign | null;
   loan: ActiveLoanState;

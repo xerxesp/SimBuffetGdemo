@@ -16,8 +16,11 @@ import {
 import {
   drawIsoCharacter,
   getGuestStyleBySeed,
+  getIsoCharacterHeadAnchorZ,
+  ISO_CHARACTER_ROLE_SCALE,
   resolveCustomerVisual,
 } from './isoCharacterArt';
+import { drawIsoTabletopOverlay } from './isoEnvironmentAssets';
 import { drawIsoFurnitureSprite } from './isoFurnitureSprites';
 
 const ISO_COS = 0.72;
@@ -235,16 +238,39 @@ function drawSteamWisps(
   tint = '255, 250, 240'
 ) {
   ctx.save();
-  const count = Math.max(2, Math.round(3 * intensity));
+  const count = Math.max(3, Math.round(4 * intensity));
+  // Soft curling calligraphic steam ribbons (烟火气)
+  for (let r = 0; r < 2; r++) {
+    const rPhase = (timeSec * 0.58 + seed * 0.29 + r * 0.5) % 1;
+    const rAlpha = Math.sin(rPhase * Math.PI) * 0.34 * Math.min(1.25, intensity);
+    const ox = (r === 0 ? -3.4 : 3.4) + Math.sin(timeSec * 1.9 + seed + r * 2.1) * 1.6;
+    const y0 = iy - rPhase * 12;
+    const y1 = y0 - 15 * Math.min(1.3, intensity);
+    ctx.strokeStyle = `rgba(${tint}, ${rAlpha.toFixed(3)})`;
+    ctx.lineWidth = (1.9 + rPhase * 1.6) * Math.min(1.2, intensity);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ix + ox, y0);
+    ctx.bezierCurveTo(
+      ix + ox - 5.2,
+      y0 - 5,
+      ix + ox + 5.2,
+      y1 + 5,
+      ix + ox + Math.sin(timeSec * 2.4 + r) * 3.0,
+      y1
+    );
+    ctx.stroke();
+  }
+  // Billowing airy watercolor steam puffs
   for (let i = 0; i < count; i++) {
-    const phase = (timeSec * 0.72 + seed * 0.37 + i * 0.33) % 1;
-    const rise = phase * 28 * intensity;
-    const sway = Math.sin(timeSec * 2.1 + seed + i * 2.2) * (3.2 + phase * 4.5);
-    const alpha = Math.sin(phase * Math.PI) * 0.44;
-    const radius = (2.8 + phase * 5.6) * Math.min(1.2, intensity);
+    const phase = (timeSec * 0.68 + seed * 0.37 + i * (1 / count)) % 1;
+    const rise = phase * 31 * intensity;
+    const sway = Math.sin(timeSec * 2.0 + seed + i * 2.1) * (3.0 + phase * 4.8);
+    const alpha = Math.sin(phase * Math.PI) * 0.42;
+    const radius = (2.6 + phase * 6.0) * Math.min(1.22, intensity);
     ctx.fillStyle = `rgba(${tint}, ${alpha.toFixed(3)})`;
     ctx.beginPath();
-    ctx.arc(ix + sway + (i - 1) * 3.2, iy - rise, radius, 0, Math.PI * 2);
+    ctx.arc(ix + sway + (i - (count - 1) * 0.5) * 2.6, iy - rise, radius, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -296,7 +322,7 @@ function drawSlattedWoodenChair(
   const legSize = 2.6;
   const seatZ = 9.5;
   const seatH = 2.2;
-  const backH = 14.5;
+  const backH = 12.0;
 
   // 4 slender wooden legs
   const legPositions = [
@@ -388,7 +414,7 @@ export function drawIsoHotpotTable(
 
     drawIsoCharacter(ctx, {
       wx: table.x - 1,
-      wy: table.y - 31,
+      wy: table.y - 33,
       archetype: leadVis.archetype,
       bodyColor: leadVis.bodyColor,
       trimColor: leadVis.trimColor,
@@ -402,13 +428,13 @@ export function drawIsoHotpotTable(
       animState: seatAnimState,
       animTime: timeSec + table.id * 0.73,
       patienceRatio,
-      scale: 0.9,
+      scale: ISO_CHARACTER_ROLE_SCALE.SEATED_GUEST,
     });
 
     if (guest.size >= 2) {
       const p2 = getGuestStyleBySeed(guestBaseSeed + 3);
       drawIsoCharacter(ctx, {
-        wx: table.x - 31,
+        wx: table.x - 33,
         wy: table.y + 1,
         archetype: p2.archetype,
         bodyColor: p2.body,
@@ -422,7 +448,7 @@ export function drawIsoHotpotTable(
         animState: seatAnimState,
         animTime: timeSec + table.id * 0.73 + 1.15,
         patienceRatio,
-        scale: 0.89,
+        scale: ISO_CHARACTER_ROLE_SCALE.SEATED_GUEST,
       });
     }
   }
@@ -489,8 +515,8 @@ export function drawIsoHotpotTable(
 
   const topCenter = w2i(table.x, table.y, 21.5);
 
-  if (table.status === 'READY') {
-    // 4 neat celadon-rimmed porcelain bowls + tiny bamboo chopsticks
+  if (table.status === 'READY' || table.status === 'WAITING_BROTH') {
+    // 4 neat celadon-rimmed porcelain bowls + crimson folded cloth napkins + bamboo chopsticks
     const settings = [
       { dx: -17, dy: -17 },
       { dx: 17, dy: -17 },
@@ -499,45 +525,107 @@ export function drawIsoHotpotTable(
     ];
     for (const st of settings) {
       const dp = w2i(table.x + st.dx, table.y + st.dy, 21.1);
+      // Folded vintage burgundy napkin diamond tucked beside bowl
+      ctx.fillStyle = '#8F2D27';
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 0.55;
+      ctx.beginPath();
+      ctx.ellipse(dp.x - 3.6, dp.y + 1.2, 2.5, 1.3, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
       ctx.fillStyle = '#FAF7F0';
       ctx.strokeStyle = INK;
       ctx.lineWidth = 0.72;
       ctx.beginPath();
-      ctx.ellipse(dp.x, dp.y, 3.9, 2.1, 0, 0, Math.PI * 2);
+      ctx.ellipse(dp.x, dp.y, 4.0, 2.15, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
       ctx.strokeStyle = '#6EA59C';
-      ctx.lineWidth = 0.55;
+      ctx.lineWidth = 0.6;
       ctx.beginPath();
-      ctx.ellipse(dp.x, dp.y - 0.2, 2.7, 1.3, 0, 0, Math.PI * 2);
+      ctx.ellipse(dp.x, dp.y - 0.2, 2.75, 1.32, 0, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Tiny chopstick pair beside bowl
+      // Tiny chopstick pair resting neatly beside bowl
       ctx.strokeStyle = '#684122';
-      ctx.lineWidth = 0.65;
+      ctx.lineWidth = 0.7;
       ctx.beginPath();
-      ctx.moveTo(dp.x + 3.5, dp.y - 1.5);
-      ctx.lineTo(dp.x + 7.2, dp.y + 0.6);
+      ctx.moveTo(dp.x + 3.4, dp.y - 1.5);
+      ctx.lineTo(dp.x + 7.4, dp.y + 0.6);
+      ctx.moveTo(dp.x + 3.8, dp.y - 0.9);
+      ctx.lineTo(dp.x + 7.6, dp.y + 1.1);
       ctx.stroke();
     }
-  } else if (table.status === 'DIRTY') {
-    const messPts = [
-      { dx: -13, dy: -9, c: '#C6BEB1', r: 4.0 },
-      { dx: 13, dy: 6, c: '#B7AEA0', r: 3.8 },
-      { dx: -5, dy: 14, c: '#C87654', r: 3.5 },
-      { dx: 11, dy: -12, c: '#C2B9AC', r: 3.6 },
-    ];
-    for (const m of messPts) {
-      const mp = w2i(table.x + m.dx, table.y + m.dy, 21.1);
-      ctx.fillStyle = m.c;
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 0.72;
+
+    // Center celadon teapot when table is clean & awaiting guests, or glowing induction burner when WAITING_BROTH
+    if (table.status === 'WAITING_BROTH') {
+      const pulse = 0.75 + Math.sin(timeSec * 5.2 + table.id) * 0.25;
+      ctx.save();
+      ctx.strokeStyle = `rgba(251, 146, 60, ${(0.72 * pulse).toFixed(2)})`;
+      ctx.lineWidth = 1.45;
       ctx.beginPath();
-      ctx.ellipse(mp.x, mp.y, m.r, m.r * 0.55, 0, 0, Math.PI * 2);
+      ctx.ellipse(topCenter.x, topCenter.y + 0.4, 9.5, 4.9, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.fillStyle = '#7DBAB0';
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.ellipse(topCenter.x, topCenter.y + 0.5, 4.1, 2.7, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      ctx.fillStyle = '#B7E1DA';
+      ctx.beginPath();
+      ctx.ellipse(topCenter.x, topCenter.y - 1.3, 2.3, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
     }
+  } else if (table.status === 'DIRTY') {
+    const drewDirtyOverlay = drawIsoTabletopOverlay(ctx, 'TABLE_DIRTY_DISHES', {
+      centerX: topCenter.x,
+      centerY: topCenter.y - 1.5,
+      maxWidth: 54,
+      maxHeight: 38,
+    });
+
+    if (!drewDirtyOverlay) {
+      const messPts = [
+        { dx: -13, dy: -9, c: '#C6BEB1', r: 4.0 },
+        { dx: 13, dy: 6, c: '#B7AEA0', r: 3.8 },
+        { dx: -5, dy: 14, c: '#C87654', r: 3.5 },
+        { dx: 11, dy: -12, c: '#C2B9AC', r: 3.6 },
+      ];
+      for (const m of messPts) {
+        const mp = w2i(table.x + m.dx, table.y + m.dy, 21.1);
+        ctx.fillStyle = m.c;
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 0.72;
+        ctx.beginPath();
+        ctx.ellipse(mp.x, mp.y, m.r, m.r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    // Subtle faint cooling wisp + tiny orbiting mess indicator flies
+    drawSteamWisps(ctx, topCenter.x, topCenter.y - 6, timeSec * 0.45, table.id * 2.1, 0.42, '214, 206, 194');
+    ctx.save();
+    for (let f = 0; f < 2; f++) {
+      const ang = timeSec * 4.2 + table.id * 1.7 + f * Math.PI;
+      const fx = topCenter.x + Math.cos(ang) * (8 + f * 3);
+      const fy = topCenter.y - 11 + Math.sin(ang * 1.7) * 3.5;
+      ctx.fillStyle = '#2B221D';
+      ctx.beginPath();
+      ctx.arc(fx, fy, 1.15, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
     drawIsoTextTag(ctx, '待收桌', topCenter.x, topCenter.y - 26, {
       color: '#FDE68A',
       bg: 'rgba(64, 24, 16, 0.88)',
@@ -553,132 +641,118 @@ export function drawIsoHotpotTable(
     });
   }
 
-  // Gleaming Copper Yin-Yang Dual-Flavor Hotpot + Side Dish Trays when DINING
+  // Gleaming Hand-Painted Copper Yin-Yang Hotpot Feast + Live Simmering Bubbles & Steam when DINING
   if (table.status === 'DINING') {
     const brothDef = BROTH_CATALOG.find((b) => b.id === table.customer?.brothId);
     const potC = w2i(table.x, table.y, 22.8);
 
     // Warm induction-hearth amber glow halo radiating softly onto the cedar tabletop
     const hearthPulse = 0.85 + Math.sin(timeSec * 4.5 + table.id * 1.3) * 0.15;
-    const hearthGrad = ctx.createRadialGradient(potC.x, potC.y + 2, 2, potC.x, potC.y + 2, 22);
-    hearthGrad.addColorStop(0, `rgba(255, 168, 62, ${(0.28 * hearthPulse).toFixed(2)})`);
-    hearthGrad.addColorStop(0.55, `rgba(245, 130, 40, ${(0.11 * hearthPulse).toFixed(2)})`);
+    const hearthGrad = ctx.createRadialGradient(potC.x, potC.y + 2, 2, potC.x, potC.y + 2, 26);
+    hearthGrad.addColorStop(0, `rgba(255, 168, 62, ${(0.34 * hearthPulse).toFixed(2)})`);
+    hearthGrad.addColorStop(0.55, `rgba(245, 130, 40, ${(0.14 * hearthPulse).toFixed(2)})`);
     hearthGrad.addColorStop(1, 'rgba(245, 130, 40, 0)');
     ctx.fillStyle = hearthGrad;
     ctx.beginPath();
-    ctx.ellipse(potC.x, potC.y + 2.2, 22, 12.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(potC.x, potC.y + 2.2, 26, 14.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Side rectangular dish trays with leafy greens & sliced beef
-    drawQuad(ctx, table.x - 24, table.y + 8, 12, 15, 21.1, '#EFEBE1', INK, 0.65);
-    drawQuad(ctx, table.x - 22, table.y + 10, 8, 11, 21.3, '#6EA052');
-    drawQuad(ctx, table.x + 12, table.y - 23, 12, 15, 21.1, '#EFEBE1', INK, 0.65);
-    drawQuad(ctx, table.x + 14, table.y - 21, 8, 11, 21.3, '#CF6A55');
+    // Hand-painted isometric Yuanyang hotpot + seafood prawns, wagyu rolls & greens tabletop feast overlay!
+    const drewFeastOverlay = drawIsoTabletopOverlay(ctx, 'TABLE_FEAST_YUANYANG', {
+      centerX: potC.x,
+      centerY: potC.y + 0.5,
+      maxWidth: 58,
+      maxHeight: 42,
+    });
 
-    // Dipping bowls & delicate celadon teacup at corners
-    for (const [dx, dy] of [
-      [-18, -18],
-      [18, 18],
-    ]) {
-      const bp = w2i(table.x + dx, table.y + dy, 21.1);
-      ctx.fillStyle = '#F9F6EE';
+    if (drewFeastOverlay) {
+      // Subtle broth-type color glaze over the pot center so distinct ordered broths shine warmly
+      if (brothDef?.color) {
+        ctx.save();
+        ctx.globalAlpha = 0.24;
+        ctx.fillStyle = brothDef.color;
+        ctx.beginPath();
+        ctx.ellipse(potC.x - 1, potC.y - 1.5, 9.5, 4.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    } else {
+      // Crisp procedural fallback while feast overlay decodes
+      drawQuad(ctx, table.x - 24, table.y + 8, 12, 15, 21.1, '#EFEBE1', INK, 0.65);
+      drawQuad(ctx, table.x - 22, table.y + 10, 8, 11, 21.3, '#6EA052');
+      drawQuad(ctx, table.x + 12, table.y - 23, 12, 15, 21.1, '#EFEBE1', INK, 0.65);
+      drawQuad(ctx, table.x + 14, table.y - 21, 8, 11, 21.3, '#CF6A55');
+
+      ctx.fillStyle = '#B57230';
       ctx.strokeStyle = INK;
-      ctx.lineWidth = 0.7;
+      ctx.lineWidth = 0.95;
       ctx.beginPath();
-      ctx.ellipse(bp.x, bp.y, 3.6, 1.9, 0, 0, Math.PI * 2);
+      ctx.ellipse(potC.x, potC.y + 1.8, 11.8, 6.6, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      // Savory sesame-chili dipping sauce center dot
-      ctx.fillStyle = '#A85828';
+
+      ctx.fillStyle = '#E2AA5A';
       ctx.beginPath();
-      ctx.ellipse(bp.x, bp.y - 0.1, 2.0, 1.0, 0, 0, Math.PI * 2);
+      ctx.ellipse(potC.x, potC.y - 1.1, 11.4, 6.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = brothDef?.color ?? '#C83724';
+      ctx.beginPath();
+      ctx.ellipse(potC.x, potC.y - 1.1, 9.4, 4.7, 0, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.fill();
+
+      ctx.fillStyle = '#ECC163';
+      ctx.beginPath();
+      ctx.ellipse(potC.x, potC.y - 1.1, 9.4, 4.7, 0, -Math.PI * 0.5, Math.PI * 0.5);
       ctx.fill();
     }
-    const cupP = w2i(table.x - 19, table.y - 7, 21.2);
-    ctx.fillStyle = '#B8DCD5';
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 0.6;
+
+    // Lively rolling simmering broth bubbles & appetizing shimmer glints directly atop the bubbling soup
+    const bPhase1 = (timeSec * 2.5 + table.id * 0.7) % 1;
+    const bPhase2 = (timeSec * 2.2 + table.id * 1.1 + 0.5) % 1;
+    const bPhase3 = (timeSec * 2.9 + table.id * 0.4 + 0.25) % 1;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 248, 226, 0.9)';
+    ctx.lineWidth = 0.75;
     ctx.beginPath();
-    ctx.ellipse(cupP.x, cupP.y, 2.2, 1.3, 0, 0, Math.PI * 2);
+    ctx.arc(potC.x - 4.0, potC.y - 2.0 - bPhase1 * 1.0, 0.75 + bPhase1 * 1.35, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(potC.x + 3.8, potC.y - 1.2 - bPhase2 * 1.0, 0.7 + bPhase2 * 1.25, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 248, 224, 0.92)';
+    ctx.beginPath();
+    ctx.arc(potC.x - 2.2, potC.y - 0.3 - bPhase3 * 0.7, 1.0, 0, Math.PI * 2);
+    ctx.arc(potC.x + 2.4, potC.y - 2.5 - bPhase1 * 0.7, 0.9, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
+    ctx.restore();
 
-    // Brass loop handles on left & right of copper pot
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.1;
-    ctx.beginPath();
-    ctx.ellipse(potC.x - 12.2, potC.y - 0.5, 2.3, 1.6, 0, 0, Math.PI * 2);
-    ctx.ellipse(potC.x + 12.2, potC.y - 0.5, 2.3, 1.6, 0, 0, Math.PI * 2);
-    ctx.stroke();
+    // Rich rising curling watercolor steam plumes ("烟火气" centerpiece!)
+    drawSteamWisps(ctx, potC.x, potC.y - 7, timeSec, table.id * 1.7, 1.3);
 
-    // Copper pot rounded belly
-    ctx.fillStyle = '#B57230';
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 0.95;
-    ctx.beginPath();
-    ctx.ellipse(potC.x, potC.y + 1.8, 11.8, 6.6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Rolled gleaming brass rim
-    ctx.fillStyle = '#E2AA5A';
-    ctx.beginPath();
-    ctx.ellipse(potC.x, potC.y - 1.1, 11.4, 6.0, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Dual-flavor broth halves (spicy mala + golden seafood stock)
-    ctx.fillStyle = brothDef?.color ?? '#C83724';
-    ctx.beginPath();
-    ctx.ellipse(potC.x, potC.y - 1.1, 9.4, 4.7, 0, Math.PI * 0.5, Math.PI * 1.5);
-    ctx.fill();
-
-    ctx.fillStyle = '#ECC163';
-    ctx.beginPath();
-    ctx.ellipse(potC.x, potC.y - 1.1, 9.4, 4.7, 0, -Math.PI * 0.5, Math.PI * 0.5);
-    ctx.fill();
-
-    // Yin-Yang S-curve stainless divider
-    ctx.strokeStyle = '#E6E2D8';
-    ctx.lineWidth = 1.0;
-    ctx.beginPath();
-    ctx.moveTo(potC.x, potC.y - 5.6);
-    ctx.bezierCurveTo(potC.x - 2.6, potC.y - 3.0, potC.x + 2.6, potC.y + 0.8, potC.x, potC.y + 3.5);
-    ctx.stroke();
-
-    // Lively rolling simmering broth bubbles & garnish flecks
-    const bPhase1 = (timeSec * 2.4 + table.id * 0.7) % 1;
-    const bPhase2 = (timeSec * 2.1 + table.id * 1.1 + 0.5) % 1;
-    const bPhase3 = (timeSec * 2.8 + table.id * 0.4 + 0.25) % 1;
-    ctx.strokeStyle = 'rgba(255, 246, 224, 0.88)';
-    ctx.lineWidth = 0.7;
-    ctx.beginPath();
-    ctx.arc(potC.x - 4.0, potC.y - 1.5 - bPhase1 * 0.8, 0.7 + bPhase1 * 1.15, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(potC.x + 3.8, potC.y - 0.8 - bPhase2 * 0.8, 0.65 + bPhase2 * 1.05, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = '#FFF5DC';
-    ctx.beginPath();
-    ctx.arc(potC.x - 2.4, potC.y + 0.3 - bPhase3 * 0.5, 0.9, 0, Math.PI * 2);
-    ctx.arc(potC.x + 2.1, potC.y - 2.2 - bPhase1 * 0.5, 0.85, 0, Math.PI * 2);
-    ctx.fill();
-    // Floating green scallion & red chili flecks
-    ctx.fillStyle = '#5D8F49';
-    ctx.fillRect(potC.x + 1.8, potC.y - 2.6, 1.6, 1.0);
-    ctx.fillRect(potC.x - 5.2, potC.y - 0.2, 1.5, 1.0);
-    ctx.fillStyle = '#E53935';
-    ctx.fillRect(potC.x - 4.8, potC.y - 2.4, 1.4, 0.85);
-
-    // Rising translucent watercolor steam curls
-    drawSteamWisps(ctx, potC.x, potC.y - 6, timeSec, table.id * 1.7, 1.15);
+    // Subtle appetizing warm broth aroma sparkles on lively dining tables
+    if (table.status === 'DINING' && guest && (guest.isVip || guest.patience / Math.max(1, guest.maxPatience) > 0.6)) {
+      const spPhase = (timeSec * 0.85 + table.id * 0.47) % 1;
+      const spAlpha = Math.sin(spPhase * Math.PI) * 0.85;
+      const sx = potC.x + Math.sin(timeSec * 2.2 + table.id) * 6;
+      const sy = potC.y - 10 - spPhase * 16;
+      ctx.save();
+      ctx.fillStyle = `rgba(254, 232, 146, ${spAlpha.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
+
+  const seatedPatienceRatio = guest ? Math.max(0, Math.min(1, guest.patience / Math.max(1, guest.maxPatience))) : undefined;
 
   // Front seated guests (size >= 3 & >= 4, back 3/4 view facing inward toward pot!)
   if (guest && guest.size >= 3) {
     const p3 = getGuestStyleBySeed(guestBaseSeed + 5);
     drawIsoCharacter(ctx, {
-      wx: table.x + 30,
+      wx: table.x + 32,
       wy: table.y + 2,
       archetype: p3.archetype,
       bodyColor: p3.body,
@@ -691,14 +765,15 @@ export function drawIsoHotpotTable(
       seatFacing: 'NW',
       animState: seatAnimState,
       animTime: timeSec + table.id * 0.73 + 2.3,
-      scale: 0.88,
+      patienceRatio: seatedPatienceRatio,
+      scale: ISO_CHARACTER_ROLE_SCALE.SEATED_GUEST,
     });
   }
   if (guest && guest.size >= 4) {
     const p4 = getGuestStyleBySeed(guestBaseSeed + 9);
     drawIsoCharacter(ctx, {
       wx: table.x + 2,
-      wy: table.y + 30,
+      wy: table.y + 32,
       archetype: p4.archetype,
       bodyColor: p4.body,
       trimColor: p4.trim,
@@ -710,7 +785,8 @@ export function drawIsoHotpotTable(
       seatFacing: 'NE',
       animState: seatAnimState,
       animTime: timeSec + table.id * 0.73 + 3.45,
-      scale: 0.88,
+      patienceRatio: seatedPatienceRatio,
+      scale: ISO_CHARACTER_ROLE_SCALE.SEATED_GUEST,
     });
   }
 
@@ -722,7 +798,7 @@ export function drawIsoHotpotTable(
     const ratio = Math.max(0, Math.min(1, guest.patience / Math.max(1, guest.maxPatience)));
     const barW = 36;
     const bx = topCenter.x - barW / 2;
-    const by = topCenter.y - 44;
+    const by = topCenter.y - 49;
 
     if (table.status === 'WAITING_BROTH') {
       drawIsoTextTag(ctx, '等锅底!', topCenter.x, by - 11, {
@@ -914,23 +990,41 @@ export function drawIsoTieredAquarium(
     }
   }
 
-  // Live animated turquoise underwater shimmer & rising aerator bubbles layered cleanly on aquarium
+  // Live animated turquoise underwater shimmer, darting fish glints & dual-stream aerator bubbles
   const center = w2i(wx + w * 0.5, wy + d * 0.5, 24);
-  const caustShift = Math.sin(timeSec * 2.2 + wx * 0.03) * 5;
+  const caustShift = Math.sin(timeSec * 2.2 + wx * 0.03) * 5.5;
   ctx.save();
-  ctx.strokeStyle = 'rgba(232, 255, 252, 0.45)';
-  ctx.lineWidth = 0.85;
+  // Shimmering caustic light ripples across upper & lower tank tiers
+  ctx.strokeStyle = 'rgba(222, 255, 252, 0.48)';
+  ctx.lineWidth = 0.9;
   ctx.beginPath();
-  ctx.ellipse(center.x + caustShift * 0.5, center.y - 6, Math.min(20, w * 0.16), 3.0, 0, 0, Math.PI * 2);
+  ctx.ellipse(center.x + caustShift * 0.5, center.y - 8, Math.min(22, w * 0.17), 3.1, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(186, 248, 244, 0.36)';
+  ctx.beginPath();
+  ctx.ellipse(center.x - caustShift * 0.4, center.y + 3, Math.min(18, w * 0.14), 2.4, 0, 0, Math.PI * 2);
   ctx.stroke();
 
-  ctx.fillStyle = 'rgba(240, 255, 255, 0.86)';
-  for (let b = 0; b < 6; b++) {
-    const bOff = (timeSec * (13 + (b % 3) * 3) + b * 3.7) % 16;
-    const bxOff = -18 + b * 7.2 + Math.sin(timeSec * 3.2 + b * 1.7) * 1.3;
-    const br = 0.7 + (b % 2) * 0.35;
+  // Subtle swimming koi/red-snapper glint silhouettes inside tank water
+  for (let f = 0; f < 2; f++) {
+    const swim = Math.sin(timeSec * (1.2 + f * 0.4) + f * 3.1 + wx * 0.02);
+    const fx = center.x + swim * 14;
+    const fy = center.y - (f === 0 ? 5 : -2) + Math.cos(timeSec * 2.4 + f) * 1.4;
+    ctx.fillStyle = f === 0 ? 'rgba(255, 146, 98, 0.68)' : 'rgba(220, 248, 255, 0.65)';
     ctx.beginPath();
-    ctx.arc(center.x + bxOff, center.y + 4 - bOff, br, 0, Math.PI * 2);
+    ctx.ellipse(fx, fy, 3.1, 1.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Rising sparkling air-stone bubble columns
+  for (let b = 0; b < 9; b++) {
+    const bOff = (timeSec * (15 + (b % 3) * 3.5) + b * 3.3) % 21;
+    const bxOff = -20 + b * 5.0 + Math.sin(timeSec * 3.5 + b * 1.9) * 1.6;
+    const br = 0.75 + (b % 3) * 0.32;
+    const bAlpha = Math.sin((bOff / 21) * Math.PI) * 0.88;
+    ctx.fillStyle = `rgba(240, 255, 255, ${bAlpha.toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(center.x + bxOff, center.y + 7 - bOff, br, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -1125,8 +1219,20 @@ export function drawIsoZonePad(
     }
     const chillA = w2i(pad.x + pad.w * 0.32, pad.y + pad.h * 0.5, 24);
     const chillB = w2i(pad.x + pad.w * 0.68, pad.y + pad.h * 0.5, 24);
-    drawSteamWisps(ctx, chillA.x, chillA.y, timeSec * 0.65, 2.2, 0.55, '208, 246, 255');
-    drawSteamWisps(ctx, chillB.x, chillB.y, timeSec * 0.65 + 2.4, 5.1, 0.5, '208, 246, 255');
+    drawSteamWisps(ctx, chillA.x, chillA.y, timeSec * 0.65, 2.2, 0.58, '208, 246, 255');
+    drawSteamWisps(ctx, chillB.x, chillB.y, timeSec * 0.65 + 2.4, 5.1, 0.52, '208, 246, 255');
+    // Low cascading dry-ice chill mist spilling gently off the ice-bed counter edge
+    ctx.save();
+    for (let m = 0; m < 3; m++) {
+      const mt = (timeSec * 0.38 + m * 0.33) % 1;
+      const mp = w2i(pad.x + pad.w * (0.24 + m * 0.26), pad.y + pad.h * 0.82, 18 - mt * 6);
+      const ma = Math.sin(mt * Math.PI) * 0.24;
+      ctx.fillStyle = `rgba(218, 248, 255, ${ma.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.ellipse(mp.x + Math.sin(timeSec + m) * 4, mp.y + mt * 4, 11 + mt * 7, 4.5 + mt * 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   } else if (zoneId === 'teppan_bbq') {
     const drewTeppanSprite = drawIsoFurnitureSprite(ctx, 'TEPPAN_BBQ', {
       ...padFoot,
@@ -1144,35 +1250,40 @@ export function drawIsoZonePad(
       });
     }
 
-    // Live warm ember glow, rising glowing sparks & sizzle wisps
-    const emberPulse = 0.72 + Math.sin(timeSec * 4.2 + pad.x * 0.05) * 0.22;
+    // Live sizzling teppan ember glow, crackling arcing oil sparks & aromatic wok-hei smoke curls
+    const emberPulse = 0.72 + Math.sin(timeSec * 4.6 + pad.x * 0.05) * 0.24;
     const glowCenter = w2i(pad.x + pad.w * 0.5, pad.y + pad.h * 0.5, 24);
-    const emberGrad = ctx.createRadialGradient(glowCenter.x, glowCenter.y, 3, glowCenter.x, glowCenter.y, 32);
-    emberGrad.addColorStop(0, `rgba(255, 132, 36, ${(0.24 * emberPulse).toFixed(2)})`);
+    const emberGrad = ctx.createRadialGradient(glowCenter.x, glowCenter.y, 3, glowCenter.x, glowCenter.y, 36);
+    emberGrad.addColorStop(0, `rgba(255, 132, 36, ${(0.3 * emberPulse).toFixed(2)})`);
+    emberGrad.addColorStop(0.55, `rgba(255, 92, 24, ${(0.12 * emberPulse).toFixed(2)})`);
     emberGrad.addColorStop(1, 'rgba(255, 132, 36, 0)');
     ctx.fillStyle = emberGrad;
     ctx.beginPath();
-    ctx.ellipse(glowCenter.x, glowCenter.y, 32, 16, 0, 0, Math.PI * 2);
+    ctx.ellipse(glowCenter.x, glowCenter.y, 36, 18, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    for (let f = 0; f < 3; f++) {
-      const fx = isVert ? pad.x + pad.w * 0.5 : pad.x + 24 + f * ((pad.w - 48) / 2);
-      const fy = isVert ? pad.y + 24 + f * ((pad.h - 48) / 2) : pad.y + pad.h * 0.5;
+    ctx.save();
+    for (let f = 0; f < 6; f++) {
+      const fx = isVert ? pad.x + pad.w * 0.5 : pad.x + 18 + (f * (pad.w - 36)) / 5;
+      const fy = isVert ? pad.y + 18 + (f * (pad.h - 36)) / 5 : pad.y + pad.h * 0.5;
       const fp = w2i(fx, fy, 25);
-      const sparkT = (timeSec * 0.9 + f * 0.37) % 1;
-      const sx = fp.x + Math.sin(timeSec * 4 + f * 3) * 3.8;
-      const sy = fp.y - 2 - sparkT * 18;
-      ctx.fillStyle = `rgba(253, 186, 116, ${((1 - sparkT) * 0.95).toFixed(2)})`;
+      const sparkT = (timeSec * (1.15 + (f % 3) * 0.25) + f * 0.29) % 1;
+      const driftX = Math.sin(timeSec * 4.5 + f * 2.7) * (4.5 + sparkT * 3.5);
+      const sx = fp.x + driftX;
+      const sy = fp.y - 2 - sparkT * 22 + sparkT * sparkT * 6;
+      const spAlpha = Math.sin(sparkT * Math.PI) * 0.96;
+      ctx.fillStyle = f % 2 === 0 ? `rgba(254, 215, 120, ${spAlpha.toFixed(2)})` : `rgba(251, 146, 60, ${spAlpha.toFixed(2)})`;
       ctx.beginPath();
-      ctx.arc(sx, sy, 1.05, 0, Math.PI * 2);
+      ctx.arc(sx, sy, 1.15 + (1 - sparkT) * 0.55, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
 
     if (slots.some((s) => s.stock > 0)) {
-      const smokeA = w2i(pad.x + pad.w * 0.36, pad.y + pad.h * 0.45, 27);
-      const smokeB = w2i(pad.x + pad.w * 0.64, pad.y + pad.h * 0.55, 27);
-      drawSteamWisps(ctx, smokeA.x, smokeA.y, timeSec * 1.1, 7.5, 1.0, '246, 236, 224');
-      drawSteamWisps(ctx, smokeB.x, smokeB.y, timeSec * 1.1 + 1.8, 7.5, 0.9, '246, 236, 224');
+      const smokeA = w2i(pad.x + pad.w * 0.34, pad.y + pad.h * 0.45, 27);
+      const smokeB = w2i(pad.x + pad.w * 0.66, pad.y + pad.h * 0.55, 27);
+      drawSteamWisps(ctx, smokeA.x, smokeA.y, timeSec * 1.15, 7.5, 1.12, '248, 236, 218');
+      drawSteamWisps(ctx, smokeB.x, smokeB.y, timeSec * 1.15 + 1.8, 7.5, 1.05, '248, 236, 218');
     }
   } else if (zoneId === 'cooked_hot') {
     const drewCookedSprite = drawIsoFurnitureSprite(ctx, 'COOKED_HOT', {
@@ -1237,9 +1348,19 @@ export function drawIsoZonePad(
       });
     }
 
-    // Delicate chilled dry-ice mist over hinoki sushi glass showcase
+    // Delicate chilled dry-ice mist curling gently over hinoki sushi glass showcase
     const smP = w2i(pad.x + pad.w * 0.5, pad.y + pad.h * 0.5, 25);
-    drawSteamWisps(ctx, smP.x, smP.y, timeSec * 0.55, 6.2, 0.48, '218, 248, 255');
+    drawSteamWisps(ctx, smP.x, smP.y, timeSec * 0.55, 6.2, 0.5, '218, 248, 255');
+    ctx.save();
+    for (let m = 0; m < 2; m++) {
+      const mt = (timeSec * 0.32 + m * 0.5) % 1;
+      const mp = w2i(pad.x + pad.w * (0.34 + m * 0.32), pad.y + pad.h * 0.78, 19 - mt * 5);
+      ctx.fillStyle = `rgba(222, 248, 255, ${(Math.sin(mt * Math.PI) * 0.22).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.ellipse(mp.x + Math.cos(timeSec + m) * 3.5, mp.y + mt * 3.5, 10 + mt * 6, 4 + mt * 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   } else if (zoneId === 'drinks_dessert') {
     const drewDrinksSprite = drawIsoFurnitureSprite(ctx, 'DRINKS_DESSERT', {
       ...padFoot,
@@ -1308,9 +1429,17 @@ export function drawIsoZonePad(
       });
     }
 
-    // Cool chilled mist rising softly from Chaoshan marinated trough
+    // Cool chilled mist & rolling dry-ice cloud above Chaoshan marinated trough
     const rmMist = w2i(pad.x + pad.w * 0.5, pad.y + pad.h * 0.5, 24);
-    drawSteamWisps(ctx, rmMist.x, rmMist.y, timeSec * 0.58, 1.6, 0.48, '204, 246, 248');
+    drawSteamWisps(ctx, rmMist.x, rmMist.y, timeSec * 0.58, 1.6, 0.5, '204, 246, 248');
+    ctx.save();
+    const rmt = (timeSec * 0.35 + 0.2) % 1;
+    const rmp = w2i(pad.x + pad.w * 0.5, pad.y + pad.h * 0.76, 18 - rmt * 5);
+    ctx.fillStyle = `rgba(208, 248, 250, ${(Math.sin(rmt * Math.PI) * 0.22).toFixed(2)})`;
+    ctx.beginPath();
+    ctx.ellipse(rmp.x + Math.sin(timeSec) * 3, rmp.y + rmt * 3, 12 + rmt * 6, 4.5 + rmt * 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   } else if (zoneId === 'wagyu_carving') {
     const drewWagyuSprite = drawIsoFurnitureSprite(ctx, 'WAGYU_CARVING', {
       ...padFoot,
@@ -1514,19 +1643,26 @@ export function drawIsoTopKitchenStation(
       });
     }
 
-    // Live warm hearth glow + rising watercolor steam curls above the 3 copper broth cauldrons
+    // Live warm hearth glow, tiny rising orange cauldron embers + curling watercolor steam above the 3 copper broth cauldrons
     for (let i = 0; i < 3; i++) {
       const bx = wx + 42 + i * ((sw - 84) / 2);
       const bp = w2i(bx, st.y, 26);
       const flameFlicker = 0.72 + Math.sin(timeSec * 9.2 + i * 2.4) * 0.22;
-      const stoveGlow = ctx.createRadialGradient(bp.x, bp.y + 4, 2, bp.x, bp.y + 4, 15);
-      stoveGlow.addColorStop(0, `rgba(255, 152, 46, ${(0.22 * flameFlicker).toFixed(2)})`);
+      const stoveGlow = ctx.createRadialGradient(bp.x, bp.y + 4, 2, bp.x, bp.y + 4, 16);
+      stoveGlow.addColorStop(0, `rgba(255, 152, 46, ${(0.26 * flameFlicker).toFixed(2)})`);
       stoveGlow.addColorStop(1, 'rgba(255, 152, 46, 0)');
       ctx.fillStyle = stoveGlow;
       ctx.beginPath();
-      ctx.ellipse(bp.x, bp.y + 4, 15, 7.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(bp.x, bp.y + 4, 16, 8, 0, 0, Math.PI * 2);
       ctx.fill();
       drawSteamWisps(ctx, bp.x, bp.y - 5, timeSec, 3.3 + i * 2.1, 0.95);
+
+      const embT = (timeSec * (1.0 + i * 0.18) + i * 0.37) % 1;
+      const embA = Math.sin(embT * Math.PI) * 0.9;
+      ctx.fillStyle = `rgba(255, 186, 82, ${embA.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(bp.x + Math.sin(timeSec * 5 + i * 2) * 4.5, bp.y - 2 - embT * 18, 1.15, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     drawIsoTextTag(ctx, '熬汤锅底灶', topCenter.x, topCenter.y - 8, {
@@ -1678,32 +1814,102 @@ export function drawIsoBackstageRoomProps(
         right: '#77532B',
       });
     }
+
+    // Living Cold-Storage VFX: chilled white mist drifting across crates + turquoise caustic shimmer & ice glints
+    ctx.save();
+    for (let m = 0; m < 3; m++) {
+      const mt = (timeSec * 0.28 + m * 0.34) % 1;
+      const mp = w2i(x + 42 + m * 46, wy + 126, 20 - mt * 6);
+      ctx.fillStyle = `rgba(216, 246, 255, ${(Math.sin(mt * Math.PI) * 0.24).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.ellipse(mp.x + Math.sin(timeSec * 1.1 + m) * 5, mp.y + mt * 4, 14 + mt * 8, 5.5 + mt * 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Turquoise holding-tank water light reflection onto floor
+    const tankGlow = w2i(x + 86, wy + 78, 1);
+    const tgPulse = 0.78 + Math.sin(timeSec * 2.4) * 0.22;
+    const tGrad = ctx.createRadialGradient(tankGlow.x, tankGlow.y, 4, tankGlow.x, tankGlow.y, 42);
+    tGrad.addColorStop(0, `rgba(94, 234, 212, ${(0.18 * tgPulse).toFixed(2)})`);
+    tGrad.addColorStop(1, 'rgba(94, 234, 212, 0)');
+    ctx.fillStyle = tGrad;
+    ctx.beginPath();
+    ctx.ellipse(tankGlow.x, tankGlow.y, 42, 19, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (world.rawIngredients > 0) {
+      const fg = Math.max(0, Math.sin(timeSec * 3.1 + 0.7));
+      if (fg > 0.4) {
+        const fp = w2i(x + 96, wy + 114, 26);
+        const sz = (fg - 0.35) * 3.2;
+        ctx.strokeStyle = `rgba(240, 253, 255, ${(fg * 0.85).toFixed(2)})`;
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(fp.x - sz, fp.y);
+        ctx.lineTo(fp.x + sz, fp.y);
+        ctx.moveTo(fp.x, fp.y - sz);
+        ctx.lineTo(fp.x, fp.y + sz);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   } else if (room.id === 'hot_kitchen') {
     // Backstage Hot Kitchen: unified canonical Stove Range + Cold Prep Butcher Counter sprites
-    drawQuad(ctx, x + 18, wy + 22, 174, 54, 0.1, 'rgba(18, 12, 8, 0.2)');
+    drawQuad(ctx, x + 22, wy + 28, 152, 48, 0.1, 'rgba(18, 12, 8, 0.2)');
     const drewBackStove = drawIsoFurnitureSprite(ctx, 'BROTH_KITCHEN', {
-      ...makeFoot(x + 16, wy + 20, 174, 54),
+      ...makeFoot(x + 20, wy + 26, 152, 48),
       flipX: true,
     });
     if (!drewBackStove) {
-      drawBox(ctx, x + 16, wy + 20, 174, 52, 24, {
+      drawBox(ctx, x + 20, wy + 26, 152, 48, 24, {
         top: '#C99B68',
         left: '#93643B',
         right: '#6F4826',
       });
     }
-    for (let i = 0; i < 2; i++) {
-      const wp = w2i(x + 68 + i * 70, wy + 46, 26);
-      drawSteamWisps(ctx, wp.x, wp.y - 4, timeSec, 11.4 + i * 3, 0.95);
-    }
+    // Living Hot-Kitchen VFX: warm range-hood glow pool + flickering live wok flames + rising orange ember sparks
+    ctx.save();
+    const hoodPool = w2i(x + 96, wy + 54, 22);
+    const hoodFlicker = 0.84 + Math.sin(timeSec * 6.8) * 0.16;
+    const hGrad = ctx.createRadialGradient(hoodPool.x, hoodPool.y, 4, hoodPool.x, hoodPool.y, 44);
+    hGrad.addColorStop(0, `rgba(255, 168, 62, ${(0.28 * hoodFlicker).toFixed(2)})`);
+    hGrad.addColorStop(0.55, `rgba(234, 88, 12, ${(0.12 * hoodFlicker).toFixed(2)})`);
+    hGrad.addColorStop(1, 'rgba(234, 88, 12, 0)');
+    ctx.fillStyle = hGrad;
+    ctx.beginPath();
+    ctx.ellipse(hoodPool.x, hoodPool.y, 44, 20, 0, 0, Math.PI * 2);
+    ctx.fill();
 
-    drawQuad(ctx, x + 24, wy + 112, 128, 46, 0.1, 'rgba(18, 12, 8, 0.2)');
+    for (let i = 0; i < 2; i++) {
+      const wp = w2i(x + 66 + i * 62, wy + 50, 26);
+      drawSteamWisps(ctx, wp.x, wp.y - 4, timeSec, 11.4 + i * 3, 1.02);
+      // Flickering wok flame tongue + rising tiny orange ember sparks
+      const flH = 4.5 + Math.sin(timeSec * 12 + i * 2.5) * 1.8;
+      ctx.fillStyle = 'rgba(251, 146, 60, 0.72)';
+      ctx.beginPath();
+      ctx.ellipse(wp.x, wp.y + 3, 4.2, flH * 0.65, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.88)';
+      ctx.beginPath();
+      ctx.ellipse(wp.x, wp.y + 3.5, 2.0, flH * 0.38, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      for (let e = 0; e < 2; e++) {
+        const et = (timeSec * (1.2 + e * 0.35) + i * 0.4 + e * 0.52) % 1;
+        const ea = Math.sin(et * Math.PI) * 0.92;
+        ctx.fillStyle = e === 0 ? `rgba(253, 224, 71, ${ea.toFixed(2)})` : `rgba(249, 115, 22, ${ea.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(wp.x + Math.sin(timeSec * 5 + i + e * 3) * 5, wp.y - 2 - et * 20, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    drawQuad(ctx, x + 26, wy + 116, 118, 44, 0.1, 'rgba(18, 12, 8, 0.2)');
     const drewBackPrep = drawIsoFurnitureSprite(ctx, 'COLD_PREP', {
-      ...makeFoot(x + 22, wy + 110, 128, 46),
+      ...makeFoot(x + 24, wy + 114, 118, 44),
       flipX: true,
     });
     if (!drewBackPrep) {
-      drawBox(ctx, x + 24, wy + 112, 102, 40, 21, {
+      drawBox(ctx, x + 26, wy + 116, 102, 40, 21, {
         top: '#CFD9DE',
         left: '#97A8B1',
         right: '#73858F',
@@ -1711,33 +1917,61 @@ export function drawIsoBackstageRoomProps(
     }
   } else if (room.id === 'dish_washroom') {
     // Backstage Dish Washroom: unified canonical Sink + Sterilizer Cabinet sprites
-    drawQuad(ctx, x + 20, wy + 22, 162, 56, 0.1, 'rgba(18, 12, 8, 0.2)');
+    drawQuad(ctx, x + 22, wy + 28, 148, 50, 0.1, 'rgba(18, 12, 8, 0.2)');
     const drewBackSink = drawIsoFurnitureSprite(ctx, 'SINK', {
-      ...makeFoot(x + 18, wy + 20, 162, 56),
+      ...makeFoot(x + 20, wy + 26, 148, 50),
       flipX: true,
     });
     if (!drewBackSink) {
-      drawBox(ctx, x + 18, wy + 22, 174, 52, 26, {
+      drawBox(ctx, x + 20, wy + 26, 148, 48, 26, {
         top: '#A5D6D7',
         left: '#6DA7AC',
         right: '#4E8287',
       });
     }
+    // Living Dish-Washroom VFX: humid hot-water steam plumes + rising iridescent soap bubbles
+    const sinkSteamP = w2i(x + 94, wy + 52, 28);
+    drawSteamWisps(ctx, sinkSteamP.x, sinkSteamP.y, timeSec * 0.85, 6.4, 0.92, '232, 248, 255');
+    ctx.save();
+    for (let b = 0; b < 5; b++) {
+      const bt = (timeSec * (0.55 + (b % 3) * 0.16) + b * 0.23) % 1;
+      const bp = w2i(x + 60 + b * 17, wy + 52, 24);
+      const bx = bp.x + Math.sin(timeSec * 2.5 + b * 1.9) * 4.5;
+      const by = bp.y - bt * 22;
+      const ba = Math.sin(bt * Math.PI) * 0.78;
+      ctx.strokeStyle = `rgba(186, 242, 255, ${ba.toFixed(2)})`;
+      ctx.fillStyle = `rgba(240, 252, 255, ${(ba * 0.32).toFixed(2)})`;
+      ctx.lineWidth = 0.75;
+      ctx.beginPath();
+      ctx.arc(bx, by, 1.4 + (b % 2) * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
 
-    drawQuad(ctx, x + 26, wy + 108, 96, 46, 0.1, 'rgba(18, 12, 8, 0.2)');
+    drawQuad(ctx, x + 28, wy + 114, 92, 44, 0.1, 'rgba(18, 12, 8, 0.2)');
     const drewBackClean = drawIsoFurnitureSprite(ctx, 'CLEAN_RACK', {
-      ...makeFoot(x + 24, wy + 106, 96, 46),
+      ...makeFoot(x + 26, wy + 112, 92, 44),
       flipX: true,
     });
     if (!drewBackClean) {
-      drawBox(ctx, x + 24, wy + 110, 88, 36, 22, {
+      drawBox(ctx, x + 26, wy + 114, 86, 36, 22, {
         top: '#DCE5E9',
         left: '#9AAAB3',
         right: '#758791',
       });
-      drawPorcelainStack(ctx, x + 46, wy + 128, 22.6, 5, 5.2);
-      drawPorcelainStack(ctx, x + 78, wy + 128, 22.6, 4, 5.2);
+      drawPorcelainStack(ctx, x + 46, wy + 130, 22.6, 5, 5.2);
+      drawPorcelainStack(ctx, x + 76, wy + 130, 22.6, 4, 5.2);
     }
+    // Clean sterilizer cyan UV shimmer & gleaming sparkle
+    const uvP = w2i(x + 72, wy + 132, 22);
+    const uvG = ctx.createRadialGradient(uvP.x, uvP.y, 2, uvP.x, uvP.y, 24);
+    uvG.addColorStop(0, `rgba(125, 244, 255, ${(0.2 + Math.sin(timeSec * 2.6) * 0.06).toFixed(2)})`);
+    uvG.addColorStop(1, 'rgba(125, 244, 255, 0)');
+    ctx.fillStyle = uvG;
+    ctx.beginPath();
+    ctx.ellipse(uvP.x, uvP.y, 24, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
   } else if (room.id === 'office') {
     // Manager Office: unified Mahogany Ledger Bookcase + Executive Desk & Banker's Lamp sprites
     drawQuad(ctx, x + 20, wy + 18, 168, 36, 0.1, 'rgba(18, 12, 8, 0.22)');
@@ -1773,6 +2007,30 @@ export function drawIsoBackstageRoomProps(
       });
       drawSlattedWoodenChair(ctx, x + 92, wy + 80, 22, 16, 'NORTH');
     }
+    // Living Office VFX: warm emerald-brass banker's lamp glow pool cast over ledger desk + floating golden dust motes
+    ctx.save();
+    const lampP = w2i(x + 104, wy + 122, 26);
+    const lPulse = 0.88 + Math.sin(timeSec * 2.1) * 0.12;
+    const deskGlow = ctx.createRadialGradient(lampP.x, lampP.y, 3, lampP.x, lampP.y, 44);
+    deskGlow.addColorStop(0, `rgba(255, 226, 132, ${(0.32 * lPulse).toFixed(2)})`);
+    deskGlow.addColorStop(0.5, `rgba(242, 186, 74, ${(0.13 * lPulse).toFixed(2)})`);
+    deskGlow.addColorStop(1, 'rgba(242, 186, 74, 0)');
+    ctx.fillStyle = deskGlow;
+    ctx.beginPath();
+    ctx.ellipse(lampP.x, lampP.y, 44, 21, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    for (let d = 0; d < 4; d++) {
+      const dt = (timeSec * 0.24 + d * 0.27) % 1;
+      const mx = lampP.x - 16 + d * 11 + Math.sin(timeSec * 1.4 + d * 2) * 3.5;
+      const my = lampP.y - 4 - dt * 16;
+      const ma = Math.sin(dt * Math.PI) * 0.68;
+      ctx.fillStyle = `rgba(255, 238, 168, ${ma.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(mx, my, 1.0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   } else if (room.id === 'restroom') {
     // Restroom: unified Celadon-Jade 3-Basin Handwashing Vanity + Twin Celadon Toilet Stalls!
     drawQuad(ctx, x + 20, wy + 20, 190, 48, 0.1, 'rgba(18, 12, 8, 0.2)');
@@ -1802,6 +2060,47 @@ export function drawIsoBackstageRoomProps(
         });
       }
     }
+
+    // Living Restroom VFX: sparkling cleanliness star-glints (>= 65%) OR warning odor haze & wisps (< 55%)
+    ctx.save();
+    if (world.restroomCleanliness >= 65) {
+      for (let k = 0; k < 4; k++) {
+        const g = Math.max(0, Math.sin(timeSec * 3.0 + k * 1.7));
+        if (g > 0.35) {
+          const sp = w2i(x + 48 + k * 42, wy + (k % 2 === 0 ? 40 : 144), 30);
+          const sz = (g - 0.3) * 3.8;
+          ctx.strokeStyle = `rgba(220, 255, 248, ${(g * 0.92).toFixed(2)})`;
+          ctx.lineWidth = 0.95;
+          ctx.beginPath();
+          ctx.moveTo(sp.x - sz, sp.y);
+          ctx.lineTo(sp.x + sz, sp.y);
+          ctx.moveTo(sp.x, sp.y - sz);
+          ctx.lineTo(sp.x, sp.y + sz);
+          ctx.stroke();
+        }
+      }
+    } else if (world.restroomCleanliness < 55) {
+      const hazeP = w2i(x + 105, wy + 152, 24);
+      const hazeG = ctx.createRadialGradient(hazeP.x, hazeP.y, 4, hazeP.x, hazeP.y, 46);
+      hazeG.addColorStop(0, 'rgba(163, 186, 68, 0.24)');
+      hazeG.addColorStop(1, 'rgba(163, 186, 68, 0)');
+      ctx.fillStyle = hazeG;
+      ctx.beginPath();
+      ctx.ellipse(hazeP.x, hazeP.y, 46, 22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      for (let w = 0; w < 3; w++) {
+        const wt = (timeSec * 0.55 + w * 0.33) % 1;
+        const wp = w2i(x + 62 + w * 44, wy + 150, 28);
+        const wa = Math.sin(wt * Math.PI) * 0.65;
+        ctx.strokeStyle = `rgba(182, 206, 78, ${wa.toFixed(2)})`;
+        ctx.lineWidth = 1.15;
+        ctx.beginPath();
+        ctx.moveTo(wp.x, wp.y - wt * 14);
+        ctx.quadraticCurveTo(wp.x + 3.5, wp.y - wt * 14 - 5, wp.x - 1, wp.y - wt * 14 - 10);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   } else if (room.id === 'equipment_room') {
     // Equipment Room: unified Chiller/Ice-Maker Machinery Unit + Copper Oil-Water Separator Tank!
     drawQuad(ctx, x + 20, wy + 24, 174, 62, 0.1, 'rgba(18, 12, 8, 0.22)');
@@ -1821,15 +2120,63 @@ export function drawIsoBackstageRoomProps(
         right: '#657886',
       });
     }
-    // Live equipment health status indicator glow overlaid cleanly on chiller front
+    // Living Equipment-Room VFX: spinning exhaust fan blades + pulsing dual health gauges + warning sparks
+    ctx.save();
+    const fanP = w2i(x + 148, wy + 52, 34);
+    const fanSpeed = world.equipmentHealth < 45 ? 1.8 : 6.5;
+    ctx.strokeStyle = 'rgba(42, 54, 64, 0.72)';
+    ctx.fillStyle = 'rgba(32, 42, 50, 0.42)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.ellipse(fanP.x, fanP.y, 7.5, 4.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    for (let b = 0; b < 3; b++) {
+      const ang = timeSec * fanSpeed + (b * Math.PI * 2) / 3;
+      ctx.strokeStyle = '#DCE6EE';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(fanP.x, fanP.y);
+      ctx.lineTo(fanP.x + Math.cos(ang) * 6.2, fanP.y + Math.sin(ang) * 3.3);
+      ctx.stroke();
+    }
+
+    // Pulsing equipment health LED cluster
     const gp = w2i(x + 86, wy + 82, 32);
-    ctx.fillStyle = world.equipmentHealth < 55 ? '#EF4444' : '#4ADE80';
+    const isWarn = world.equipmentHealth < 55;
+    const ledPulse = 0.55 + Math.sin(timeSec * (isWarn ? 7.5 : 2.6)) * 0.45;
+    const ledCol = isWarn ? '#EF4444' : world.equipmentHealth < 78 ? '#FBBF24' : '#4ADE80';
+    const ledGlow = ctx.createRadialGradient(gp.x, gp.y, 1, gp.x, gp.y, 11);
+    ledGlow.addColorStop(0, isWarn ? `rgba(239, 68, 68, ${(0.55 * ledPulse).toFixed(2)})` : `rgba(74, 222, 128, ${(0.36 * ledPulse).toFixed(2)})`);
+    ledGlow.addColorStop(1, 'rgba(74, 222, 128, 0)');
+    ctx.fillStyle = ledGlow;
+    ctx.beginPath();
+    ctx.arc(gp.x, gp.y, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = ledCol;
     ctx.strokeStyle = INK;
     ctx.lineWidth = 0.7;
     ctx.beginPath();
     ctx.arc(gp.x, gp.y, 3.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+
+    if (isWarn) {
+      // Crackling malfunction warning sparks when equipment health is low
+      for (let sp = 0; sp < 3; sp++) {
+        const st = (timeSec * 2.2 + sp * 0.35) % 1;
+        if (st < 0.45) {
+          const sx = gp.x + (sp - 1) * 6 + Math.sin(timeSec * 14 + sp) * 4;
+          const sy = gp.y - st * 14;
+          ctx.fillStyle = `rgba(254, 215, 102, ${(1 - st * 2).toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
 
     drawQuad(ctx, x + 26, wy + 126, 134, 52, 0.1, 'rgba(18, 12, 8, 0.22)');
     const drewSeparator = drawIsoFurnitureSprite(ctx, 'EQUIP_SEPARATOR', {
@@ -1842,6 +2189,11 @@ export function drawIsoBackstageRoomProps(
         left: '#A86423',
         right: '#7D4717',
       });
+    }
+    // Rhythmic copper-pipe pressure steam puffs above oil-water separator
+    const pipeP = w2i(x + 114, wy + 144, 28);
+    if ((timeSec * 0.42) % 1 < 0.6) {
+      drawSteamWisps(ctx, pipeP.x, pipeP.y, timeSec * 1.15, 4.2, 0.65, '232, 240, 246');
     }
   } else if (room.id === 'dormitory') {
     // Staff Dormitory: Twin Unified Cedar Double-Decker Bunk Beds + Cantonese Gongfu Tea Table!
@@ -1871,6 +2223,34 @@ export function drawIsoBackstageRoomProps(
         right: '#694321',
       });
     }
+    // Living Dormitory VFX: cozy warm amber tea-lounge glow pool + delicate gongfu oolong tea steam + partner hearts
+    ctx.save();
+    const teaP = w2i(x + 128, wy + 154, 16);
+    const tGlow = ctx.createRadialGradient(teaP.x, teaP.y, 4, teaP.x, teaP.y, 50);
+    tGlow.addColorStop(0, 'rgba(255, 206, 126, 0.26)');
+    tGlow.addColorStop(0.55, 'rgba(244, 160, 74, 0.10)');
+    tGlow.addColorStop(1, 'rgba(244, 160, 74, 0)');
+    ctx.fillStyle = tGlow;
+    ctx.beginPath();
+    ctx.ellipse(teaP.x, teaP.y, 50, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawSteamWisps(ctx, teaP.x, teaP.y - 3, timeSec * 0.72, 2.7, 0.56, '255, 244, 224');
+
+    if (world.activePartnerId) {
+      for (let hIdx = 0; hIdx < 2; hIdx++) {
+        const ht = (timeSec * 0.36 + hIdx * 0.52) % 1;
+        const hx = teaP.x + (hIdx === 0 ? -12 : 14) + Math.sin(timeSec * 2 + hIdx) * 3;
+        const hy = teaP.y - 10 - ht * 22;
+        const ha = Math.sin(ht * Math.PI) * 0.82;
+        ctx.fillStyle = `rgba(244, 114, 152, ${ha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy + 2.6);
+        ctx.bezierCurveTo(hx - 3.6, hy - 0.6, hx - 2.6, hy - 3.6, hx, hy - 1.4);
+        ctx.bezierCurveTo(hx + 2.6, hy - 3.6, hx + 3.6, hy - 0.6, hx, hy + 2.6);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   // Special Staff NPC in Cold Storage (林汐) / Hot Kitchen (沈知微) / Office (苏星遥)
@@ -1898,9 +2278,31 @@ export function drawIsoBackstageRoomProps(
           : bond?.recruited
             ? '#E8C97A'
             : '#38BDF8',
-        scale: 1.02,
+        scale: ISO_CHARACTER_ROLE_SCALE.BACKSTAGE_NPC,
       });
-      const np = w2i(room.npcX, npcWy, 43);
+
+      // Gentle orbiting warm affinity heart spark for close-bond recruited special staff
+      if (bond?.recruited && bond.affection >= 60) {
+        const ht = (timeSec * 0.45 + room.npcX * 0.01) % 1;
+        const hp = w2i(room.npcX + 8, npcWy - 4, 46);
+        const ha = Math.sin(ht * Math.PI) * 0.88;
+        ctx.save();
+        ctx.fillStyle = `rgba(248, 128, 158, ${ha.toFixed(2)})`;
+        const hx = hp.x + Math.sin(timeSec * 2.4) * 3;
+        const hy = hp.y - ht * 14;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy + 2.4);
+        ctx.bezierCurveTo(hx - 3.2, hy - 0.5, hx - 2.3, hy - 3.2, hx, hy - 1.2);
+        ctx.bezierCurveTo(hx + 2.3, hy - 3.2, hx + 3.2, hy - 0.5, hx, hy + 2.4);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      const np = w2i(
+        room.npcX,
+        npcWy,
+        getIsoCharacterHeadAnchorZ(ISO_CHARACTER_ROLE_SCALE.BACKSTAGE_NPC, 9)
+      );
       drawIsoTextTag(
         ctx,
         bond?.recruited
@@ -1921,7 +2323,7 @@ export function drawIsoBackstageRoomProps(
   }
 
   // Room title badge centered cleanly
-  const titlePos = w2i(x + w * 0.5, wy + h * 0.5, 58);
+  const titlePos = w2i(x + w * 0.5, wy + h * 0.5, 64);
   const statusHint =
     room.id === 'restroom' && world.restroomCleanliness < 55
       ? ` · 洁净${Math.round(world.restroomCleanliness)}%`

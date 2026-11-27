@@ -5,6 +5,7 @@ import { HIDDEN_SYNERGIES } from '../data/policyAndTechConfig';
 import { SPECIAL_STORIES } from '../data/storyConfig';
 import { ACHIEVEMENTS_CATALOG } from '../data/tycoonSystemsConfig';
 import { PersistentEncyclopedia } from '../types/game';
+import { BrothSvgIcon, SeafoodSvgIcon } from './VintageIcons';
 
 type EncyclopediaTab = 'ACHIEVEMENTS' | 'CATALOG' | 'LORE';
 
@@ -156,19 +157,30 @@ export function EncyclopediaModal({ encyclopedia, onClose }: EncyclopediaModalPr
                     return (
                       <div
                         key={item.id}
-                        className={`rounded-lg p-3 border text-xs ${
+                        className={`rounded-lg p-3 border text-xs flex items-start gap-2.5 ${
                           seen
                             ? 'game-card border-[#6b472b]'
                             : 'bg-[#160c08] border-[#362014] opacity-60'
                         }`}
                       >
-                        <div className="font-display font-bold text-[#FFF6E5]">
-                          {seen ? item.name : '？？？'}
+                        <div
+                          className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${
+                            seen
+                              ? 'bg-[#1c110b] border-[#8c633a]'
+                              : 'bg-[#120a07] border-[#3b2518] grayscale opacity-45'
+                          }`}
+                        >
+                          <SeafoodSvgIcon itemId={item.id} zoneId={item.zone} className="w-7 h-7" />
                         </div>
-                        <div className="text-[11px] text-[#C5AE92] mt-1">
-                          {seen
-                            ? `餐位溢价 +¥${item.ticketBonus} · 单格上限 ${item.maxStock}`
-                            : '待通过门店发展树或奇遇解锁'}
+                        <div className="min-w-0">
+                          <div className="font-display font-bold text-[#FFF6E5] truncate">
+                            {seen ? item.name : '？？？'}
+                          </div>
+                          <div className="text-[11px] text-[#C5AE92] mt-1 leading-snug">
+                            {seen
+                              ? `餐位溢价 +¥${item.ticketBonus} · 上限 ${item.maxStock}`
+                              : '待通过门店发展树或奇遇解锁'}
+                          </div>
                         </div>
                       </div>
                     );
@@ -186,23 +198,41 @@ export function EncyclopediaModal({ encyclopedia, onClose }: EncyclopediaModalPr
                     return (
                       <div
                         key={b.id}
-                        className={`rounded-lg p-3 border text-xs ${
+                        className={`rounded-lg p-3 border text-xs flex items-start gap-2.5 ${
                           seen
                             ? 'game-card border-[#6b472b]'
                             : 'bg-[#160c08] border-[#362014] opacity-60'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-display font-bold text-[#FFF6E5]">
-                            {seen ? b.name : '未解锁锅底'}
-                          </span>
-                          {seen && (
-                            <span className="font-mono-num text-[#F6DA8D]">+¥{b.priceBonus}</span>
-                          )}
+                        <div
+                          className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${
+                            seen
+                              ? 'bg-[#1c110b] border-[#8c633a]'
+                              : 'bg-[#120a07] border-[#3b2518] grayscale opacity-45'
+                          }`}
+                        >
+                          <BrothSvgIcon
+                            brothId={b.id}
+                            color={b.color}
+                            secondaryColor={b.secondaryColor}
+                            className="w-7 h-7"
+                          />
                         </div>
-                        <p className="text-[11px] text-[#C5AE92] mt-1">
-                          {seen ? b.description : '需在发展树研学解锁'}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-display font-bold text-[#FFF6E5] truncate">
+                              {seen ? b.name : '未解锁锅底'}
+                            </span>
+                            {seen && (
+                              <span className="font-mono-num text-[#F6DA8D] shrink-0">
+                                +¥{b.priceBonus}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#C5AE92] mt-1 leading-snug">
+                            {seen ? b.description : '需在发展树研学解锁'}
+                          </p>
+                        </div>
                       </div>
                     );
                   })}

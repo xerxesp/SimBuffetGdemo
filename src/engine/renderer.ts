@@ -1976,6 +1976,394 @@ function drawWeatherOverlay(
   ctx.restore();
 }
 
+/**
+ * Renders the simulation-driven Four-Season visual atmosphere layers:
+ * - SPRING: Fluttering multi-depth notched cherry blossom petals & soft blossom light veil
+ * - SUMMER: Shimmering heatwave refraction distortion waves & rising golden mirage ripples
+ * - AUTUMN: Swirling maple & ginkgo falling leaves with warm harvest breeze streaks
+ * - WINTER: Dynamic snow blanket coverage along eaves/edges, crystalline frost sheen & falling snowflakes
+ */
+export function drawSeasonalVisualLayer(
+  ctx: CanvasRenderingContext2D,
+  world: GameWorld,
+  timeSec: number,
+  width = CANVAS_WIDTH,
+  height = CANVAS_HEIGHT
+) {
+  const sv = world.seasonalVisual;
+  const season = sv?.activeSeason ?? world.season;
+  const isStorm = world.weather === 'RAINY' || world.weather === 'TYPHOON';
+  const isHeatwave = world.weather === 'HEATWAVE';
+  const isBlizzard = world.weather === 'SNOWY';
+
+  const sakuraDensity = sv ? sv.sakuraDensity : season === 'SPRING' ? 1 : 0;
+  const heatIntensity = sv
+    ? sv.heatDistortionIntensity
+    : isHeatwave
+      ? 1
+      : season === 'SUMMER'
+        ? 0.62
+        : 0;
+  const autumnDensity = sv ? sv.autumnLeafDensity : season === 'AUTUMN' ? 1 : 0;
+  const snowCoverage = sv
+    ? sv.snowCoverage
+    : isBlizzard
+      ? 0.95
+      : season === 'WINTER'
+        ? 0.72
+        : 0;
+
+  ctx.save();
+
+  // ---------------------------------------------------
+  // 1. SPRING: Cherry Blossom Petals & Fresh Dawn Haze
+  // ---------------------------------------------------
+  if (sakuraDensity > 0.02) {
+    const dim = isStorm ? 0.45 : 1.0;
+    const eff = sakuraDensity * dim;
+
+    if (!isStorm) {
+      const spGrad = ctx.createLinearGradient(0, 0, width, height);
+      spGrad.addColorStop(0, `rgba(255, 224, 238, ${(0.08 * eff).toFixed(3)})`);
+      spGrad.addColorStop(0.5, `rgba(255, 248, 234, ${(0.03 * eff).toFixed(3)})`);
+      spGrad.addColorStop(1, `rgba(167, 243, 208, ${(0.045 * eff).toFixed(3)})`);
+      ctx.fillStyle = spGrad;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    const simPetals = sv?.particles.filter((p) => p.kind === 'SAKURA_PETAL') ?? [];
+    if (simPetals.length > 0) {
+      for (const p of simPetals) {
+        const px = p.x * width + Math.sin(timeSec * 1.3 + p.swayPhase) * 14 * (p.depth + 1);
+        const py = p.y * height;
+        const rot = p.rotation + Math.sin(timeSec * 2.1 + p.swayPhase) * 0.25;
+        const r = p.size;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(rot);
+        ctx.globalAlpha = Math.min(1, p.alpha * eff);
+        // Authentic notched sakura petal silhouette
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.moveTo(0, r * 0.85);
+        ctx.bezierCurveTo(-r * 1.05, r * 0.2, -r * 0.95, -r * 0.95, -r * 0.18, -r * 0.68);
+        ctx.lineTo(0, -r * 0.35);
+        ctx.lineTo(r * 0.18, -r * 0.68);
+        ctx.bezierCurveTo(r * 0.95, -r * 0.95, r * 1.05, r * 0.2, 0, r * 0.85);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.48)';
+        ctx.beginPath();
+        ctx.arc(0, r * 0.1, r * 0.26, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    } else {
+      for (let i = 0; i < 36; i++) {
+        const layer = i % 3;
+        const px = ((i * 191 + timeSec * (36 + layer * 16)) % (width + 80)) - 40;
+        const py = ((i * 127 + timeSec * (24 + layer * 11)) % (height + 60)) - 30;
+        const r = 3.2 + layer * 1.4;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(timeSec * (1.2 + layer * 0.5) + i);
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(251, 168, 206, 0.68)' : 'rgba(255, 228, 240, 0.72)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r, r * 0.56, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  // ---------------------------------------------------
+  // 2. SUMMER: Heatwave Refraction Distortion & Sun Shafts
+  // ---------------------------------------------------
+  if (heatIntensity > 0.02 && !isStorm) {
+    const hi = heatIntensity;
+
+    // Warm sunlit coastal summer wash + diagonal sun shafts
+    const sunGrad = ctx.createLinearGradient(width, 0, width * 0.18, height * 0.82);
+    sunGrad.addColorStop(0, `rgba(255, 206, 98, ${(0.18 * hi).toFixed(3)})`);
+    sunGrad.addColorStop(0.45, `rgba(255, 178, 76, ${(0.07 * hi).toFixed(3)})`);
+    sunGrad.addColorStop(1, 'rgba(255, 210, 120, 0)');
+    ctx.fillStyle = sunGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    for (let b = 0; b < 3; b++) {
+      const bx = width * (0.56 + b * 0.18);
+      const shimmer = 0.76 + Math.sin(timeSec * 1.7 + b * 2.1) * 0.24;
+      const rayGrad = ctx.createLinearGradient(bx, 0, bx - width * 0.24, height * 0.78);
+      rayGrad.addColorStop(0, `rgba(255, 242, 184, ${(0.12 * hi * shimmer).toFixed(3)})`);
+      rayGrad.addColorStop(1, 'rgba(255, 242, 184, 0)');
+      ctx.fillStyle = rayGrad;
+      ctx.beginPath();
+      ctx.moveTo(bx - 42, 0);
+      ctx.lineTo(bx + 54, 0);
+      ctx.lineTo(bx - width * 0.18, height * 0.8);
+      ctx.lineTo(bx - width * 0.28, height * 0.8);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Layered sinusoidal heatwave mirage distortion ribbons across hot air zones
+    const bandCount = isHeatwave ? 7 : 4;
+    for (let w = 0; w < bandCount; w++) {
+      const yFrac = w % 2 === 0 ? 0.07 + w * 0.045 : 0.72 + (w - 1) * 0.045;
+      const baseY = height * Math.min(0.95, yFrac);
+      const amp = (3.5 + hi * 5.2) * (isHeatwave ? 1.2 : 0.85);
+      const freq = 0.018 + (w % 3) * 0.005;
+      const phase = timeSec * (3.2 + w * 0.45);
+      ctx.save();
+      ctx.strokeStyle =
+        w % 2 === 0
+          ? `rgba(255, 244, 198, ${(0.14 * hi).toFixed(3)})`
+          : `rgba(255, 204, 118, ${(0.12 * hi).toFixed(3)})`;
+      ctx.lineWidth = isHeatwave ? 2.4 : 1.7;
+      ctx.beginPath();
+      const segs = 22;
+      for (let s = 0; s <= segs; s++) {
+        const sx = (s / segs) * width;
+        const sy = baseY + Math.sin(sx * freq + phase) * amp;
+        if (s === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Rising shimmering heat-mirage ripples & sunlit motes driven by simulation particles
+    const heatParticles = sv?.particles.filter((p) => p.kind === 'HEAT_RIPPLE') ?? [];
+    for (const p of heatParticles) {
+      const px = p.x * width + Math.sin(timeSec * 3.4 + p.swayPhase) * 8;
+      const py = p.y * height;
+      const waveLen = p.size * (0.75 + hi * 0.45);
+      const waveH = 2.2 + Math.sin(timeSec * 5.2 + p.swayPhase) * 1.9;
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.55, p.alpha * hi);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(px - waveLen * 0.5, py);
+      ctx.quadraticCurveTo(px - waveLen * 0.25, py - waveH, px, py);
+      ctx.quadraticCurveTo(px + waveLen * 0.25, py + waveH, px + waveLen * 0.5, py);
+      ctx.stroke();
+      // Tiny sunlit heat-shimmer mote beside the ripple
+      ctx.fillStyle = 'rgba(255, 248, 206, 0.7)';
+      ctx.beginPath();
+      ctx.arc(px + waveLen * 0.18, py - 3, 1.3 + p.depth * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ---------------------------------------------------
+  // 3. AUTUMN: Swirling Golden Ginkgo & Crimson Maple Leaves
+  // ---------------------------------------------------
+  if (autumnDensity > 0.02) {
+    const dim = isStorm ? 0.55 : 1.0;
+    const eff = autumnDensity * dim;
+
+    if (!isStorm) {
+      const auGrad = ctx.createLinearGradient(width, 0, 0, height);
+      auGrad.addColorStop(0, `rgba(245, 166, 62, ${(0.13 * eff).toFixed(3)})`);
+      auGrad.addColorStop(0.55, `rgba(217, 119, 6, ${(0.05 * eff).toFixed(3)})`);
+      auGrad.addColorStop(1, `rgba(120, 53, 15, ${(0.065 * eff).toFixed(3)})`);
+      ctx.fillStyle = auGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Gentle autumn harvest wind arcs
+      for (let b = 0; b < 4; b++) {
+        const bt = (timeSec * 0.36 + b * 0.27) % 1;
+        const bx = bt * (width + 240) - 120;
+        const by = height * (0.18 + b * 0.21) + Math.sin(timeSec * 1.4 + b) * 12;
+        const alpha = Math.sin(bt * Math.PI) * 0.16 * eff;
+        ctx.strokeStyle = `rgba(252, 206, 128, ${alpha.toFixed(3)})`;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(bx - 52, by - 4);
+        ctx.quadraticCurveTo(bx, by + 6, bx + 52, by - 2);
+        ctx.stroke();
+      }
+    }
+
+    const leaves = sv?.particles.filter((p) => p.kind === 'AUTUMN_LEAF') ?? [];
+    if (leaves.length > 0) {
+      for (const p of leaves) {
+        const lx = p.x * width + Math.sin(timeSec * 1.8 + p.swayPhase) * 16 * (p.depth + 1);
+        const ly = p.y * height;
+        const r = p.size;
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(p.rotation);
+        ctx.globalAlpha = Math.min(1, p.alpha * eff);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.moveTo(0, -r);
+        ctx.quadraticCurveTo(r * 0.95, -r * 0.2, r * 0.65, r * 0.72);
+        ctx.lineTo(0, r * 0.34);
+        ctx.lineTo(-r * 0.65, r * 0.72);
+        ctx.quadraticCurveTo(-r * 0.95, -r * 0.2, 0, -r);
+        ctx.closePath();
+        ctx.fill();
+        // Delicate leaf midrib vein
+        ctx.strokeStyle = 'rgba(255, 240, 200, 0.38)';
+        ctx.lineWidth = 0.75;
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 0.7);
+        ctx.lineTo(0, r * 0.55);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  // ---------------------------------------------------
+  // 4. WINTER: Snow Blanket Coverage, Frost Corners & Snowflakes
+  // ---------------------------------------------------
+  if (snowCoverage > 0.02 && !isStorm) {
+    const sc = snowCoverage;
+
+    // Crisp frosty winter corner vignette with warm cozy hearth center!
+    const frostGrad = ctx.createRadialGradient(
+      width * 0.5,
+      height * 0.5,
+      height * 0.24,
+      width * 0.5,
+      height * 0.5,
+      Math.max(width, height) * 0.78
+    );
+    frostGrad.addColorStop(0, `rgba(255, 214, 142, ${(0.055 * sc).toFixed(3)})`);
+    frostGrad.addColorStop(0.66, `rgba(186, 226, 250, ${(0.08 * sc).toFixed(3)})`);
+    frostGrad.addColorStop(1, `rgba(204, 234, 252, ${(0.24 * sc).toFixed(3)})`);
+    ctx.fillStyle = frostGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Dynamic Winter Snow Accumulation Blanket along top eaves & lower ground rim (scales with snowCoverage!)
+    const driftDepth = (8 + sc * 12) * (isBlizzard ? 1.25 : 1.0);
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.88, sc * 0.82);
+
+    // Top-edge soft snow cornice & tiny crystalline icicles
+    const topSnowGrad = ctx.createLinearGradient(0, 0, 0, driftDepth * 1.4);
+    topSnowGrad.addColorStop(0, 'rgba(246, 252, 255, 0.92)');
+    topSnowGrad.addColorStop(0.65, 'rgba(218, 240, 254, 0.45)');
+    topSnowGrad.addColorStop(1, 'rgba(218, 240, 254, 0)');
+    ctx.fillStyle = topSnowGrad;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(width, 0);
+    const scallops = 14;
+    for (let s = scallops; s >= 0; s--) {
+      const sx = (s / scallops) * width;
+      const sy = driftDepth * (0.55 + 0.42 * Math.sin(s * 1.7 + 0.6));
+      ctx.lineTo(sx, sy);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Bottom-edge gentle snowdrifts hugging the lower viewport corners
+    const botSnowGrad = ctx.createLinearGradient(0, height - driftDepth * 1.6, 0, height);
+    botSnowGrad.addColorStop(0, 'rgba(224, 244, 255, 0)');
+    botSnowGrad.addColorStop(0.6, 'rgba(232, 246, 255, 0.36)');
+    botSnowGrad.addColorStop(1, 'rgba(248, 253, 255, 0.78)');
+    ctx.fillStyle = botSnowGrad;
+    ctx.beginPath();
+    ctx.moveTo(0, height);
+    for (let s = 0; s <= scallops; s++) {
+      const sx = (s / scallops) * width;
+      const cornerLift = Math.pow(Math.abs((s / scallops) * 2 - 1), 1.6) * driftDepth * 1.15;
+      const sy = height - driftDepth * 0.35 - cornerLift - Math.sin(s * 2.1) * 3.5;
+      ctx.lineTo(sx, sy);
+    }
+    ctx.lineTo(width, height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Crystalline frost-fern corner sparkles on frosty/blizzard days
+    if (sc > 0.55) {
+      const corners = [
+        [24, 24],
+        [width - 24, 24],
+        [24, height - 24],
+        [width - 24, height - 24],
+      ];
+      for (let c = 0; c < corners.length; c++) {
+        const [cx, cy] = corners[c];
+        const pulse = 0.45 + Math.sin(timeSec * 2.4 + c * 1.5) * 0.35;
+        ctx.strokeStyle = `rgba(232, 248, 255, ${(0.36 * sc * pulse).toFixed(3)})`;
+        ctx.lineWidth = 1.0;
+        const r = 9 + pulse * 4;
+        ctx.beginPath();
+        ctx.moveTo(cx - r, cy);
+        ctx.lineTo(cx + r, cy);
+        ctx.moveTo(cx, cy - r);
+        ctx.lineTo(cx, cy + r);
+        ctx.moveTo(cx - r * 0.65, cy - r * 0.65);
+        ctx.lineTo(cx + r * 0.65, cy + r * 0.65);
+        ctx.moveTo(cx + r * 0.65, cy - r * 0.65);
+        ctx.lineTo(cx - r * 0.65, cy + r * 0.65);
+        ctx.stroke();
+      }
+    }
+
+    // Multi-depth falling snowflakes from simulation state
+    const flakes = sv?.particles.filter((p) => p.kind === 'SNOWFLAKE') ?? [];
+    for (const p of flakes) {
+      const fx = p.x * width + Math.sin(timeSec * 1.2 + p.swayPhase) * 14;
+      const fy = p.y * height;
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.92, p.alpha * Math.min(1, sc * 1.15));
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(fx, fy, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      // Foreground flakes get a crisp 6-point ice crystal star highlight
+      if (p.depth === 2 && p.size >= 3.0) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+        ctx.lineWidth = 0.75;
+        const arm = p.size * 1.35;
+        ctx.beginPath();
+        ctx.moveTo(fx - arm, fy);
+        ctx.lineTo(fx + arm, fy);
+        ctx.moveTo(fx, fy - arm);
+        ctx.lineTo(fx, fy + arm);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // ---------------------------------------------------
+  // 5. Cross-Season Luminous Transition Sweep
+  // ---------------------------------------------------
+  if (sv && sv.transitionTimer > 0 && sv.transitionDuration > 0) {
+    const progress = 1 - sv.transitionTimer / sv.transitionDuration;
+    const sweepAlpha = Math.sin(progress * Math.PI) * 0.85;
+    const bandX = -width * 0.25 + progress * width * 1.5;
+    const tint =
+      season === 'SPRING'
+        ? 'rgba(249, 168, 212, 0.28)'
+        : season === 'SUMMER'
+          ? 'rgba(253, 224, 71, 0.25)'
+          : season === 'AUTUMN'
+            ? 'rgba(245, 158, 11, 0.26)'
+            : 'rgba(186, 230, 253, 0.28)';
+    ctx.save();
+    ctx.globalAlpha = sweepAlpha;
+    const swGrad = ctx.createLinearGradient(bandX - 180, 0, bandX + 180, height * 0.65);
+    swGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    swGrad.addColorStop(0.5, tint);
+    swGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = swGrad;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
 // ==========================================
 // MAIN HD-2D CANVAS RENDER ENTRYPOINT
 // ==========================================
@@ -2059,8 +2447,9 @@ export function renderGameCanvas(
   }
   ctx.restore();
 
-  // 4. HD-2D Soft Dynamic Lighting & Atmospheric Vignette Pass + Weather Overlay
+  // 4. HD-2D Soft Dynamic Lighting, Simulation-Driven Seasonal Visual Layers & Weather Overlay
   drawDynamicLighting(ctx, world, timeSec);
+  drawSeasonalVisualLayer(ctx, world, timeSec, CANVAS_WIDTH, CANVAS_HEIGHT);
   drawWeatherOverlay(ctx, world, timeSec);
 
   // 4b. Customer Dining Speech Bubbles (crisp above lighting; Special NPCs get highlighted styling!)

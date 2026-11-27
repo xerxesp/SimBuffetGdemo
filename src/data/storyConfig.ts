@@ -15,6 +15,7 @@ import {
   StoryModalEvent,
   StoryPhilosophy,
 } from '../types/game';
+import { getTechNodeDef } from './policyAndTechConfig';
 
 import titleKeyartImg from '../assets/images/hotpot_title_keyart_1795580644561.jpg';
 import portraitLinXiImg from '../assets/images/vn_portrait_lin_xi_1795709046807.jpg';
@@ -169,62 +170,122 @@ export const MAIN_CHAPTERS: MainChapterDef[] = [
   {
     chapter: 1,
     title: '第一章 · 烟火初开',
-    subtitle: '立足街角，立稳海鲜鲜味与熟食招牌',
+    subtitle: '立稳街角第一锅，点亮阶段一天赋起点',
     narrative:
-      '新店剪彩第一周，街坊们大多持观望态度。亲自迎宾、上锅、烹制熟食并保持冰台充足，让第一批食客记住你的名字。',
+      '新店剪彩伊始，街坊们大多仍在门外张望。亲自迎宾、守住厅堂卫生、接待头 8 桌客人，并在天赋发展树点亮阶段一的首个新节点。',
     completionNarrative:
-      '第一批食客口口相传，小店每晚都飘出鲜香锅气与烤贝焦香！关于小店未来的方向，第一个抉择已经摆在面前。',
+      '第一批食客口口相传，小店每晚都飘出鲜香锅气与蒜蓉烤贝的焦香！关于小店未来的方向，第一个抉择已经摆在面前。',
     rewardCash: 320,
-    rewardReputation: 6,
-    rewardNote: '奖励 ¥320 · 口碑 +6 · 开启第一章剧情抉择',
+    rewardReputation: 5,
+    rewardNote: '奖励 ¥320 · 口碑 +5 · 开启第一章剧情抉择',
   },
   {
     chapter: 2,
-    title: '第二章 · 人声鼎沸',
-    subtitle: '招兵买马，扩建海鲜自助分区与团队',
+    title: '第二章 · 鲜锅立名',
+    subtitle: '充实阶段一菜牌与产能，用口味锁住食客胃口',
     narrative:
-      '客流攀升，单打独斗已应接不暇。在开店前预约升级店铺、扩建厅堂餐桌，并签约热厨与大堂骨干并肩作战。',
+      '想在港城站稳脚跟，光靠基础菜单远远不够。持续推进阶段一天赋节点（点亮 2 项）、累计接待 20 桌宾客并售出 50 份菜品，让老饕们记住你家鲜味。',
     completionNarrative:
-      '扩建后的厅堂灯火通明，热厨与冷链衔接流畅！“潮鲜沸鼎”正式登上本地热门榜，城中资本与老饕同时把目光投向了你。',
-    rewardCash: 520,
-    rewardReputation: 6,
-    rewardNote: '奖励 ¥520 · 口碑 +6 · 开启第二章剧情抉择',
+      '热气腾腾的锅底配上鲜活海味，桌桌见底！一位嘴刁的港城老饕暗访了一整晚，终于在打烊前亮明了身份。',
+    rewardCash: 480,
+    rewardReputation: 5,
+    rewardNote: '奖励 ¥480 · 口碑 +5 · 开启第二章剧情抉择',
   },
   {
     chapter: 3,
-    title: '第三章 · 潮起云涌',
-    subtitle: '四季流转，打造海鲜分区旗舰品质',
+    title: '第三章 · 同舟招贤',
+    subtitle: '迈入天赋树阶段二，招兵买马告别单打独斗',
     narrative:
-      '名气打响的同时，季节行情波动与挑剔食客接踵而至。升级至 Lv.3 旗舰馆，扩建更多功能分区，把营收推向新高度。',
+      '晚市排号渐渐变长，一个人既要迎宾又要补菜洗碗已捉襟见肘。招募至少 2 名帮手、踏入天赋树阶段二点亮新节点，并将累计营收推上 ¥5,000。',
     completionNarrative:
-      '四季更迭间你游刃有余，食客们为了那一口当季活鲜甘愿排长队。城市美食峰会的邀请函已经寄到了店长办公室！',
-    rewardCash: 880,
-    rewardReputation: 8,
-    rewardNote: '奖励 ¥880 · 口碑 +8 · 开启第三章剧情抉择',
+      '伙计们配合渐入佳境，探店短视频也在同城悄然走红！资本与口碑的十字路口，正等着你亲手拍板。',
+    rewardCash: 680,
+    rewardReputation: 5,
+    rewardNote: '奖励 ¥680 · 口碑 +5 · 开启第三章剧情抉择',
   },
   {
     chapter: 4,
-    title: '第四章 · 鼎沸御膳',
-    subtitle: '珍馐云集，跻身顶级海鲜殿堂',
+    title: '第四章 · 后场定规',
+    subtitle: '夯实阶段二经营体系，整肃后场明档与设施',
     narrative:
-      '向星级海鲜殿堂迈进！扩充雅座至 10 桌，丰富海鲜与熟食品类，同时别忘了在开闭店时陪伴并肩打拼的特殊店员。',
+      '前厅红火，后场更容不得半点马虎。点亮 3 项阶段二及以上天赋、扩建至 4 处自助明档，将设备、供氧与洗手间均保持在 80% 以上，营收突破 ¥12,000。',
     completionNarrative:
-      '活捞缸波光粼粼，刺身明档如画卷展开，全城一座难求！距离最终的传奇终章与时代定调，只剩最后一步。',
-    rewardCash: 1450,
-    rewardReputation: 8,
-    rewardNote: '奖励 ¥1,450 · 口碑 +8 · 开启第四章剧情抉择',
+      '明档分区井然有序，后场冷链与洗消一尘不染！面对同行暗中掀起的食安流言，你手握最硬的底气。',
+    rewardCash: 920,
+    rewardReputation: 6,
+    rewardNote: '奖励 ¥920 · 口碑 +6 · 开启第四章剧情抉择',
   },
   {
     chapter: 5,
-    title: '第五章 · 海上传奇',
-    subtitle: '问鼎传奇火锅城，书写时代终章',
+    title: '第五章 · 四季初潮',
+    subtitle: '历经首轮换季浪潮，踏入天赋树阶段三',
     narrative:
-      '冲刺最高等级门店，守住 90 分以上金字口碑并突破万元总营收。在终章演绎中做出最终抉择，见证店铺、个人、伴侣与时代的结局！',
+      '港城海风一变，时令行情与客流偏好也随之更迭。跨越首轮换季（抵达第 6 天）、点亮阶段三天赋节点，将口碑推上 70 分并达成 ¥24,000 累计营收。',
     completionNarrative:
-      '从街角烟火小馆到名震四海的传奇海上御膳火锅城，你用无数个滚沸的日夜改写了这座港城的味觉记忆。',
+      '四季更迭间你稳扎稳打，面对休渔期涨价与气候突变毫不慌乱。港城渔业协会的峰会邀约，已悄悄递到了你案头。',
+    rewardCash: 1280,
+    rewardReputation: 6,
+    rewardNote: '奖励 ¥1,280 · 口碑 +6 · 开启第五章剧情抉择',
+  },
+  {
+    chapter: 6,
+    title: '第六章 · 江湖奇遇',
+    subtitle: '深化阶段三天赋，结交奇人异士并锻造骨干',
+    narrative:
+      '名气渐起后，码头各路奇人开始留意这块招牌。点亮 3 项阶段三及以上天赋、结识至少 2 位奇遇来客或特聘伙伴、培养 2 名 2 星骨干，并突破 ¥45,000 营收。',
+    completionNarrative:
+      '店里不再只是谋生之地，更成了各路高人愿停步小酌的江湖堂口。老码头夜市的商帮前辈，今夜专程登门拜会。',
+    rewardCash: 1680,
+    rewardReputation: 6,
+    rewardNote: '奖励 ¥1,680 · 口碑 +6 · 开启第六章剧情抉择',
+  },
+  {
+    chapter: 7,
+    title: '第七章 · 百味明档',
+    subtitle: '迈入阶段四御海尊享，打造琳琅海鲜矩阵',
+    narrative:
+      '真正的海鲜殿堂讲究丰盛与格调并存。跨入天赋树阶段四点亮首个节点，解锁 9 种海鲜熟食、开放 5 大自助明档分区，并将累计营收推升至 ¥78,000。',
+    completionNarrative:
+      '活捞缸波光粼粼，热厨与冷盘交相辉映，全城食客纷至沓来！就在此时，星级评鉴前的商战暗流也悄然逼近。',
+    rewardCash: 2200,
+    rewardReputation: 7,
+    rewardNote: '奖励 ¥2,200 · 口碑 +7 · 开启第七章剧情抉择',
+  },
+  {
+    chapter: 8,
+    title: '第八章 · 商海竞逐',
+    subtitle: '深耕阶段四高定体系，在高压客流下守住口碑',
+    narrative:
+      '连锁巨头与网红新馆接连落子港城。点亮 3 项阶段四及以上天赋、累计接待 140 桌宾客、突破 ¥125,000 总营收，并同时守住 80 分口碑与 82 分卫生标线。',
+    completionNarrative:
+      '面对价格战与跟风潮，你用实打实的出品节奏笑傲全城。年度港城美食峰会正式邀你登台，为行业定调。',
     rewardCash: 2800,
+    rewardReputation: 7,
+    rewardNote: '奖励 ¥2,800 · 口碑 +7 · 开启第八章剧情抉择',
+  },
+  {
+    chapter: 9,
+    title: '第九章 · 薪火传承',
+    subtitle: '叩响阶段五沸鼎传奇，铸就黄金班底与汤鼎绝艺',
+    narrative:
+      '距离巅峰仅一步之遥！点亮阶段五天赋树首个节点，组建 6 人以上精锐班底（含 3 名 2 星骨干），累计售出 400 份菜品并达成 ¥175,000 总营收。',
+    completionNarrative:
+      '从青涩小馆到宾客盈门的海味殿堂，你的故事登上城市美食年鉴封面。距离最终的传奇终章，只差最后临门一脚。',
+    rewardCash: 3600,
+    rewardReputation: 8,
+    rewardNote: '奖励 ¥3,600 · 口碑 +8 · 开启第九章剧情抉择',
+  },
+  {
+    chapter: 10,
+    title: '第十章 · 海上传奇',
+    subtitle: '登顶阶段五双节点，书写港城不熄的时代终章',
+    narrative:
+      '集大成于一鼎，铸就海上传奇！在阶段五天赋树点亮至少 2 个节点，累计接待 220 桌宾客、总营收突破 ¥220,000 并守住 88 分金字口碑，迎接四维史诗终章！',
+    completionNarrative:
+      '从街角烟火小馆到名震四海的潮鲜殿堂，你用无数个滚沸的日夜与四季潮汐，彻底改写了这座港城的味觉记忆。',
+    rewardCash: 5000,
     rewardReputation: 10,
-    rewardNote: '终章奖励 ¥2,800 · 永久小费 +30% · 解锁四维多结局史诗终章',
+    rewardNote: '终章奖励 ¥5,000 · 永久小费 +30% · 解锁四维多结局史诗终章',
   },
 ];
 
@@ -300,6 +361,63 @@ export const MAIN_CHAPTER_SCRIPTS: Record<number, ChapterSceneScript> = {
   },
   2: {
     badge: '主线演绎 · 第二章抉择',
+    headline: '试锅夜的老饕暗访',
+    lines: (charName) => [
+      {
+        speaker: '老饕·蔡叔',
+        title: '港城味觉活字典',
+        text: `“小老板，别忙着收灶！我连着三天来试你的新锅底和海鲜冰台，今晚总算敢开口评一句——你这口鲜味，有点老码头当年的魂了！”`,
+        accentColor: '#F97316',
+        portraitSide: 'right',
+      },
+      {
+        speaker: charName,
+        title: '潮鲜沸鼎店长',
+        text: '“原来您就是食客们常提起的蔡叔！这几天我反复调配汤料比例，又扩充了新海鲜品类，就怕口重掩了鲜、口轻又没回甘。”',
+        accentColor: '#E8C97A',
+        portraitSide: 'left',
+      },
+      {
+        speaker: '老饕·蔡叔',
+        title: '港城味觉活字典',
+        text: '“难得你肯花心思钻研菜单！我手里正好有张三十年前老港城渔市的秘制蘸料方子，还有几家本地吃货群的人脉——你说，你想拿这手艺先打哪张牌？”',
+        accentColor: '#F97316',
+        portraitSide: 'right',
+      },
+    ],
+    choices: [
+      {
+        id: 'ch2_craft',
+        label: '“请蔡叔赐教古法蘸料与熬汤心法，我想把底味磨成镇店绝学！”',
+        hint: '匠心路线 +2 · 熟食补满 · 原料库 +10 · 口碑 +4',
+        philosophyDelta: { CRAFT: 2 },
+        reputationDelta: 4,
+        storyFlag: { key: 'ch2', value: 'craft' },
+        outcomeText: '蔡叔欣然手书古法沙茶与海鲜酱油秘方，满堂食客闻香称绝，回头率节节攀升。',
+      },
+      {
+        id: 'ch2_empire',
+        label: '“借吃货群口碑推出‘限时新菜品鉴卡’，趁势把客单价和翻台拉起来！”',
+        hint: '商业帝国 +2 · 预售回款 +¥240 · 口碑 +2',
+        philosophyDelta: { EMPIRE: 2 },
+        cashDelta: 240,
+        reputationDelta: 2,
+        storyFlag: { key: 'ch2', value: 'empire' },
+        outcomeText: '品鉴卡一经推出便在本地吃货圈售罄，新菜还没上架就先收回了一笔充裕现金流。',
+      },
+      {
+        id: 'ch2_warmth',
+        label: '“把秘方做成免费自选蘸料台，让老街坊花平民价也能尝到老港味。”',
+        hint: '烟火温情 +2 · 口碑 +6 · 卫生 +4',
+        philosophyDelta: { WARMTH: 2 },
+        reputationDelta: 6,
+        storyFlag: { key: 'ch2', value: 'warmth' },
+        outcomeText: '免费古法蘸料台一夜传遍老街，蔡叔竖起大拇指：“有这格局，这招牌保准长青！”',
+      },
+    ],
+  },
+  3: {
+    badge: '主线演绎 · 第三章抉择',
     headline: '爆红之后的十字路口',
     lines: (charName) => [
       {
@@ -312,7 +430,7 @@ export const MAIN_CHAPTER_SCRIPTS: Record<number, ChapterSceneScript> = {
       {
         speaker: charName,
         title: '潮鲜沸鼎店长',
-        text: '“难怪今天还没到晚市，门口的排号队就已经拐到巷口了。多谢你镜头手下留情，没把后厨忙乱的样子拍进去。”',
+        text: '“难怪今天还没到晚市，门口的排号队就已经拐到巷口了。幸好提前招齐了伙计、理顺了经营流程，不然今晚肯定手忙脚乱。”',
         accentColor: '#E8C97A',
         portraitSide: 'left',
       },
@@ -333,120 +451,339 @@ export const MAIN_CHAPTER_SCRIPTS: Record<number, ChapterSceneScript> = {
     ],
     choices: [
       {
-        id: 'ch2_craft',
-        label: '“冻货预制绝无可能！宁可只开一家店，也要守住活鲜现烹的灵魂。”',
+        id: 'ch3_craft',
+        label: '“冻货预制绝无可能！宁可步子慢些，也要守住活鲜现烹的灵魂。”',
         hint: '匠心路线 +2 · 口碑 +6',
         philosophyDelta: { CRAFT: 2 },
         reputationDelta: 6,
-        storyFlag: { key: 'ch2', value: 'craft' },
+        storyFlag: { key: 'ch3', value: 'craft' },
         outcomeText: '你的硬气回应被发到网上，反而引发全城食客点赞，“死磕活鲜”成了店里的金字标签。',
       },
       {
-        id: 'ch2_empire',
+        id: 'ch3_empire',
         label: '“引入资本但保留冷链主权！用大宗直采建立自己的海鲜供应链帝国。”',
         hint: '商业帝国 +2 · 合作注资 +¥360',
         philosophyDelta: { EMPIRE: 2 },
         cashDelta: 360,
-        storyFlag: { key: 'ch2', value: 'empire' },
+        storyFlag: { key: 'ch3', value: 'empire' },
         outcomeText: '凭借出色的谈判，你拿下战略注资并握紧了冷链采购主导权，门店扩张速度倍增！',
       },
       {
-        id: 'ch2_warmth',
+        id: 'ch3_warmth',
         label: '“把扩张预算省下来，翻新员工宿舍、给团队涨福利，人稳了菜才香。”',
-        hint: '烟火温情 +2 · 全体特殊店员好感 +10',
+        hint: '烟火温情 +2 · 全体特聘伙伴好感 +10 · 员工士气回满',
         philosophyDelta: { WARMTH: 2 },
         reputationDelta: 3,
-        storyFlag: { key: 'ch2', value: 'warmth' },
+        storyFlag: { key: 'ch3', value: 'warmth' },
         outcomeText: '当晚宿舍里欢呼声一片，员工们自发多留半小时打磨摆台细节，团队凝聚力空前高涨。',
-      },
-    ],
-  },
-  3: {
-    badge: '主线演绎 · 第三章抉择',
-    headline: '四季休渔与行业风浪',
-    lines: (charName) => [
-      {
-        speaker: '渔业协会代表',
-        title: '港城渔政顾问',
-        text: `“${charName}店长，久仰大名。今年伏季休渔期行情波动剧烈，不少海鲜自助同行为了压价以次充好，唯独你们店撑过了四季起伏。”`,
-        accentColor: '#4ADE80',
-        portraitSide: 'right',
-      },
-      {
-        speaker: charName,
-        title: '潮鲜沸鼎店长',
-        text: '“实不相瞒，休渔期和寒冬冷链涨价的时候，我每天闭店对着采购账本也头疼。但既然挂了‘潮鲜’二字，总不能拿不新鲜的货糊弄客人。”',
-        accentColor: '#E8C97A',
-        portraitSide: 'left',
-      },
-      {
-        speaker: '渔业协会代表',
-        title: '港城渔政顾问',
-        text: '“正因如此，本周的城市餐饮峰会特邀你做压轴发言！台下全是同行、渔民代表和冷链巨头——海鲜自助行业的下一个十年，你会主张哪条路？”',
-        accentColor: '#4ADE80',
-        portraitSide: 'right',
-      },
-      {
-        speaker: charName,
-        title: '潮鲜沸鼎店长',
-        text: '“聚光灯打在讲台上，台下上百双眼睛都在等一个答案。我扶正话筒，决定把心里最笃定的理念讲给整座港城听。”',
-        accentColor: '#E8C97A',
-        portraitSide: 'left',
-      },
-    ],
-    choices: [
-      {
-        id: 'ch3_craft',
-        label: '“顺应四季不时不食！推行可持续渔获与应季锅底，尊重每一片海域。”',
-        hint: '匠心路线 +2 · 时代生态向好 · 口碑 +7',
-        philosophyDelta: { CRAFT: 2 },
-        reputationDelta: 7,
-        storyFlag: { key: 'ch3', value: 'sustainable_sea' },
-        outcomeText: '你的演讲引发全场共鸣，政府授予门店“绿色可持续海鲜示范餐厅”铭牌。',
-      },
-      {
-        id: 'ch3_empire',
-        label: '“打通全球深海冷链航线！让食客在任何季节都能吃遍四大洋珍馐。”',
-        hint: '商业帝国 +2 · 时代冷链腾飞 · 资金 +¥500',
-        philosophyDelta: { EMPIRE: 2 },
-        cashDelta: 500,
-        storyFlag: { key: 'ch3', value: 'global_coldchain' },
-        outcomeText: '远洋冷链巨头当场抛出橄榄枝，港城迅速崛起为全国海鲜冷链集散新枢纽。',
-      },
-      {
-        id: 'ch3_warmth',
-        label: '“发起港城夜市互助联盟，把小渔船和街头老摊一起带进现代美食街！”',
-        hint: '烟火温情 +2 · 时代夜市复兴 · 口碑 +5 / 资金 +¥200',
-        philosophyDelta: { WARMTH: 2 },
-        reputationDelta: 5,
-        cashDelta: 200,
-        storyFlag: { key: 'ch3', value: 'harbor_alliance' },
-        outcomeText: '数十家老渔户和夜市档口抱团新生，曾经沉寂的老码头重新亮起绵延十里的灯火。',
       },
     ],
   },
   4: {
     badge: '主线演绎 · 第四章抉择',
-    headline: '星级殿堂的传承之问',
+    headline: '明厨亮灶的食安暗战',
+    lines: (charName) => [
+      {
+        speaker: '后场设备师傅·老梁',
+        title: '冷链与管网顾问',
+        text: `“${charName}店长，刚才巡完后场七间房，我不得不佩服——活氧泵稳得很，洗消间连水渍都擦得透亮，洗手间也香喷喷的！”`,
+        accentColor: '#2DD4BF',
+        portraitSide: 'right',
+      },
+      {
+        speaker: charName,
+        title: '潮鲜沸鼎店长',
+        text: '“老梁叔，前厅是面子，后场才是里子。明档越开越多，如果冷链、设备和洗消跟不上，迟早要砸了招牌。”',
+        accentColor: '#E8C97A',
+        portraitSide: 'left',
+      },
+      {
+        speaker: '后场设备师傅·老梁',
+        title: '冷链与管网顾问',
+        text: '“说得太对了！刚才街尾几家眼红的同行在本地论坛匿名造谣，说咱们自助海鲜便宜没好货、后厨肯定藏污纳垢。你打算怎么回敬他们？”',
+        accentColor: '#2DD4BF',
+        portraitSide: 'right',
+      },
+    ],
+    choices: [
+      {
+        id: 'ch4_craft',
+        label: '“直接装上透明玻璃墙办‘后场开放日’，请全城食客亲自查验冷链与洗消！”',
+        hint: '匠心路线 +2 · 卫生回满 · 设备/供氧 +15 · 口碑 +6',
+        philosophyDelta: { CRAFT: 2 },
+        reputationDelta: 6,
+        storyFlag: { key: 'ch4', value: 'open_backstage' },
+        outcomeText: '透明后场直播一战封神，食客们惊叹连冰库温度计都清清楚楚，谣言不攻自破！',
+      },
+      {
+        id: 'ch4_empire',
+        label: '“顺势申请第三方食安金盾认证，把品控标准做成全城最高门槛！”',
+        hint: '商业帝国 +2 · 品牌补贴 +¥420 · 口碑 +3',
+        philosophyDelta: { EMPIRE: 2 },
+        cashDelta: 420,
+        reputationDelta: 3,
+        storyFlag: { key: 'ch4', value: 'golden_cert' },
+        outcomeText: '你用一纸权威认证反向收割了一大波高端商务客流，同行反而灰头土脸。',
+      },
+      {
+        id: 'ch4_warmth',
+        label: '“邀请街坊大妈团和老客当‘荣誉食安监督员’，每月送免费海鲜锅！”',
+        hint: '烟火温情 +2 · 口碑 +7 · 全体特聘伙伴好感 +6',
+        philosophyDelta: { WARMTH: 2 },
+        reputationDelta: 7,
+        storyFlag: { key: 'ch4', value: 'neighbor_watch' },
+        outcomeText: '大妈监督团比谁都护短，把你家干净透亮的后厨夸遍了整片社区，回头客络绎不绝。',
+      },
+    ],
+  },
+  5: {
+    badge: '主线演绎 · 第五章抉择',
+    headline: '四季休渔与行业风浪',
+    lines: (charName) => [
+      {
+        speaker: '渔业协会代表',
+        title: '港城渔政顾问',
+        text: `“${charName}店长，久仰大名。季节一换、行情剧烈波动，不少海鲜自助同行为了压价以次充好，唯独你们店稳稳扛过了换季考验。”`,
+        accentColor: '#4ADE80',
+        portraitSide: 'right',
+      },
+      {
+        speaker: charName,
+        title: '潮鲜沸鼎店长',
+        text: '“实不相瞒，换季和休渔期冷链涨价的时候，我每天闭店对着采购账本也头疼。但既然挂了‘潮鲜’二字，总不能拿不新鲜的货糊弄客人。”',
+        accentColor: '#E8C97A',
+        portraitSide: 'left',
+      },
+      {
+        speaker: '渔业协会代表',
+        title: '港城渔政顾问',
+        text: '“正因如此，港城渔业协会想请你作为新生代餐饮代表定下一项行业倡议——面对四季潮汐与海洋资源变化，你最主张哪条路？”',
+        accentColor: '#4ADE80',
+        portraitSide: 'right',
+      },
+    ],
+    choices: [
+      {
+        id: 'ch5_craft',
+        label: '“顺应四季不时不食！推行可持续渔获与应季锅底，尊重每一片海域。”',
+        hint: '匠心路线 +2 · 时代生态向好 · 口碑 +7',
+        philosophyDelta: { CRAFT: 2 },
+        reputationDelta: 7,
+        storyFlag: { key: 'ch5', value: 'sustainable_sea' },
+        outcomeText: '你的倡议引发全场共鸣，渔业协会授予门店“绿色可持续海鲜示范餐厅”铭牌。',
+      },
+      {
+        id: 'ch5_empire',
+        label: '“打通全球深海冷链航线！让食客在任何季节都能吃遍四大洋珍馐。”',
+        hint: '商业帝国 +2 · 时代冷链腾飞 · 资金 +¥500',
+        philosophyDelta: { EMPIRE: 2 },
+        cashDelta: 500,
+        storyFlag: { key: 'ch5', value: 'global_coldchain' },
+        outcomeText: '远洋冷链巨头当场抛出橄榄枝，港城迅速崛起为全国海鲜冷链集散新枢纽。',
+      },
+      {
+        id: 'ch5_warmth',
+        label: '“发起港城夜市互助联盟，把小渔船和街头老摊一起带进现代美食街！”',
+        hint: '烟火温情 +2 · 时代夜市复兴 · 口碑 +5 / 资金 +¥200',
+        philosophyDelta: { WARMTH: 2 },
+        reputationDelta: 5,
+        cashDelta: 200,
+        storyFlag: { key: 'ch5', value: 'harbor_alliance' },
+        outcomeText: '数十家老渔户和夜市档口抱团新生，曾经沉寂的老码头重新亮起绵延十里的灯火。',
+      },
+    ],
+  },
+  6: {
+    badge: '主线演绎 · 第六章抉择',
+    headline: '码头夜市的无声邀约',
+    lines: (charName) => [
+      {
+        speaker: '码头总把头·郑叔',
+        title: '老渔帮牵头人',
+        text: `“${charName}掌柜，听说你店里不仅聚起了得力骨干，连江湖上的奇人都频频登门？老码头的兄弟们托我送来一坛陈年花雕，想问你一句实在话。”`,
+        accentColor: '#F59E0B',
+        portraitSide: 'right',
+      },
+      {
+        speaker: charName,
+        title: '潮鲜沸鼎店长',
+        text: '“郑叔客气了！做餐饮哪有独行侠，靠的都是伙计们同心、老船东供鲜、贵客捧场。码头这边可是有什么难处？”',
+        accentColor: '#E8C97A',
+        portraitSide: 'left',
+      },
+      {
+        speaker: '码头总把头·郑叔',
+        title: '老渔帮牵头人',
+        text: '“老码头下个月要改建文化渔港，大开发商想一口气买断所有凌晨早市的优质鱼获优先权。咱们这些世代跑船的，想问问你愿不愿站出来牵个头？”',
+        accentColor: '#F59E0B',
+        portraitSide: 'right',
+      },
+    ],
+    choices: [
+      {
+        id: 'ch6_craft',
+        label: '“联合船老大设立‘鲜度分级拍卖台’，好渔获按质论价，绝不让外行糟蹋！”',
+        hint: '匠心路线 +2 · 原料库补满 · 口碑 +6',
+        philosophyDelta: { CRAFT: 2 },
+        reputationDelta: 6,
+        storyFlag: { key: 'ch6', value: 'fresh_auction' },
+        outcomeText: '清晨的鲜度分级拍卖成了港城新风景，最肥美的头茬活鲜从此总先送到你后厨。',
+      },
+      {
+        id: 'ch6_empire',
+        label: '“由我出面组建港城渔获集采联盟，直接把码头早市变成咱们的专属前仓！”',
+        hint: '商业帝国 +2 · 联盟分红 +¥560',
+        philosophyDelta: { EMPIRE: 2 },
+        cashDelta: 560,
+        storyFlag: { key: 'ch6', value: 'dock_syndicate' },
+        outcomeText: '你凭借精准议价把采购成本压低一截，码头商户纷纷认你作了新任商界话事人。',
+      },
+      {
+        id: 'ch6_warmth',
+        label: '“为老渔民保留早市摊位，每逢大风浪夜，我的店免费给收船兄弟留碗热汤！”',
+        hint: '烟火温情 +2 · 口碑 +6 · 全体特聘伙伴好感 +8',
+        philosophyDelta: { WARMTH: 2 },
+        reputationDelta: 6,
+        storyFlag: { key: 'ch6', value: 'fishermen_hearth' },
+        outcomeText: '老渔帮汉子们红了眼眶，此后每有稀罕深海鲜货上岸，第一时间便提着竹篓敲响你的后门。',
+      },
+    ],
+  },
+  7: {
+    badge: '主线演绎 · 第七章抉择',
+    headline: '星级评鉴前的暗流涌动',
+    lines: (charName) => [
+      {
+        speaker: '海鲜巨鳄·秦总监',
+        title: '外埠连锁餐饮副总裁',
+        text: `“${charName}店长，久仰。刚参观完你们的明档分区与厅堂陈设，菜品之丰盛确实让我吃了一惊——难怪我们新开的旗舰店客流总被你分走一半。”`,
+        accentColor: '#F43F5E',
+        portraitSide: 'right',
+      },
+      {
+        speaker: charName,
+        title: '潮鲜沸鼎店长',
+        text: '“秦总大驾光临，不知是来吃海鲜的，还是来下战书的？港城市场大得很，靠真本事留客，谁也不用怕谁。”',
+        accentColor: '#E8C97A',
+        portraitSide: 'left',
+      },
+      {
+        speaker: '海鲜巨鳄·秦总监',
+        title: '外埠连锁餐饮副总裁',
+        text: '“爽快！下周就是城市星级餐厅评鉴，我们可以一起联合造势垄断高端市场，也可以各自打响价格补贴战——或者，你有第三种解法？”',
+        accentColor: '#F43F5E',
+        portraitSide: 'right',
+      },
+    ],
+    choices: [
+      {
+        id: 'ch7_craft',
+        label: '“不搞恶性补贴，也不搞垄断——评鉴现场比活鲜、比锅底、比明档真功夫！”',
+        hint: '匠心路线 +2 · 熟食补满 · 卫生 +6 · 口碑 +7',
+        philosophyDelta: { CRAFT: 2 },
+        reputationDelta: 7,
+        storyFlag: { key: 'ch7', value: 'craft_duel' },
+        outcomeText: '评鉴现场你的现切活鲜与沸腾金汤艳压全场，秦总监尝罢亦不得不抱拳认输。',
+      },
+      {
+        id: 'ch7_empire',
+        label: '“签下互惠联名协议，借他们的全国渠道把‘潮鲜沸鼎’名号推向省外！”',
+        hint: '商业帝国 +2 · 联名分成 +¥680 · 口碑 +2',
+        philosophyDelta: { EMPIRE: 2 },
+        cashDelta: 680,
+        reputationDelta: 2,
+        storyFlag: { key: 'ch7', value: 'alliance_deal' },
+        outcomeText: '你在谈判桌上寸步不让，不仅守住了独立品牌，还顺势借船出海收获巨额联名收益。',
+      },
+      {
+        id: 'ch7_warmth',
+        label: '“评鉴之夜举办‘老客回馈百鲜宴’，真正给这家店打分的，永远是桌上食客！”',
+        hint: '烟火温情 +2 · 口碑 +8 · 员工士气回满',
+        philosophyDelta: { WARMTH: 2 },
+        reputationDelta: 8,
+        storyFlag: { key: 'ch7', value: 'guest_jury' },
+        outcomeText: '当晚满堂欢笑与真诚好评胜过一切公关通稿，评委们当场写下满分评语。',
+      },
+    ],
+  },
+  8: {
+    badge: '主线演绎 · 第八章抉择',
+    headline: '港城美食峰会的聚光灯',
+    lines: (charName) => [
+      {
+        speaker: '港城餐饮商会会长',
+        title: '年度峰会主持人',
+        text: `“各位来宾，让我们把掌声送给‘潮鲜沸鼎’的${charName}店长！在激烈的商海竞逐中，这家从街角起家的门店用无可挑剔的口碑与经营体系折服了所有人！”`,
+        accentColor: '#A855F7',
+        portraitSide: 'right',
+      },
+      {
+        speaker: charName,
+        title: '潮鲜沸鼎店长',
+        text: '“聚光灯打在脸上，台下坐着曾经质疑过我的同行、帮衬过我的老渔民、还有一路捧场的食客……这一刻，比拿到任何奖杯都沉甸甸的。”',
+        accentColor: '#E8C97A',
+        portraitSide: 'left',
+      },
+      {
+        speaker: '港城餐饮商会会长',
+        title: '年度峰会主持人',
+        text: '“作为本届峰会最具影响力的领军人物，商会将为你配套一笔专项扶持基金——你会把这股势能投向哪一方向？”',
+        accentColor: '#A855F7',
+        portraitSide: 'right',
+      },
+    ],
+    choices: [
+      {
+        id: 'ch8_craft',
+        label: '“筹建海鲜锅底研发实验室，把潮汕与深海烹鲜技艺整理成典籍！”',
+        hint: '匠心路线 +2 · 原料库 +16 · 口碑 +7',
+        philosophyDelta: { CRAFT: 2 },
+        reputationDelta: 7,
+        storyFlag: { key: 'ch8', value: 'flavor_lab' },
+        outcomeText: '你的研发手记很快成为港城厨师争相传阅的宝典，门店也成了行业朝圣之地。',
+      },
+      {
+        id: 'ch8_empire',
+        label: '“启动智慧冷链与品牌孵化计划，把港城海鲜模式输出到全国沿海城市！”',
+        hint: '商业帝国 +2 · 专项扶持 +¥820',
+        philosophyDelta: { EMPIRE: 2 },
+        cashDelta: 820,
+        storyFlag: { key: 'ch8', value: 'expansion_fund' },
+        outcomeText: '峰会尚未散场，已有三座海滨城市的商业代表团围过来递上旗舰店邀约。',
+      },
+      {
+        id: 'ch8_warmth',
+        label: '“设立‘港城青年厨师助学金’，帮更多怀揣烟火梦的年轻人撑起第一口灶！”',
+        hint: '烟火温情 +2 · 口碑 +8 · 全体特聘伙伴好感 +10',
+        philosophyDelta: { WARMTH: 2 },
+        reputationDelta: 8,
+        storyFlag: { key: 'ch8', value: 'youth_fellowship' },
+        outcomeText: '台下爆发出经久不息的掌声，无数怀揣热忱的年轻厨师因此把你视作灯塔。',
+      },
+    ],
+  },
+  9: {
+    badge: '主线演绎 · 第九章抉择',
+    headline: '十年之问与星级殿堂',
     lines: (charName) => [
       {
         speaker: '城市美食年鉴主编',
         title: '特约人物专访',
-        text: `“${charName}店长，请看这组对比照——左边是你刚开业时四张木桌的小馆，右边则是今晚活捞缸波光粼粼、刺身明档满座的星级殿堂。”`,
+        text: `“${charName}店长，请看这组对比照——左边是你刚开业时人手紧巴巴的街角小馆，右边则是今晚团队精锐、锅底百味、满堂欢声的顶级殿堂。”`,
         accentColor: '#C084FC',
         portraitSide: 'right',
       },
       {
         speaker: charName,
         title: '潮鲜沸鼎店长',
-        text: '“时间过得真快啊……看着照片，我还能想起当初人手不够时自己一手端沸锅、一手收脏碗满场飞奔的样子。”',
+        text: '“时间过得真快啊……看着照片，我还能想起当初人手不够时自己一手端沸锅、一手收脏碗满场飞奔的样子，也记得每一次换季迎风浪的夜晚。”',
         accentColor: '#E8C97A',
         portraitSide: 'left',
       },
       {
         speaker: '城市美食年鉴主编',
         title: '特约人物专访',
-        text: '“如今全城餐饮界都在研究你的管理模式。作为今年年鉴的封面人物，最后一个问题：如果十年后人们再提起‘潮鲜沸鼎’，你最想留下怎样的印记？”',
+        text: '“如今全城餐饮界都在研究你的管理哲学。作为今年年鉴的封面人物，最后一个问题：如果十年后人们再提起‘潮鲜沸鼎’，你最想留下怎样的印记？”',
         accentColor: '#C084FC',
         portraitSide: 'right',
       },
@@ -460,56 +797,56 @@ export const MAIN_CHAPTER_SCRIPTS: Record<number, ChapterSceneScript> = {
     ],
     choices: [
       {
-        id: 'ch4_craft',
+        id: 'ch9_craft',
         label: '“希望它成为写进厨艺教科书的百年鲜味标杆。”',
-        hint: '匠心路线 +2 · 口碑 +6',
+        hint: '匠心路线 +2 · 口碑 +7',
         philosophyDelta: { CRAFT: 2 },
-        reputationDelta: 6,
-        storyFlag: { key: 'ch4', value: 'craft' },
+        reputationDelta: 7,
+        storyFlag: { key: 'ch9', value: 'craft' },
         outcomeText: '主编郑重记下这句话，决定为你的锅底工艺与活鲜标准撰写整章专题。',
       },
       {
-        id: 'ch4_empire',
+        id: 'ch9_empire',
         label: '“希望‘潮鲜沸鼎’成为走向海外的东方海鲜自助第一品牌！”',
-        hint: '商业帝国 +2 · 品牌赞助 +¥680',
+        hint: '商业帝国 +2 · 品牌赞助 +¥900',
         philosophyDelta: { EMPIRE: 2 },
-        cashDelta: 680,
-        storyFlag: { key: 'ch4', value: 'empire' },
+        cashDelta: 900,
+        storyFlag: { key: 'ch9', value: 'empire' },
         outcomeText: '海外华商餐饮代表团读到专访后率先发来新加坡与东京的旗舰店选址邀约。',
       },
       {
-        id: 'ch4_warmth',
+        id: 'ch9_warmth',
         label: '“希望无论时代怎么变，推开这扇门，总有熟人笑着给你留一张桌。”',
-        hint: '烟火温情 +2 · 口碑 +5 / 全体特殊店员好感 +8',
+        hint: '烟火温情 +2 · 口碑 +6 / 全体特聘伙伴好感 +10',
         philosophyDelta: { WARMTH: 2 },
-        reputationDelta: 5,
-        storyFlag: { key: 'ch4', value: 'warmth' },
+        reputationDelta: 6,
+        storyFlag: { key: 'ch9', value: 'warmth' },
         outcomeText: '访谈刊出当晚，许多从第一章就来吃虾的老客特意送来手写贺卡，贴满了迎宾台。',
       },
     ],
   },
-  5: {
+  10: {
     badge: '主线终章演绎 · 时代定调',
     headline: '海上传奇 · 沸鼎不息',
     lines: (charName) => [
       {
         speaker: '老街坊·陈伯',
         title: '港城老客代表',
-        text: `“哎哟，${charName}店长！从街角大排档到今天的传奇海上御膳火锅城，我这老头子算是亲眼见证一段海上传奇啦！”`,
+        text: `“哎哟，${charName}店长！从街角第一盏红灯笼，到今天名动四方的潮鲜传奇殿堂，我这老头子算是亲眼见证了一段海上传奇啦！”`,
         accentColor: '#F59E0B',
         portraitSide: 'right',
       },
       {
         speaker: '城市美食年鉴主编',
         title: '时代见证者',
-        text: '“今晚全城媒体与餐饮协会齐聚于此，为‘潮鲜沸鼎’加冕年度至高金鼎！不知站上巅峰的店长，下一步打算书写怎样的终章？”',
+        text: '“今晚全城媒体、渔业协会与餐饮同仁齐聚于此，为‘潮鲜沸鼎’加冕年度至高金鼎！不知站上巅峰的店长，下一步打算书写怎样的终章？”',
         accentColor: '#C084FC',
         portraitSide: 'right',
       },
       {
         speaker: charName,
         title: '潮鲜沸鼎店长',
-        text: '“大厅里沸腾的蒸汽、后厨忙碌却默契的伙计们、还有一路走来每一个并肩相守的身影……这口沸鼎，承载了太多人的梦想。”',
+        text: '“大厅里沸腾的蒸汽、后厨忙碌却默契的伙计们、四季流转间留下的欢笑与感动、还有一路并肩相守的身影……这口沸鼎，承载了太多人的梦想。”',
         accentColor: '#E8C97A',
         portraitSide: 'left',
       },
@@ -523,27 +860,27 @@ export const MAIN_CHAPTER_SCRIPTS: Record<number, ChapterSceneScript> = {
     ],
     choices: [
       {
-        id: 'ch5_craft',
+        id: 'ch10_craft',
         label: '设立「潮鲜传艺学堂」，守着这方总店把匠心海味传给下一代。',
         hint: '锁定匠心宗师终章 · 见证四维史诗结局',
         philosophyDelta: { CRAFT: 3 },
-        storyFlag: { key: 'ch5', value: 'academy' },
+        storyFlag: { key: 'ch10', value: 'academy' },
         outcomeText: '你亲手挂上“潮鲜传艺”匾额，从此江湖流传：凡出此门者，皆识天下至鲜。',
       },
       {
-        id: 'ch5_empire',
+        id: 'ch10_empire',
         label: '敲响「潮鲜沸鼎集团」上市钟声，让东方海鲜沸锅扬帆四海！',
         hint: '锁定商业传奇终章 · 见证四维史诗结局',
         philosophyDelta: { EMPIRE: 3 },
-        storyFlag: { key: 'ch5', value: 'ipo' },
-        outcomeText: '港城码头礼炮齐鸣，从四张木桌起步的品牌正式驶向世界餐饮的星辰大海！',
+        storyFlag: { key: 'ch10', value: 'ipo' },
+        outcomeText: '港城码头礼炮齐鸣，从街角起步的品牌正式驶向世界餐饮的星辰大海！',
       },
       {
-        id: 'ch5_warmth',
+        id: 'ch10_warmth',
         label: '卸下浮名，与挚爱和老伙计们守着海风与灯火，把温暖延续到白头。',
         hint: '锁定人间烟火终章 · 见证四维史诗结局',
         philosophyDelta: { WARMTH: 3 },
-        storyFlag: { key: 'ch5', value: 'haven' },
+        storyFlag: { key: 'ch10', value: 'haven' },
         outcomeText: '海风吹过灯笼，灶上鲜汤翻滚如初。你笑着系紧围裙，迎向又一个热气腾腾的夜晚。',
       },
     ],
@@ -561,97 +898,258 @@ export function evaluateChapterObjectives(world: GameWorld): {
   allDone: boolean;
 } {
   const ch = world.mainChapter;
+  const totalDishesConsumed = Object.values(world.dishConsumptionCounts || {}).reduce(
+    (sum, n) => sum + (Number.isFinite(n) ? n : 0),
+    0
+  );
+  const highTierCount = world.staff.filter((s) => s.tier >= 2).length;
+  const discoveredSpecialCustomers = Object.values(world.specialStories).filter(
+    (st) => st.discovered
+  ).length;
+  const recruitedSpecialStaff = Object.values(world.specialStaffBonds).filter(
+    (b) => b.recruited
+  ).length;
+
+  const countTechAtOrAbove = (minStage: number) =>
+    world.unlockedTechNodeIds.filter((id) => {
+      const def = getTechNodeDef(id);
+      return Boolean(def && !def.starterUnlocked && def.stage >= minStage);
+    }).length;
+
   let objectives: ChapterObjectiveStatus[] = [];
 
   if (ch === 1) {
+    const stage1Nodes = countTechAtOrAbove(1);
     objectives = [
       {
         label: '累计接待顾客',
-        currentText: `${world.totalGuestsServed}/4 桌`,
-        done: world.totalGuestsServed >= 4,
+        currentText: `${world.totalGuestsServed}/8 桌`,
+        done: world.totalGuestsServed >= 8,
       },
       {
         label: '门店卫生保持良好',
-        currentText: `${Math.round(world.hygiene)}/75`,
-        done: world.hygiene >= 75,
+        currentText: `${Math.round(world.hygiene)}/78`,
+        done: world.hygiene >= 78,
       },
       {
-        label: '已解锁海鲜/熟食品类',
-        currentText: `${world.unlockedSeafoodIds.length}/4 种`,
-        done: world.unlockedSeafoodIds.length >= 4,
+        label: '天赋树点亮阶段一新节点',
+        currentText: `${stage1Nodes}/1 项`,
+        done: stage1Nodes >= 1,
       },
     ];
   } else if (ch === 2) {
+    const stage1Nodes = countTechAtOrAbove(1);
     objectives = [
       {
-        label: '店铺等级达到 Lv.2',
-        currentText: `Lv.${world.shopLevel}/2`,
-        done: world.shopLevel >= 2,
+        label: '累计接待顾客',
+        currentText: `${world.totalGuestsServed}/20 桌`,
+        done: world.totalGuestsServed >= 20,
       },
       {
-        label: '在职员工数量',
+        label: '累计售出/消耗菜品',
+        currentText: `${totalDishesConsumed}/50 份`,
+        done: totalDishesConsumed >= 50,
+      },
+      {
+        label: '天赋树点亮阶段一及以上节点',
+        currentText: `${stage1Nodes}/2 项`,
+        done: stage1Nodes >= 2,
+      },
+    ];
+  } else if (ch === 3) {
+    const stage2Nodes = countTechAtOrAbove(2);
+    objectives = [
+      {
+        label: '组建团队（在职员工人数）',
         currentText: `${world.staff.length}/2 人`,
         done: world.staff.length >= 2,
       },
       {
-        label: '扩建大厅餐桌',
-        currentText: `${world.tableLimit}/6 桌`,
-        done: world.tableLimit >= 6,
-      },
-    ];
-  } else if (ch === 3) {
-    const highTierCount = world.staff.filter((s) => s.tier >= 2).length;
-    objectives = [
-      {
-        label: '店铺等级达到 Lv.3',
-        currentText: `Lv.${world.shopLevel}/3`,
-        done: world.shopLevel >= 3,
-      },
-      {
-        label: '拥有 2 星及以上员工',
-        currentText: `${highTierCount}/1 人`,
-        done: highTierCount >= 1,
+        label: '天赋树点亮阶段二及以上节点',
+        currentText: `${stage2Nodes}/1 项`,
+        done: stage2Nodes >= 1,
       },
       {
         label: '累计营业收入',
-        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥2,800`,
-        done: world.totalCashEarned >= 2800,
+        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥5,000`,
+        done: world.totalCashEarned >= 5000,
       },
     ];
   } else if (ch === 4) {
+    const stage2Nodes = countTechAtOrAbove(2);
+    const backstageMin = Math.min(
+      Math.round(world.equipmentHealth),
+      Math.round(world.oxygenLevel),
+      Math.round(world.restroomCleanliness)
+    );
     objectives = [
       {
-        label: '店铺等级达到 Lv.4',
-        currentText: `Lv.${world.shopLevel}/4`,
-        done: world.shopLevel >= 4,
+        label: '天赋树点亮阶段二及以上节点',
+        currentText: `${stage2Nodes}/3 项`,
+        done: stage2Nodes >= 3,
       },
       {
-        label: '扩建大厅餐桌',
-        currentText: `${world.tableLimit}/10 桌`,
-        done: world.tableLimit >= 10,
+        label: '后场设备、供氧与洗手间均 ≥ 80%',
+        currentText: `最低 ${backstageMin}%/80%`,
+        done:
+          world.equipmentHealth >= 80 &&
+          world.oxygenLevel >= 80 &&
+          world.restroomCleanliness >= 80,
       },
       {
-        label: '已扩建功能分区',
-        currentText: `${world.unlockedZones.length}/5 区`,
-        done: world.unlockedZones.length >= 5,
-      },
-    ];
-  } else {
-    objectives = [
-      {
-        label: '店铺升至满级 Lv.5',
-        currentText: `Lv.${world.shopLevel}/5`,
-        done: world.shopLevel >= 5,
+        label: '扩建自助明档分区',
+        currentText: `${world.unlockedZones.length}/4 区`,
+        done: world.unlockedZones.length >= 4,
       },
       {
         label: '累计营业收入',
-        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥10,000`,
-        done: world.totalCashEarned >= 10000,
+        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥12,000`,
+        done: world.totalCashEarned >= 12000,
+      },
+    ];
+  } else if (ch === 5) {
+    const stage3Nodes = countTechAtOrAbove(3);
+    objectives = [
+      {
+        label: '经营跨越首轮换季（抵达第 6 天）',
+        currentText: `第 ${world.day}/6 天`,
+        done: world.day >= 6,
+      },
+      {
+        label: '天赋树点亮阶段三及以上节点',
+        currentText: `${stage3Nodes}/1 项`,
+        done: stage3Nodes >= 1,
+      },
+      {
+        label: '门店口碑提升至小有名气',
+        currentText: `${Math.round(world.reputation)}/70 分`,
+        done: world.reputation >= 70,
+      },
+      {
+        label: '累计营业收入',
+        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥24,000`,
+        done: world.totalCashEarned >= 24000,
+      },
+    ];
+  } else if (ch === 6) {
+    const stage3Nodes = countTechAtOrAbove(3);
+    const specialBondsCount = discoveredSpecialCustomers + recruitedSpecialStaff;
+    objectives = [
+      {
+        label: '天赋树点亮阶段三及以上节点',
+        currentText: `${stage3Nodes}/3 项`,
+        done: stage3Nodes >= 3,
+      },
+      {
+        label: '结识奇遇来客或招募特聘店员',
+        currentText: `${specialBondsCount}/2 位`,
+        done: specialBondsCount >= 2,
+      },
+      {
+        label: '培养或聘请 2 星及以上员工',
+        currentText: `${highTierCount}/2 人`,
+        done: highTierCount >= 2,
+      },
+      {
+        label: '累计营业收入',
+        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥45,000`,
+        done: world.totalCashEarned >= 45000,
+      },
+    ];
+  } else if (ch === 7) {
+    const stage4Nodes = countTechAtOrAbove(4);
+    objectives = [
+      {
+        label: '天赋树点亮阶段四及以上节点',
+        currentText: `${stage4Nodes}/1 项`,
+        done: stage4Nodes >= 1,
+      },
+      {
+        label: '解锁海鲜/熟食品类',
+        currentText: `${world.unlockedSeafoodIds.length}/9 种`,
+        done: world.unlockedSeafoodIds.length >= 9,
+      },
+      {
+        label: '扩建自助明档分区',
+        currentText: `${world.unlockedZones.length}/5 区`,
+        done: world.unlockedZones.length >= 5,
+      },
+      {
+        label: '累计营业收入',
+        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥78,000`,
+        done: world.totalCashEarned >= 78000,
+      },
+    ];
+  } else if (ch === 8) {
+    const stage4Nodes = countTechAtOrAbove(4);
+    objectives = [
+      {
+        label: '天赋树点亮阶段四及以上节点',
+        currentText: `${stage4Nodes}/3 项`,
+        done: stage4Nodes >= 3,
+      },
+      {
+        label: '累计接待顾客',
+        currentText: `${world.totalGuestsServed}/140 桌`,
+        done: world.totalGuestsServed >= 140,
+      },
+      {
+        label: '口碑 ≥ 80 分 且 卫生 ≥ 82',
+        currentText: `口碑 ${Math.round(world.reputation)}/80 · 卫生 ${Math.round(world.hygiene)}/82`,
+        done: world.reputation >= 80 && world.hygiene >= 82,
+      },
+      {
+        label: '累计营业收入',
+        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥125,000`,
+        done: world.totalCashEarned >= 125000,
+      },
+    ];
+  } else if (ch === 9) {
+    const stage5Nodes = countTechAtOrAbove(5);
+    objectives = [
+      {
+        label: '天赋树点亮阶段五节点',
+        currentText: `${stage5Nodes}/1 项`,
+        done: stage5Nodes >= 1,
+      },
+      {
+        label: '在职员工 ≥ 6 人且含 3 名以上 2 星骨干',
+        currentText: `${world.staff.length}/6 人 · 骨干 ${highTierCount}/3`,
+        done: world.staff.length >= 6 && highTierCount >= 3,
+      },
+      {
+        label: '累计售出/消耗菜品',
+        currentText: `${totalDishesConsumed}/400 份`,
+        done: totalDishesConsumed >= 400,
+      },
+      {
+        label: '累计营业收入',
+        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥175,000`,
+        done: world.totalCashEarned >= 175000,
+      },
+    ];
+  } else {
+    const stage5Nodes = countTechAtOrAbove(5);
+    objectives = [
+      {
+        label: '阶段五天赋树点亮至少 2 个节点',
+        currentText: `${stage5Nodes}/2 项`,
+        done: stage5Nodes >= 2,
+      },
+      {
+        label: '累计接待顾客',
+        currentText: `${world.totalGuestsServed}/220 桌`,
+        done: world.totalGuestsServed >= 220,
+      },
+      {
+        label: '累计营业收入',
+        currentText: `¥${world.totalCashEarned.toLocaleString()}/¥220,000`,
+        done: world.totalCashEarned >= 220000,
       },
       {
         label: '门店口碑达到金字招牌',
-        currentText: `${Math.round(world.reputation)}/90 分`,
-        done: world.reputation >= 90,
+        currentText: `${Math.round(world.reputation)}/88 分`,
+        done: world.reputation >= 88,
       },
     ];
   }
@@ -1715,19 +2213,19 @@ export function buildEndingEpilogue(world: GameWorld): EndingEpilogueReport {
   }
 
   // 4. Era / Times Change Ending
-  const ch3Flag = world.storyFlags.ch3;
+  const eraFlag = world.storyFlags.ch5 || world.storyFlags.ch3;
   let eraEnding = {
     title: '《碧海潮生 · 四季鲜食新时代》',
     summary:
       '二十年后，港城彻底告别了粗放低价的冻货时代。受你当年“顺应四季、不时不食”理念的深远影响，海洋生态休养生息，每逢开海季与冬至沸锅节，全城灯火如昼，成为世界闻名的可持续海鲜美食之都。',
   };
-  if (ch3Flag === 'global_coldchain' || dominant === 'EMPIRE') {
+  if (eraFlag === 'global_coldchain' || dominant === 'EMPIRE') {
     eraEnding = {
       title: '《冷链通四海 · 港城全球味觉枢纽》',
       summary:
         '二十年后，高速智慧冷链与远洋活鲜航线将这座港口城市推向世界舞台。曾经偏居一隅的小码头崛起为国际海洋美食中心，东方海鲜自助火锅文化随着潮鲜沸鼎的航迹风靡全球。',
     };
-  } else if (ch3Flag === 'harbor_alliance' || dominant === 'WARMTH') {
+  } else if (eraFlag === 'harbor_alliance' || dominant === 'WARMTH') {
     eraEnding = {
       title: '《十里红灯 · 永不消逝的港湾烟火》',
       summary:

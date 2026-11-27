@@ -1379,13 +1379,13 @@ export function getNearFailureStatus(world: GameWorld): NearFailureWarningState 
   if (world.penaltyStrikes >= world.maxPenaltyStrikes - 1) {
     reasons.push({
       title: `违规红线告急（${world.penaltyStrikes}/${world.maxPenaltyStrikes}）`,
-      tip: '再记 1 次违规即吊销执照！切勿断菜、逃单或卫生低于45（单日零客诉且卫生≥85可撤1点）',
+      tip: '再记 1 次违规即吊销执照！切勿断菜、逃单或卫生低于 35（单日逃单≤1 且卫生≥78 可撤 1 点）',
       critical: true,
     });
   } else if (world.penaltyStrikes >= world.maxPenaltyStrikes - 2) {
     reasons.push({
       title: `违规记点偏高（${world.penaltyStrikes}/${world.maxPenaltyStrikes}）`,
-      tip: '请注意保持卫生≥85并避免顾客逃单/断供',
+      tip: '请注意保持卫生≥78并避免顾客逃单/断供',
       critical: false,
     });
   }
@@ -1405,16 +1405,16 @@ export function getNearFailureStatus(world: GameWorld): NearFailureWarningState 
     });
   }
 
-  // 3) Cash near bankruptcy (-400)
+  // 3) Cash near bankruptcy (-600)
   const projectedDailyCost =
     world.staff.reduce((s, st) => s + st.dailyWage, 0) + getShopConfig(world.shopLevel).baseRent;
-  if (world.cash <= -240 || (world.phase === 'CLOSING' && world.cash - projectedDailyCost < -340)) {
+  if (world.cash <= -380 || (world.phase === 'CLOSING' && world.cash - projectedDailyCost < -520)) {
     reasons.push({
       title: `资金濒临断裂（当前 ¥${Math.round(world.cash)}）`,
-      tip: '资金低于 -¥400 将宣告破产！请谨慎采购支出并尽快盈利回血',
+      tip: '资金低于 -¥600 将宣告破产！请谨慎采购支出并尽快盈利回血',
       critical: true,
     });
-  } else if (world.cash <= -100) {
+  } else if (world.cash <= -180) {
     reasons.push({
       title: `门店现金流透支（¥${Math.round(world.cash)}）`,
       tip: '注意预留今日租金与员工日薪（约 ¥' + projectedDailyCost + '）',
@@ -1422,12 +1422,12 @@ export function getNearFailureStatus(world: GameWorld): NearFailureWarningState 
     });
   }
 
-  // 4) Hygiene critically low during open business hours (penalty strike triggers at <45)
-  if (world.phase === 'PLAYING' && world.hygiene < 50) {
+  // 4) Hygiene critically low during open business hours (penalty strike triggers at <35)
+  if (world.phase === 'PLAYING' && world.hygiene < 42) {
     reasons.push({
       title: `卫生严重告急（${Math.round(world.hygiene)} 分）`,
-      tip: '低于 45 分将立刻触发高额罚款与违规记点！快收脏桌、洗脏碗！',
-      critical: world.hygiene < 47,
+      tip: '低于 35 分将触发食安突击整改！快收脏桌、洗脏碗！',
+      critical: world.hygiene < 38,
     });
   }
 

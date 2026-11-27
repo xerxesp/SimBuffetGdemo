@@ -1,4 +1,4 @@
-import { BookOpen, Check, Compass, Crown, Heart, Sparkles, X } from 'lucide-react';
+import { BookOpen, Calendar, Check, Compass, Crown, Heart, Sparkles, X } from 'lucide-react';
 import { STAFF_ROLE_META } from '../data/gameConfig';
 import {
   evaluateChapterObjectives,
@@ -8,7 +8,10 @@ import {
   SPECIAL_STORIES,
 } from '../data/storyConfig';
 import { getAvailableSpecialStaffQuests } from '../engine/storyAndFacilities';
-import { getDiscoveredSideQuestSummaries } from '../data/serviceIncidentsConfig';
+import {
+  getDiscoveredSeasonalEventSummaries,
+  getDiscoveredSideQuestSummaries,
+} from '../data/serviceIncidentsConfig';
 import { GameWorld, SpecialStaffId } from '../types/game';
 
 interface StoryChronicleModalProps {
@@ -47,6 +50,7 @@ export function StoryChronicleModal({
     (story) => world.specialStories[story.id].discovered
   );
   const sideQuestSummaries = getDiscoveredSideQuestSummaries(world);
+  const seasonalSummaries = getDiscoveredSeasonalEventSummaries(world);
 
   const { CRAFT, EMPIRE, WARMTH } = world.storyPhilosophy;
 
@@ -429,6 +433,49 @@ export function StoryChronicleModal({
                           当前走向：{sq.branchLabel}
                         </div>
                         <p className="text-xs text-[#DFCDB6] leading-relaxed">{sq.summaryText}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Four-Season Limited Events Archive */}
+              <section className="space-y-3 pt-2">
+                <div className="flex items-baseline justify-between border-b border-[#593b25] pb-2">
+                  <div>
+                    <h3 className="font-display text-base font-bold text-[#FFF6E5] flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-[#F9A8D4]" />
+                      四季风物志 · 季节限定事件
+                    </h3>
+                    <p className="text-xs text-[#C5AE92] mt-0.5">
+                      春夏秋冬各藏两段海港应季见闻，随季节流转在营业中触发
+                    </p>
+                  </div>
+                  <span className="font-mono-num text-xs font-bold text-[#F9A8D4]">
+                    已收录 {seasonalSummaries.length}/8 卷
+                  </span>
+                </div>
+
+                {seasonalSummaries.length === 0 ? (
+                  <div className="game-inset p-4 rounded-xl text-xs text-[#C5AE92] leading-relaxed">
+                    尚未收录季节限定见闻。随春夏秋冬四季更迭正常营业，将陆续邂逅春日赏樱游船、盛夏热浪与伏季休渔、金秋蟹季灯会、寒冬围炉与岁末尾牙等专属事件！
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {seasonalSummaries.map((ev) => (
+                      <div key={ev.id} className="game-card p-3.5 rounded-xl space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className="font-display text-sm font-bold"
+                            style={{ color: ev.accentColor }}
+                          >
+                            【{ev.seasonLabel}】{ev.title}
+                          </span>
+                          <span className="text-[11px] font-mono-num font-bold text-[#6EE7B7] shrink-0">
+                            {ev.outcomeLabel}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#DFCDB6] leading-relaxed">{ev.summaryText}</p>
                       </div>
                     ))}
                   </div>

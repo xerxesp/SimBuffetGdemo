@@ -1,3 +1,4 @@
+import { SeasonId, WeatherId } from '../types/game';
 import { BgmTrackId } from '../types/settings';
 
 // MIDI note number to frequency (Hz)
@@ -281,6 +282,21 @@ class SoundManager {
   private schedulerId: number | null = null;
   private gestureBound = false;
 
+  // Weather & Season atmospheric audio engine
+  private ambientBus: GainNode | null = null;
+  private bgmWarmFilter: BiquadFilterNode | null = null;
+  private weatherBedSource: AudioBufferSourceNode | null = null;
+  private weatherBedFilter: BiquadFilterNode | null = null;
+  private weatherBedGain: GainNode | null = null;
+  private weatherWindLfo: OscillatorNode | null = null;
+  private weatherWindLfoGain: GainNode | null = null;
+  private activeSeason: SeasonId = 'SPRING';
+  private activeWeather: WeatherId = 'SUNNY';
+  private inGameplayEnv = false;
+  private lastCheckoutMs = 0;
+  private checkoutComboCount = 0;
+  private lastDialogueTickMs = 0;
+
   constructor() {
     this.bindUnlockGesture();
   }
@@ -337,7 +353,7 @@ class SoundManager {
         sfx.connect(master);
         this.sfxBus = sfx;
 
-        // BGM Bus with warm low-pass rolloff so music sits comfortably behind gameplay
+        // BGM Bus with warm low-pass rolloff (seasonally tuned) so music sits comfortably behind gameplay
         const bgm = ctx.createGain();
         bgm.gain.value = this.bgmMuted ? 0 : this.bgmVolume * 0.42;
         const bgmWarmFilter = ctx.createBiquadFilter();
@@ -346,6 +362,13 @@ class SoundManager {
         bgm.connect(bgmWarmFilter);
         bgmWarmFilter.connect(master);
         this.bgmBus = bgm;
+        this.bgmWarmFilter = bgmWarmFilter;
+
+        // Dedicated Weather & Season Ambient Bus
+        const ambient = ctx.createGain();
+        ambient.gain.value = this.computeAmbientBusGain();
+        ambient.connect(master);
+        this.ambientBus = ambient;
 
         // Gentle studio feedback-delay space for guzheng / flute warmth
         const delaySend = ctx.createGain();
@@ -365,7 +388,7 @@ class SoundManager {
         delayFilter.connect(bgm);
         this.reverbSend = delaySend;
 
-        // Reusable 2-second white-noise buffer for percussion, steam, ice, waves
+        // Reusable 2-second white-noise buffer for percussion, steam, ice, waves, rain & wind
         const bufLen = ctx.sampleRate * 2;
         const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
         const data = buf.getChannelData(0);
@@ -373,6 +396,9 @@ class SoundManager {
           data[i] = Math.random() * 2 - 1;
         }
         this.noiseBuffer = buf;
+
+        // Continuous crossfaded weather noise bed (rain / typhoon gale / snow breeze / harbor air)
+        this.initWeatherBed(ctx, ambient, buf);
       }
     }
 
@@ -383,12 +409,137 @@ class SoundManager {
       this.ctx.resume().catch(() => {});
     }
     this.syncGains();
+    this.applyEnvironmentAudio();
     return {
       ctx: this.ctx,
       sfxOut: this.sfxBus,
       bgmOut: this.bgmBus,
       reverb: this.reverbSend,
     };
+  }
+
+  private computeAmbientBusGain(): number {
+    if (this.muted || this.volume <= 0.001) return 0;
+    const base = Math.max(this.sfxVolume * 0.72, this.bgmMuted ? 0 : this.bgmVolume * 0.6);
+    const sceneMult = this.inGameplayEnv ? 1.0 : 0.22;
+    return base * sceneMult;
+  }
+
+  private initWeatherBed(ctx: AudioContext, ambientOut: GainNode, noiseBuf: AudioBuffer) {
+    if (this.weatherBedSource) return;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    src.loop = true;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 420;
+    filter.Q.value = 0.7;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0.0001;
+
+    // Slow organic wind gust LFO modulating the weather filter cutoff
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 0.16;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 40;
+    lfo.connect(lfoGain);
+    lfoGain.connect(filter.frequency);
+
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(ambientOut);
+
+    src.start();
+    lfo.start();
+
+    this.weatherBedSource = src;
+    this.weatherBedFilter = filter;
+    this.weatherBedGain = gain;
+    this.weatherWindLfo = lfo;
+    this.weatherWindLfoGain = lfoGain;
+  }
+
+  private applyEnvironmentAudio() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // 1. Seasonal timbral warmth on the BGM master filter
+    if (this.bgmWarmFilter) {
+      const seasonCutoff: Record<SeasonId, number> = {
+        SPRING: 4950,
+        SUMMER: 5300,
+        AUTUMN: 4200,
+        WINTER: 3650,
+      };
+      this.bgmWarmFilter.frequency.setTargetAtTime(seasonCutoff[this.activeSeason], now, 0.35);
+    }
+
+    // 2. Continuous Weather Bed crossfade
+    if (this.weatherBedFilter && this.weatherBedGain && this.weatherWindLfo && this.weatherWindLfoGain) {
+      switch (this.activeWeather) {
+        case 'SUNNY':
+          this.weatherBedFilter.type = 'lowpass';
+          this.weatherBedFilter.frequency.setTargetAtTime(420, now, 0.45);
+          this.weatherBedFilter.Q.setTargetAtTime(0.6, now, 0.35);
+          this.weatherWindLfo.frequency.setTargetAtTime(0.11, now, 0.3);
+          this.weatherWindLfoGain.gain.setTargetAtTime(45, now, 0.35);
+          this.weatherBedGain.gain.setTargetAtTime(0.014, now, 0.5);
+          break;
+        case 'RAINY':
+          this.weatherBedFilter.type = 'bandpass';
+          this.weatherBedFilter.frequency.setTargetAtTime(1650, now, 0.45);
+          this.weatherBedFilter.Q.setTargetAtTime(0.62, now, 0.35);
+          this.weatherWindLfo.frequency.setTargetAtTime(0.22, now, 0.3);
+          this.weatherWindLfoGain.gain.setTargetAtTime(190, now, 0.35);
+          this.weatherBedGain.gain.setTargetAtTime(0.062, now, 0.5);
+          break;
+        case 'TYPHOON':
+          this.weatherBedFilter.type = 'bandpass';
+          this.weatherBedFilter.frequency.setTargetAtTime(760, now, 0.4);
+          this.weatherBedFilter.Q.setTargetAtTime(1.15, now, 0.35);
+          this.weatherWindLfo.frequency.setTargetAtTime(0.29, now, 0.3);
+          this.weatherWindLfoGain.gain.setTargetAtTime(340, now, 0.35);
+          this.weatherBedGain.gain.setTargetAtTime(0.095, now, 0.45);
+          break;
+        case 'SNOWY':
+          this.weatherBedFilter.type = 'bandpass';
+          this.weatherBedFilter.frequency.setTargetAtTime(1020, now, 0.45);
+          this.weatherBedFilter.Q.setTargetAtTime(1.35, now, 0.35);
+          this.weatherWindLfo.frequency.setTargetAtTime(0.14, now, 0.3);
+          this.weatherWindLfoGain.gain.setTargetAtTime(180, now, 0.35);
+          this.weatherBedGain.gain.setTargetAtTime(0.036, now, 0.55);
+          break;
+        case 'HEATWAVE':
+          this.weatherBedFilter.type = 'lowpass';
+          this.weatherBedFilter.frequency.setTargetAtTime(520, now, 0.45);
+          this.weatherBedFilter.Q.setTargetAtTime(0.7, now, 0.35);
+          this.weatherWindLfo.frequency.setTargetAtTime(0.09, now, 0.3);
+          this.weatherWindLfoGain.gain.setTargetAtTime(35, now, 0.35);
+          this.weatherBedGain.gain.setTargetAtTime(0.016, now, 0.5);
+          break;
+      }
+    }
+
+    if (this.ambientBus) {
+      this.ambientBus.gain.setTargetAtTime(this.computeAmbientBusGain(), now, 0.25);
+    }
+  }
+
+  /** Sync continuous weather & season soundscape with live world state */
+  setEnvironment(season: SeasonId, weather: WeatherId, inGameplay = true) {
+    const changed =
+      this.activeSeason !== season ||
+      this.activeWeather !== weather ||
+      this.inGameplayEnv !== inGameplay;
+    this.activeSeason = season;
+    this.activeWeather = weather;
+    this.inGameplayEnv = inGameplay;
+    if (changed && this.ctx) {
+      this.applyEnvironmentAudio();
+    }
   }
 
   private syncGains() {
@@ -401,6 +552,9 @@ class SoundManager {
       0.08
     );
     this.sfxBus.gain.setTargetAtTime(this.sfxVolume, now, 0.02);
+    if (this.ambientBus) {
+      this.ambientBus.gain.setTargetAtTime(this.computeAmbientBusGain(), now, 0.08);
+    }
   }
 
   setVolume(percent: number) {
@@ -470,43 +624,93 @@ class SoundManager {
 
     const trackId = this.currentTrack ?? this.desiredTrack;
     const pattern = TRACKS[trackId];
-    const stepDur = 60 / pattern.bpm / pattern.stepsPerBeat;
+    // Seasonal tempo nuance during active gameplay (Summer lively, Winter cozy)
+    const seasonBpmMult =
+      this.inGameplayEnv && (trackId === 'PREP' || trackId === 'SERVICE' || trackId === 'RUSH' || trackId === 'CLOSING')
+        ? this.activeSeason === 'SUMMER'
+          ? 1.05
+          : this.activeSeason === 'WINTER'
+            ? 0.94
+            : this.activeSeason === 'AUTUMN'
+              ? 0.97
+              : 1.01
+        : 1.0;
+    const stepDur = 60 / (pattern.bpm * seasonBpmMult) / pattern.stepsPerBeat;
 
     // Schedule notes 180ms ahead for rock-solid Web Audio timing
     while (this.nextNoteTime < this.ctx.currentTime + 0.18) {
-      this.scheduleStep(pattern, this.stepIndex, this.nextNoteTime, stepDur);
+      this.scheduleStep(pattern, trackId, this.stepIndex, this.nextNoteTime, stepDur);
       this.nextNoteTime += stepDur;
       this.stepIndex = (this.stepIndex + 1) % pattern.length;
     }
   }
 
-  private scheduleStep(pattern: TrackPattern, step: number, time: number, stepDur: number) {
+  private scheduleStep(
+    pattern: TrackPattern,
+    trackId: BgmTrackId,
+    step: number,
+    time: number,
+    stepDur: number
+  ) {
     if (!this.ctx || !this.bgmBus || !this.reverbSend) return;
 
-    // 1. Plucked Guzheng / Pipa melody
+    // Distinct Seasonal Melodic & Harmonic Coloration on Gameplay Tracks
+    const applySeasonShift =
+      this.inGameplayEnv &&
+      (trackId === 'PREP' || trackId === 'SERVICE' || trackId === 'RUSH' || trackId === 'CLOSING');
+    const seasonTranspose = applySeasonShift
+      ? this.activeSeason === 'SPRING'
+        ? 2
+        : this.activeSeason === 'SUMMER'
+          ? 0
+          : this.activeSeason === 'AUTUMN'
+            ? -2
+            : -3
+      : 0;
+
+    // 1. Plucked Guzheng / Pipa melody (+ seasonal ornament phrases!)
     const pluckMidi = pattern.pluck[step];
     if (pluckMidi != null) {
-      this.synthPluck(midiToFreq(pluckMidi), time, stepDur * 2.1, 0.18);
+      const shifted = pluckMidi + seasonTranspose;
+      this.synthPluck(midiToFreq(shifted), time, stepDur * 2.1, 0.18);
+      // Summer: lively upper-octave coastal shimmer on offbeat accents
+      if (applySeasonShift && this.activeSeason === 'SUMMER' && step % 8 === 4) {
+        this.synthPluck(midiToFreq(shifted + 12), time + stepDur * 0.5, stepDur * 1.4, 0.085);
+      }
+      // Spring: delicate ascending blossom grace note on bar starts
+      if (applySeasonShift && this.activeSeason === 'SPRING' && step % 16 === 0) {
+        this.synthPluck(midiToFreq(shifted + 7), time + stepDur * 0.45, stepDur * 1.6, 0.08);
+      }
     }
 
-    // 2. Bamboo Flute lyrical counter-melody
+    // 2. Bamboo Flute lyrical counter-melody (Autumn adds warm lyrical passing tones)
     const fluteMidi = pattern.flute?.[step];
     if (fluteMidi != null) {
-      this.synthFlute(midiToFreq(fluteMidi), time, stepDur * 3.2, 0.11);
+      this.synthFlute(
+        midiToFreq(fluteMidi + seasonTranspose),
+        time,
+        stepDur * (applySeasonShift && this.activeSeason === 'AUTUMN' ? 3.8 : 3.2),
+        applySeasonShift && this.activeSeason === 'AUTUMN' ? 0.13 : 0.11
+      );
+    } else if (applySeasonShift && this.activeSeason === 'AUTUMN' && (step === 6 || step === 22) && pluckMidi != null) {
+      this.synthFlute(midiToFreq(pluckMidi + seasonTranspose + 5), time, stepDur * 2.4, 0.075);
     }
 
     // 3. Acoustic Bassline
     const bassMidi = pattern.bass[step];
     if (bassMidi != null) {
-      this.synthBass(midiToFreq(bassMidi), time, stepDur * 2.4, 0.2);
+      this.synthBass(midiToFreq(bassMidi + seasonTranspose), time, stepDur * 2.4, 0.2);
     }
 
-    // 4. Warm Chord Pad
+    // 4. Warm Chord Pad (+ Winter crystalline hearth-chime overtone on chord roots)
     const chord = pattern.chords[step];
     if (chord) {
       const chordDur = stepDur * 8;
       for (const m of chord) {
-        this.synthPadVoice(midiToFreq(m), time, chordDur, 0.042);
+        this.synthPadVoice(midiToFreq(m + seasonTranspose), time, chordDur, 0.042);
+      }
+      if (applySeasonShift && this.activeSeason === 'WINTER' && chord.length > 0) {
+        this.synthPadVoice(midiToFreq(chord[chord.length - 1] + seasonTranspose + 12), time + 0.04, stepDur * 3.5, 0.032);
       }
     }
 
@@ -522,6 +726,204 @@ class SoundManager {
     } else if (pattern.ambient === 'SIMMER' && step % 8 === 0) {
       this.synthGentleSimmer(time, stepDur * 6);
     }
+
+    // 7. Live Weather & Season Atmospheric Accents (audible during active gameplay)
+    if (this.inGameplayEnv && this.ambientBus) {
+      this.scheduleEnvironmentAccent(step, time, stepDur);
+    }
+  }
+
+  private scheduleEnvironmentAccent(step: number, time: number, stepDur: number) {
+    if (!this.ctx || !this.ambientBus || !this.noiseBuffer) return;
+
+    // Weather-driven accents
+    if (this.activeWeather === 'RAINY' && (step % 6 === 2 || step % 11 === 5)) {
+      this.synthRaindropPlink(time, 0.028);
+    } else if (this.activeWeather === 'TYPHOON') {
+      if (step % 4 === 1) {
+        this.synthRaindropPlink(time, 0.032);
+      }
+      if (step === 12 || step === 28) {
+        this.synthDistantThunder(time, 0.085);
+      }
+    } else if (this.activeWeather === 'SNOWY' && step === 16) {
+      this.synthSnowWindBell(time, 0.03);
+    } else if (this.activeWeather === 'HEATWAVE' && (step === 4 || step === 20)) {
+      this.synthSummerCicada(time, stepDur * 6.5, 0.032);
+    }
+
+    // Seasonal ambient signature motifs (delicate, non-intrusive)
+    if (step === 0) {
+      if (this.activeSeason === 'SPRING' && this.activeWeather !== 'TYPHOON') {
+        this.synthSpringBirdChirp(time + 0.12, 0.028);
+      } else if (this.activeSeason === 'SUMMER' && this.activeWeather === 'SUNNY') {
+        this.synthSummerCicada(time + 0.08, stepDur * 5, 0.018);
+      } else if (this.activeSeason === 'AUTUMN') {
+        this.synthAutumnLeafRustle(time + 0.1, stepDur * 6, 0.026);
+      } else if (this.activeSeason === 'WINTER') {
+        this.synthWinterHearthCrackle(time + 0.1, 0.032);
+      }
+    }
+  }
+
+  private synthRaindropPlink(time: number, peak: number) {
+    if (!this.ctx || !this.ambientBus) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const base = 1150 + Math.random() * 950;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(base, time);
+    osc.frequency.exponentialRampToValueAtTime(base * 1.48, time + 0.055);
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.linearRampToValueAtTime(peak, time + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.075);
+    osc.connect(gain);
+    gain.connect(this.ambientBus);
+    osc.start(time);
+    osc.stop(time + 0.09);
+  }
+
+  private synthDistantThunder(time: number, peak: number) {
+    if (!this.ctx || !this.ambientBus || !this.noiseBuffer) return;
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(170, time);
+    filter.frequency.exponentialRampToValueAtTime(52, time + 1.5);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.linearRampToValueAtTime(peak, time + 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 1.65);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ambientBus);
+    src.start(time);
+    src.stop(time + 1.72);
+  }
+
+  private synthSnowWindBell(time: number, peak: number) {
+    if (!this.ctx || !this.ambientBus) return;
+    const ctx = this.ctx;
+    const freqs = [1567.98, 2093.0];
+    freqs.forEach((f, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = time + idx * 0.18;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(peak, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.85);
+      osc.connect(gain);
+      gain.connect(this.ambientBus!);
+      osc.start(t);
+      osc.stop(t + 0.9);
+    });
+  }
+
+  private synthSummerCicada(time: number, dur: number, peak: number) {
+    if (!this.ctx || !this.ambientBus || !this.noiseBuffer) return;
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.loop = true;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 4350;
+    filter.Q.value = 4.2;
+
+    const gain = ctx.createGain();
+    const am = ctx.createOscillator();
+    const amGain = ctx.createGain();
+    am.type = 'sine';
+    am.frequency.value = 14.5;
+    amGain.gain.value = peak * 0.45;
+    am.connect(amGain);
+    amGain.connect(gain.gain);
+
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.linearRampToValueAtTime(peak, time + 0.25);
+    gain.gain.setValueAtTime(peak * 0.85, time + dur * 0.7);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ambientBus);
+    src.start(time);
+    am.start(time);
+    src.stop(time + dur + 0.05);
+    am.stop(time + dur + 0.05);
+  }
+
+  private synthSpringBirdChirp(time: number, peak: number) {
+    if (!this.ctx || !this.ambientBus) return;
+    const ctx = this.ctx;
+    [0, 0.14].forEach((offset, idx) => {
+      const t = time + offset;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(idx === 0 ? 1980 : 2240, t);
+      osc.frequency.exponentialRampToValueAtTime(idx === 0 ? 2760 : 3080, t + 0.055);
+      osc.frequency.exponentialRampToValueAtTime(2150, t + 0.11);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(peak, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      osc.connect(gain);
+      gain.connect(this.ambientBus!);
+      osc.start(t);
+      osc.stop(t + 0.14);
+    });
+  }
+
+  private synthAutumnLeafRustle(time: number, dur: number, peak: number) {
+    if (!this.ctx || !this.ambientBus || !this.noiseBuffer) return;
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(2100, time);
+    filter.frequency.linearRampToValueAtTime(3200, time + dur * 0.5);
+    filter.frequency.linearRampToValueAtTime(1600, time + dur);
+    filter.Q.value = 1.6;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.linearRampToValueAtTime(peak, time + dur * 0.35);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ambientBus);
+    src.start(time);
+    src.stop(time + dur + 0.04);
+  }
+
+  private synthWinterHearthCrackle(time: number, peak: number) {
+    if (!this.ctx || !this.ambientBus || !this.noiseBuffer) return;
+    const ctx = this.ctx;
+    [0, 0.16, 0.42].forEach((offset) => {
+      const t = time + offset;
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.value = 3400;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(peak, t + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.032);
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ambientBus!);
+      src.start(t);
+      src.stop(t + 0.045);
+    });
   }
 
   // --- BGM Instrument Synthesizers ---
@@ -970,6 +1372,184 @@ class SoundManager {
   // Crisp UI click
   playClick() {
     this.playTone(540, 0.045, 'sine', 0.055, 700);
+  }
+
+  // =========================================================================
+  // SEASON, WEATHER, HOLIDAY & TACTILE SCENE TRANSITION SOUND EFFECTS
+  // =========================================================================
+
+  /** Distinct Chaoshan pentatonic musical signature when a new season arrives */
+  playSeasonChange(season: SeasonId) {
+    switch (season) {
+      case 'SPRING': {
+        // Ascending blossom guzheng arpeggio + delicate spring bird chime
+        const notes = [587.33, 659.25, 739.99, 880, 1174.66];
+        notes.forEach((f, i) => {
+          this.playTone(f, 0.34, 'triangle', 0.085, undefined, i * 0.075);
+        });
+        this.playTone(2180, 0.11, 'sine', 0.05, 2960, 0.42);
+        this.playTone(2360, 0.12, 'sine', 0.045, 3140, 0.54);
+        break;
+      }
+      case 'SUMMER': {
+        // Bright coastal harbor cascade + warm surf shimmer
+        const notes = [783.99, 880, 987.77, 1174.66, 1567.98];
+        notes.forEach((f, i) => {
+          this.playTone(f, 0.28, 'sine', 0.08, undefined, i * 0.065);
+        });
+        this.playNoiseBurst(0.55, 'lowpass', 620, 0.06, 0.08);
+        break;
+      }
+      case 'AUTUMN': {
+        // Warm golden harvest chime + lyrical resonant brass gong + crisp leaf wind
+        this.playTone(220, 0.55, 'triangle', 0.1, 214, 0);
+        const notes = [880, 783.99, 659.25, 587.33, 880];
+        notes.forEach((f, i) => {
+          this.playTone(f, 0.32, 'triangle', 0.08, undefined, 0.06 + i * 0.09);
+        });
+        this.playNoiseBurst(0.45, 'bandpass', 2400, 0.055, 0.12, 1.4);
+        break;
+      }
+      case 'WINTER': {
+        // Solemn warm temple bell + crystalline winter frost harmony
+        this.playTone(196, 0.65, 'sine', 0.1, 192, 0);
+        this.playTone(659.25, 0.55, 'sine', 0.08, undefined, 0.08);
+        this.playTone(987.77, 0.58, 'sine', 0.075, undefined, 0.18);
+        this.playTone(1318.51, 0.68, 'sine', 0.07, undefined, 0.28);
+        this.playTone(1975.53, 0.62, 'sine', 0.05, undefined, 0.38);
+        break;
+      }
+    }
+  }
+
+  /** Distinct atmospheric cue when daily weather shifts */
+  playWeatherChange(weather: WeatherId) {
+    switch (weather) {
+      case 'SUNNY': {
+        // Radiant morning triad chime
+        this.playTone(523.25, 0.24, 'triangle', 0.075, undefined, 0);
+        this.playTone(659.25, 0.26, 'sine', 0.08, undefined, 0.07);
+        this.playTone(783.99, 0.32, 'sine', 0.08, undefined, 0.14);
+        this.playTone(1046.5, 0.42, 'sine', 0.075, undefined, 0.21);
+        break;
+      }
+      case 'RAINY': {
+        // Soft rain onset swell + translucent falling raindrops
+        this.playNoiseBurst(0.62, 'bandpass', 1750, 0.075, 0, 0.8);
+        const drops = [1480, 1760, 1318, 1975, 1568];
+        drops.forEach((f, idx) => {
+          this.playTone(f, 0.08, 'sine', 0.055, f * 1.38, 0.06 + idx * 0.09);
+        });
+        break;
+      }
+      case 'TYPHOON': {
+        // Deep coastal thunder rumble + dramatic howling gale sweep
+        this.playTone(88, 0.72, 'triangle', 0.15, 34, 0);
+        this.playNoiseBurst(0.95, 'lowpass', 240, 0.14, 0.02);
+        this.playNoiseBurst(0.85, 'bandpass', 780, 0.1, 0.15, 1.3);
+        this.playTone(145, 0.45, 'sawtooth', 0.055, 62, 0.18);
+        break;
+      }
+      case 'SNOWY': {
+        // Sparkling winter frost wind-bell harmonics + hushed crisp air
+        this.playNoiseBurst(0.55, 'bandpass', 1250, 0.05, 0, 1.5);
+        const bells = [1567.98, 2093, 2637.02, 3135.96];
+        bells.forEach((f, idx) => {
+          this.playTone(f, 0.48, 'sine', 0.055, undefined, 0.05 + idx * 0.095);
+        });
+        break;
+      }
+      case 'HEATWAVE': {
+        // Shimmering golden heat chord + brief cicada chorus pulse
+        this.playTone(587.33, 0.32, 'triangle', 0.07, 602, 0);
+        this.playTone(880, 0.36, 'sine', 0.07, 898, 0.08);
+        this.playNoiseBurst(0.52, 'bandpass', 4300, 0.065, 0.1, 3.6);
+        break;
+      }
+    }
+  }
+
+  /** Celebratory Chaoshan festival gong & rapid guzheng flourish on holiday mornings */
+  playHolidayFanfare() {
+    this.playTone(174.61, 0.65, 'triangle', 0.13, 168, 0);
+    const gliss = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1318.51];
+    gliss.forEach((f, i) => {
+      this.playTone(f, 0.28, 'triangle', 0.085, undefined, 0.05 + i * 0.05);
+    });
+  }
+
+  /** Crisp porcelain plate placement + warm subtle steam hiss when serving dishes */
+  playDishServed() {
+    this.playTone(1640, 0.065, 'sine', 0.065);
+    this.playTone(2180, 0.08, 'sine', 0.05, undefined, 0.03);
+    this.playNoiseBurst(0.11, 'bandpass', 2600, 0.045, 0.02, 1.4);
+  }
+
+  /** Tactile timber sliding door sound when moving between front hall and backstage */
+  playBackstageDoor() {
+    this.playNoiseBurst(0.18, 'lowpass', 540, 0.085, 0);
+    this.playTone(135, 0.14, 'triangle', 0.075, 92, 0.02);
+    this.playTone(720, 0.045, 'sine', 0.05, 560, 0.15);
+  }
+
+  /** Crisp sashimi knife swish + wooden cutting board tap */
+  playSashimiSlice() {
+    this.playNoiseBurst(0.09, 'highpass', 4200, 0.08, 0);
+    this.playTone(1850, 0.055, 'sine', 0.04, 1280, 0.01);
+    this.playTone(320, 0.045, 'triangle', 0.065, 220, 0.065);
+  }
+
+  /** Fiery cast-iron teppan sear burst + crisp oil crackle */
+  playTeppanSizzle() {
+    this.playNoiseBurst(0.28, 'bandpass', 3100, 0.115, 0, 1.0);
+    this.playNoiseBurst(0.12, 'highpass', 5200, 0.065, 0.08);
+    this.playTone(185, 0.1, 'triangle', 0.06, 120, 0);
+    this.playTone(420, 0.06, 'sine', 0.045, 680, 0.09);
+  }
+
+  /** Live seafood aquarium oxygen-bubble cascade & splash */
+  playTankBubbles() {
+    const bubbles = [340, 480, 620, 790];
+    bubbles.forEach((f, i) => {
+      this.playTone(f, 0.07, 'sine', 0.065, f * 1.48, i * 0.048);
+    });
+    this.playNoiseBurst(0.14, 'bandpass', 1200, 0.055, 0.02, 1.8);
+  }
+
+  /** Feather-light woodblock/brush tick during VN typewriter dialogue */
+  playDialogueTick() {
+    const nowMs = Date.now();
+    if (nowMs - this.lastDialogueTickMs < 68) return;
+    this.lastDialogueTickMs = nowMs;
+    const pitch = 740 + (nowMs % 5) * 28;
+    this.playTone(pitch, 0.024, 'triangle', 0.024, pitch * 0.88);
+  }
+
+  /** Tactile scroll/parchment page turn for story advancement & ending epilogue */
+  playPageFlip() {
+    this.playNoiseBurst(0.095, 'bandpass', 2200, 0.055, 0, 1.1);
+    this.playNoiseBurst(0.06, 'highpass', 3800, 0.035, 0.04);
+    this.playTone(480, 0.05, 'sine', 0.03, 640, 0.02);
+  }
+
+  /** Escalating pentatonic brass prosperity chime for rapid consecutive table checkouts */
+  playCheckoutCombo() {
+    const nowMs = Date.now();
+    if (nowMs - this.lastCheckoutMs <= 4800) {
+      this.checkoutComboCount = Math.min(5, this.checkoutComboCount + 1);
+    } else {
+      this.checkoutComboCount = 1;
+    }
+    this.lastCheckoutMs = nowMs;
+
+    const pentatonic = [987.77, 1108.73, 1318.51, 1479.98, 1760.0, 1975.53];
+    const baseIdx = Math.min(3, this.checkoutComboCount - 1);
+    this.playTone(pentatonic[baseIdx], 0.09, 'triangle', 0.11);
+    this.playTone(pentatonic[baseIdx + 1], 0.16, 'sine', 0.12, undefined, 0.06);
+    this.playTone(pentatonic[baseIdx + 2], 0.21, 'sine', 0.075, undefined, 0.115);
+    if (this.checkoutComboCount >= 3) {
+      this.playTone(pentatonic[5] * 1.25, 0.26, 'sine', 0.065, undefined, 0.165);
+    }
   }
 }
 

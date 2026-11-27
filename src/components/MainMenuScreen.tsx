@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BookOpen, HardDrive, Play, RotateCcw, Settings, ShieldAlert, Trophy, X } from 'lucide-react';
 import { TITLE_KEYART_URL } from '../data/storyConfig';
 import { SaveSlotMeta } from '../types/game';
+import { ChaoshanCornerOrnament, VermilionSealStamp } from './VintageIcons';
 
 interface MainMenuScreenProps {
   bestDays: number;
@@ -70,24 +71,31 @@ export function MainMenuScreen({
 
         {/* Center-Left Classic Strategy Game Title & Refined Vertical Menu Stack */}
         <div className="max-w-lg space-y-7 my-auto">
-          <div className="space-y-3">
+          <div className="relative space-y-3 pl-4 border-l-2 border-[#c9a45c]/55">
+            <ChaoshanCornerOrnament className="absolute -top-3 -left-3 w-7 h-7 opacity-80" />
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full border-2 border-[#E8C97A] bg-[#9B2B16] flex items-center justify-center font-display font-black text-base text-[#FFF7E6] shadow-lg shrink-0">
-                鼎
+              <VermilionSealStamp label="沸鼎" size="md" className="rotate-[-2deg]" />
+              <div className="flex flex-col">
+                <span className="text-sm text-[#E8C97A] font-semibold tracking-[0.26em]">
+                  潮汕海畔 · 店长物语
+                </span>
+                <span className="text-[11px] text-[#C5AE92]/85 tracking-[0.18em]">
+                  老字号活鲜自助火锅馆
+                </span>
               </div>
-              <span className="text-sm text-[#E8C97A] font-semibold tracking-[0.24em]">
-                店长物语
-              </span>
             </div>
 
-            <h1
-              className="font-display text-6xl md:text-7xl font-black tracking-tight text-[#FFF7E8] leading-none"
-              style={{
-                textShadow: '0 4px 20px rgba(0, 0, 0, 0.85), 0 1px 0 #7C5B20',
-              }}
-            >
-              潮鲜沸鼎
-            </h1>
+            <div className="flex items-end gap-3.5">
+              <h1
+                className="font-display text-6xl md:text-7xl font-black tracking-tight text-[#FFF7E8] leading-none"
+                style={{
+                  textShadow: '0 4px 20px rgba(0, 0, 0, 0.85), 0 1px 0 #7C5B20',
+                }}
+              >
+                潮鲜沸鼎
+              </h1>
+              <VermilionSealStamp label="御膳潮鲜" size="sm" className="mb-1.5 opacity-90 rotate-[3deg]" />
+            </div>
 
             <p className="text-sm md:text-[15px] text-[#E8D8C2] leading-relaxed max-w-md pt-1">
               执掌海畔火锅名馆，开店前于门店配置中心调兵遣将、扩建七大前场档口与秘制锅底；开市后迎宾上锅、冷库补货、清桌洗碗，在客流高峰与食安红线中问鼎海上御膳传奇。
@@ -190,11 +198,18 @@ export function MainMenuScreen({
             if (e.target === e.currentTarget) setShowGuide(false);
           }}
         >
-          <div className="game-panel w-full max-w-2xl rounded-xl p-6 md:p-7 text-[#F7EFE2]">
+          <div className="relative game-panel w-full max-w-2xl max-h-[86vh] overflow-y-auto rounded-xl p-6 md:p-7 text-[#F7EFE2]">
+            <ChaoshanCornerOrnament className="absolute top-2 left-2 w-6 h-6 opacity-80" />
+            <ChaoshanCornerOrnament className="absolute top-2 right-2 w-6 h-6 rotate-90 opacity-80" />
+            <ChaoshanCornerOrnament className="absolute bottom-2 right-2 w-6 h-6 rotate-180 opacity-80" />
+            <ChaoshanCornerOrnament className="absolute bottom-2 left-2 w-6 h-6 -rotate-90 opacity-80" />
             <div className="flex items-center justify-between pb-4 border-b border-[#593b25]">
-              <h2 className="font-display text-2xl font-bold text-[#FFF6E5]">
-                店长经营手札 · 玩法与失败红线
-              </h2>
+              <div className="flex items-center gap-2.5">
+                <VermilionSealStamp label="手札" size="sm" />
+                <h2 className="font-display text-2xl font-bold text-[#FFF6E5]">
+                  店长经营手札 · 玩法与失败红线
+                </h2>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowGuide(false)}
@@ -228,17 +243,51 @@ export function MainMenuScreen({
                   <span>二、惩罚与经营失败判定</span>
                 </h3>
                 <p>
-                  <strong className="text-[#FCA5A5]">违规处罚满 5/5 次（吊销停业）</strong>：卫生低于 45 触发食安突击重罚并直接记 +2 次违规；顾客逃单或档口断供每累计 3 次各记 +1 次违规。
+                  <strong className="text-[#FCA5A5]">违规处罚满 5/5 次（吊销停业）</strong>：卫生低于 35 触发食安突击整改并记 +1 次违规；顾客逃单满 4 次或档口断供满 5 次各记 +1 次违规（前 2 日新店扶持期免记违规）。
                 </p>
                 <p>
-                  <strong className="text-[#FCA5A5]">门店口碑归 0（倒闭）</strong>：排队超时、未上锅底逃单及食安不合格均大幅扣减口碑。
+                  <strong className="text-[#FCA5A5]">门店口碑归 0（倒闭）</strong>：排队超时、未上锅底离席及食安不合格会扣减口碑。
                 </p>
                 <p>
-                  <strong className="text-[#FCA5A5]">资金低于 -¥400（破产）</strong>：每日打烊需扣除门店租金与员工日薪。
+                  <strong className="text-[#FCA5A5]">资金低于 -¥600（破产）</strong>：每日打烊需扣除门店租金与员工日薪。
                 </p>
                 <p className="text-[#86EFAC]">
-                  补救机制：单日达成「零逃单、零食安失败、卫生 ≥ 85」可撤销 1 次违规记点！
+                  补救机制：单日达成「逃单 ≤ 1、零食安失败、卫生 ≥ 78」可撤销 1 次违规记点！
                 </p>
+              </div>
+            </div>
+
+            <div className="pt-4 pb-5 border-t border-[#593b25] space-y-2.5 text-xs text-[#DFCDB6]">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="text-sm font-semibold text-[#99F6E4]">
+                  三、后场七大功能区速览（局内按 [M] 随时切换巡视）
+                </h3>
+                <span className="text-[11px] text-[#C5AE92]">
+                  每房每日 1 次巡视剧情 · 标「!」有可免费招募的神秘访客
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] leading-snug">
+                <div className="game-inset rounded-lg px-3 py-2">
+                  <strong className="text-[#38BDF8]">冷链活鲜库</strong>：闭店冷链补货下单（次日闭店入库）、换水增氧巡检；可结识特聘伙伴 <strong className="text-[#FFF6E5]">林汐</strong>。
+                </div>
+                <div className="game-inset rounded-lg px-3 py-2">
+                  <strong className="text-[#FB923C]">热厨出品间</strong>：加急现烹熟食（+3）救急前厅热菜；可结识特聘名厨 <strong className="text-[#FFF6E5]">沈知微</strong>。
+                </div>
+                <div className="game-inset rounded-lg px-3 py-2">
+                  <strong className="text-[#67E8F9]">餐具洗消间</strong>：集中高温洗消积压脏碗，快速拉升全店卫生评分。
+                </div>
+                <div className="game-inset rounded-lg px-3 py-2">
+                  <strong className="text-[#E8C97A]">店长办公室</strong>：核查考勤回士气、闭店补货、加急直采原料、发布灵活用工兼职（最多 3 人）；可结识 <strong className="text-[#FFF6E5]">苏星遥</strong>。
+                </div>
+                <div className="game-inset rounded-lg px-3 py-2">
+                  <strong className="text-[#86EFAC]">卫生间洗手区</strong>：全面保洁补耗材，防止洁净度低于 55% 拖累口碑与半月检查。
+                </div>
+                <div className="game-inset rounded-lg px-3 py-2">
+                  <strong className="text-[#FBBF24]">机电设备间</strong>：¥30 例行检修冷链与油水分离器，避免低于 60% 引发故障扣分。
+                </div>
+                <div className="game-inset rounded-lg px-3 py-2 sm:col-span-2">
+                  <strong className="text-[#F472B6]">员工宿舍与茶室</strong>：¥40 安排宵夜慰问大幅恢复全员士气；与特聘伙伴好感 ≥80 结缘后可在此陪伴或满足心愿维系亲密。
+                </div>
               </div>
             </div>
 

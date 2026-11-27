@@ -80,6 +80,7 @@ import {
   openShopForBusiness,
   promoteStaff,
   startNextDay,
+  syncSeasonalVisualState,
   tickWorld,
   walkPlayerToBackstage,
 } from './engine/simulation';
@@ -902,7 +903,9 @@ export default function App() {
     setShowOnboardingIntro(false);
     setManualGuideOpen(false);
     resetCameraZoom();
+    syncSeasonalVisualState(loaded, false);
     worldRef.current = loaded;
+    sound.setEnvironment(loaded.season, loaded.weather, true);
     sound.playBell();
     addAlert(worldRef.current, `已读取存档（第 ${loaded.day} 天 · Lv.${loaded.shopLevel}）！`, 'success');
     refreshPersistentData();
@@ -1013,10 +1016,28 @@ export default function App() {
 
   const world = worldRef.current;
   const desiredBgmTrack = resolveBgmTrack(world, settings);
+  const inGameplayAudio =
+    world.phase !== 'MAIN_MENU' &&
+    world.phase !== 'CHARACTER_SELECT' &&
+    world.phase !== 'GAME_OVER';
+  const prevSceneRef = useRef(world.activeScene);
 
   useEffect(() => {
     sound.setBgmTrack(desiredBgmTrack);
   }, [desiredBgmTrack]);
+
+  useEffect(() => {
+    sound.setEnvironment(world.season, world.weather, inGameplayAudio);
+  }, [world.season, world.weather, inGameplayAudio]);
+
+  useEffect(() => {
+    if (prevSceneRef.current !== world.activeScene) {
+      prevSceneRef.current = world.activeScene;
+      if (inGameplayAudio) {
+        sound.playBackstageDoor();
+      }
+    }
+  }, [world.activeScene, inGameplayAudio]);
 
   if (world.phase === 'MAIN_MENU') {
     const hasAnySave = Object.values(saveSlots).some(Boolean);
@@ -1421,7 +1442,7 @@ export default function App() {
                     <div className="text-[11px] text-[#D6C3A8] truncate mt-0.5">
                       {world.mainStoryCompleted
                         ? '无尽传奇 · 可重温结局'
-                        : `第${world.mainChapter}章 · ${chapterDef.title}`}
+                        : `第${world.mainChapter}/${MAIN_CHAPTERS.length}章 · ${chapterDef.title.replace(/^第.+?章\s*·\s*/, '')}`}
                     </div>
                   </div>
                 </button>
@@ -1555,7 +1576,7 @@ export default function App() {
                     </span>
                   </div>
                   <div className="text-[#B59876] pt-0.5">
-                    卫生低于45触发重罚；单日零逃单且卫生≥85撤1点违规。
+                    卫生低于35触发整改；单日逃单≤1且卫生≥78撤1点违规（前2日免记违规）。
                   </div>
                 </div>
 

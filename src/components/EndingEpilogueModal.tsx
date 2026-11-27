@@ -16,6 +16,7 @@ import {
 import { getCharacterDef } from '../data/storyConfig';
 import { EndingEpilogueReport, GameWorld } from '../types/game';
 import { sound } from '../utils/sound';
+import { ChaoshanCornerOrnament, VermilionSealStamp } from './VintageIcons';
 import endingShopEmpireImg from '../assets/images/ending_shop_empire_1795681654695.jpg';
 import endingShopCraftImg from '../assets/images/ending_shop_craft_1795681655994.jpg';
 import endingManagerGloryImg from '../assets/images/ending_manager_glory_1795681663856.jpg';
@@ -116,7 +117,7 @@ export function EndingEpilogueModal({
       const clamped = Math.max(0, Math.min(slides.length - 1, nextIdx));
       setSlideIdx(clamped);
       setElapsedMs(0);
-      sound.playClick();
+      sound.playPageFlip();
     },
     [slides.length]
   );
@@ -191,11 +192,14 @@ export function EndingEpilogueModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-[#090503]/95 backdrop-blur-md flex items-center justify-center p-2.5 md:p-5">
-      <div className="game-panel w-[97vw] max-w-6xl h-[92vh] max-h-[820px] rounded-xl overflow-hidden flex flex-col text-[#F7EFE2] shadow-2xl border-2 border-[#c9a45c]">
+      <div className="relative game-panel w-[97vw] max-w-6xl h-[92vh] max-h-[820px] rounded-xl overflow-hidden flex flex-col text-[#F7EFE2] shadow-2xl border-2 border-[#c9a45c]">
+        <ChaoshanCornerOrnament className="absolute top-1.5 left-1.5 z-30 w-6 h-6 opacity-85" />
+        <ChaoshanCornerOrnament className="absolute top-1.5 right-1.5 z-30 w-6 h-6 rotate-90 opacity-85" />
         {/* Top Compact Cinema Header */}
         <header className="px-5 py-3 bg-gradient-to-r from-[#2c190f] via-[#21130c] to-[#1a0f0a] border-b border-[#8c6239] flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-full border border-[#e8c97a] bg-[#160c08] flex items-center justify-center text-[#E8C97A] shrink-0">
+            <VermilionSealStamp label="终章" size="sm" />
+            <div className="w-8 h-8 rounded-full border border-[#e8c97a] bg-[#160c08] hidden sm:flex items-center justify-center text-[#E8C97A] shrink-0">
               <Crown className="w-4 h-4" />
             </div>
             <div className="min-w-0">
@@ -369,7 +373,9 @@ export function EndingEpilogueModal({
             </div>
 
             {/* Narration Description Box */}
-            <div className="bg-[#160c08]/86 border border-[#7c5634]/70 rounded-xl px-4 md:px-5 py-3.5 backdrop-blur-sm space-y-3">
+            <div className="relative bg-[#160c08]/88 border border-[#c9a45c]/65 rounded-xl px-5 md:px-6 py-3.5 backdrop-blur-sm space-y-3">
+              <ChaoshanCornerOrnament className="absolute top-1.5 left-1.5 w-5 h-5 opacity-75" />
+              <ChaoshanCornerOrnament className="absolute bottom-1.5 right-1.5 w-5 h-5 rotate-180 opacity-75" />
               <p className="text-sm md:text-[15px] text-[#F5E9D6] leading-relaxed">
                 {current.description}
               </p>

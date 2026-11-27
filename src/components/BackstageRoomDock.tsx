@@ -21,6 +21,7 @@ import {
   getDishUnitPurchaseCost,
 } from '../engine/storyAndFacilities';
 import { FacilitySceneId, GameWorld, SpecialStaffId } from '../types/game';
+import { HudResourceSvgIcon, SeafoodSvgIcon, SeasonSvgIcon } from './VintageIcons';
 
 interface BackstageRoomDockProps {
   world: GameWorld;
@@ -115,8 +116,10 @@ export function BackstageRoomDock({
           <div className="flex items-center justify-between gap-2 text-xs shrink-0 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-display font-bold text-[#E8C97A] flex items-center gap-1.5">
-                <Truck className="w-4 h-4" />
-                闭店冷链补货采购单 · {seasonDef.name}（行情 ×{seasonDef.costMultiplier}）
+                <HudResourceSvgIcon kind="DELIVERY" className="w-4 h-4 shrink-0" />
+                <span>闭店冷链补货采购单 ·</span>
+                <SeasonSvgIcon season={world.season} className="w-4 h-4 shrink-0" />
+                <span>{seasonDef.name}（行情 ×{seasonDef.costMultiplier}）</span>
               </span>
               <span
                 className={`text-[11px] font-bold px-2 py-0.5 rounded border ${
@@ -160,20 +163,25 @@ export function BackstageRoomDock({
                     stock <= 6 ? 'border-[#f87171]/70' : ''
                   }`}
                 >
-                  <div className="min-w-0">
-                    <div className="font-display text-xs font-bold text-[#FFF6E5] truncate">
-                      {def.shortName}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded-md bg-[#180e0a] border border-[#6b472b] flex items-center justify-center shrink-0">
+                      <SeafoodSvgIcon itemId={def.id} zoneId={def.zone} className="w-6 h-6" />
                     </div>
-                    <div className="text-[10px] font-mono-num flex items-center gap-2 mt-0.5">
-                      <span className={stock <= 6 ? 'text-[#FCA5A5] font-bold' : 'text-[#DECBB0]'}>
-                        库余 {stock} 份
-                      </span>
-                      {inTransit > 0 && (
-                        <span className="text-[#7DD3FC]">在途 +{inTransit}</span>
-                      )}
-                    </div>
-                    <div className="text-[10px] font-mono-num text-[#B59876]">
-                      单价 ¥{unitCost}/份
+                    <div className="min-w-0">
+                      <div className="font-display text-xs font-bold text-[#FFF6E5] truncate">
+                        {def.shortName}
+                      </div>
+                      <div className="text-[10px] font-mono-num flex items-center gap-2 mt-0.5">
+                        <span className={stock <= 6 ? 'text-[#FCA5A5] font-bold' : 'text-[#DECBB0]'}>
+                          库余 {stock} 份
+                        </span>
+                        {inTransit > 0 && (
+                          <span className="text-[#7DD3FC]">在途 +{inTransit}</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-mono-num text-[#B59876]">
+                        单价 ¥{unitCost}/份
+                      </div>
                     </div>
                   </div>
                   <button

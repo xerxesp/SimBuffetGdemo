@@ -51,11 +51,15 @@ import {
   HiredStaff,
   PendingOrder,
   RegimeId,
+  SeasonalVisualParticle,
+  SeasonalVisualState,
+  SeasonId,
   SpecialCustomerId,
   StaffCandidate,
   StaffRole,
   StaffTier,
   TaskStep,
+  WeatherId,
 } from '../types/game';
 import { sound } from '../utils/sound';
 import {
@@ -221,10 +225,210 @@ function addSpecialStaffToWorld(world: GameWorld, tpl: StaffCandidate) {
   addFloatingText(world, hired.x, hired.y - 28, `特聘名匠 ${hired.name} 入队！`, '#F7D060', 15);
 }
 
+export function resolveCalendarFromDay(day: number): {
+  day: number;
+  year: number;
+  season: SeasonId;
+  dayInSeason: number;
+} {
+  const safeDay = Math.max(1, Math.floor(day));
+  const zeroBased = safeDay - 1;
+  const seasonSpan = Math.max(1, DAYS_PER_SEASON);
+  const totalSeasonsElapsed = Math.floor(zeroBased / seasonSpan);
+  const season = SEASON_ORDER[totalSeasonsElapsed % SEASON_ORDER.length];
+  const year = Math.floor(totalSeasonsElapsed / SEASON_ORDER.length) + 1;
+  const dayInSeason = (zeroBased % seasonSpan) + 1;
+  return { day: safeDay, year, season, dayInSeason };
+}
+
+function buildSeasonalParticles(
+  season: SeasonId,
+  weather: WeatherId
+): SeasonalVisualParticle[] {
+  const particles: SeasonalVisualParticle[] = [];
+  if (season === 'SPRING') {
+    const colors = ['#FBCFE8', '#F9A8D4', '#FCE7F3', '#F472B6'];
+    for (let i = 0; i < 44; i++) {
+      const depth = (i % 3) as 0 | 1 | 2;
+      particles.push({
+        kind: 'SAKURA_PETAL',
+        x: Math.random(),
+        y: Math.random(),
+        vx: 0.024 + depth * 0.014 + Math.random() * 0.012,
+        vy: 0.032 + depth * 0.018 + Math.random() * 0.016,
+        size: 3.1 + depth * 1.45 + Math.random() * 0.8,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() > 0.5 ? 1 : -1) * (1.1 + depth * 0.5 + Math.random() * 0.7),
+        swayPhase: Math.random() * Math.PI * 2,
+        swayAmp: 0.014 + depth * 0.008,
+        depth,
+        color: colors[i % colors.length],
+        alpha: 0.5 + depth * 0.16,
+      });
+    }
+  } else if (season === 'SUMMER' || weather === 'HEATWAVE') {
+    const isHeat = weather === 'HEATWAVE';
+    const count = isHeat ? 32 : 20;
+    for (let i = 0; i < count; i++) {
+      const depth = (i % 3) as 0 | 1 | 2;
+      particles.push({
+        kind: 'HEAT_RIPPLE',
+        x: Math.random(),
+        y: Math.random(),
+        vx: (Math.random() - 0.5) * 0.012,
+        vy: -(0.022 + depth * 0.012 + Math.random() * 0.015),
+        size: (isHeat ? 18 : 13) + depth * 8 + Math.random() * 6,
+        rotation: 0,
+        rotSpeed: 2.2 + Math.random() * 1.8,
+        swayPhase: Math.random() * Math.PI * 2,
+        swayAmp: 0.018 + depth * 0.008,
+        depth,
+        color: i % 2 === 0 ? '#FEF08A' : '#FDBA74',
+        alpha: (isHeat ? 0.34 : 0.2) + depth * 0.08,
+      });
+    }
+  } else if (season === 'AUTUMN') {
+    const colors = ['#DC2626', '#EA580C', '#F59E0B', '#EAB308', '#B45309'];
+    for (let i = 0; i < 40; i++) {
+      const depth = (i % 3) as 0 | 1 | 2;
+      particles.push({
+        kind: 'AUTUMN_LEAF',
+        x: Math.random(),
+        y: Math.random(),
+        vx: 0.036 + depth * 0.018 + Math.random() * 0.02,
+        vy: 0.038 + depth * 0.02 + Math.random() * 0.02,
+        size: 3.8 + depth * 1.7 + Math.random() * 1.1,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() > 0.5 ? 1 : -1) * (1.4 + depth * 0.65 + Math.random() * 1.1),
+        swayPhase: Math.random() * Math.PI * 2,
+        swayAmp: 0.02 + depth * 0.01,
+        depth,
+        color: colors[i % colors.length],
+        alpha: 0.58 + depth * 0.14,
+      });
+    }
+  } else {
+    // WINTER / SNOWY
+    const isBlizzard = weather === 'SNOWY';
+    const count = isBlizzard ? 86 : 42;
+    for (let i = 0; i < count; i++) {
+      const depth = (i % 3) as 0 | 1 | 2;
+      particles.push({
+        kind: 'SNOWFLAKE',
+        x: Math.random(),
+        y: Math.random(),
+        vx: (isBlizzard ? 0.038 : 0.01) + depth * (isBlizzard ? 0.016 : 0.006),
+        vy: (isBlizzard ? 0.085 : 0.042) + depth * 0.024 + Math.random() * 0.016,
+        size: (isBlizzard ? 2.1 : 1.55) + depth * 1.15,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 1.4,
+        swayPhase: Math.random() * Math.PI * 2,
+        swayAmp: 0.014 + depth * 0.008,
+        depth,
+        color: i % 4 === 0 ? '#E0F2FE' : '#F8FDFF',
+        alpha: (isBlizzard ? 0.58 : 0.44) + depth * 0.16,
+      });
+    }
+  }
+  return particles;
+}
+
+export function createSeasonalVisualState(
+  season: SeasonId,
+  weather: WeatherId = 'SUNNY'
+): SeasonalVisualState {
+  const isSnowy = weather === 'SNOWY';
+  const isHeatwave = weather === 'HEATWAVE';
+  return {
+    activeSeason: season,
+    previousSeason: null,
+    transitionTimer: 0,
+    transitionDuration: 2.8,
+    snowCoverage: isSnowy ? 0.92 : season === 'WINTER' ? 0.72 : 0,
+    heatDistortionIntensity: isHeatwave ? 1.0 : season === 'SUMMER' ? 0.62 : 0,
+    sakuraDensity: season === 'SPRING' ? 1.0 : 0,
+    autumnLeafDensity: season === 'AUTUMN' ? 1.0 : 0,
+    particles: buildSeasonalParticles(season, weather),
+  };
+}
+
+export function syncSeasonalVisualState(world: GameWorld, triggerTransition = false): void {
+  const prev = world.seasonalVisual;
+  if (!prev) {
+    world.seasonalVisual = createSeasonalVisualState(world.season, world.weather);
+    return;
+  }
+  const seasonChanged = prev.activeSeason !== world.season;
+  const prevSeason = seasonChanged ? prev.activeSeason : prev.previousSeason;
+  const needsRebuild =
+    seasonChanged ||
+    prev.particles.length === 0 ||
+    (world.weather === 'SNOWY' && prev.particles[0]?.kind !== 'SNOWFLAKE') ||
+    (world.weather === 'HEATWAVE' && prev.particles[0]?.kind !== 'HEAT_RIPPLE');
+
+  if (needsRebuild) {
+    prev.particles = buildSeasonalParticles(world.season, world.weather);
+  }
+  prev.activeSeason = world.season;
+  if (seasonChanged || triggerTransition) {
+    prev.previousSeason = prevSeason;
+    prev.transitionDuration = 2.8;
+    prev.transitionTimer = 2.8;
+  }
+}
+
+export function updateSeasonalVisuals(world: GameWorld, dt: number): void {
+  if (dt <= 0) return;
+  if (!world.seasonalVisual || world.seasonalVisual.activeSeason !== world.season) {
+    syncSeasonalVisualState(world, Boolean(world.seasonalVisual));
+  }
+  const sv = world.seasonalVisual!;
+  if (sv.transitionTimer > 0) {
+    sv.transitionTimer = Math.max(0, sv.transitionTimer - dt);
+  }
+
+  // Smoothly interpolate seasonal layer coverages & intensities
+  const targetSnow = world.weather === 'SNOWY' ? 0.96 : world.season === 'WINTER' ? 0.76 : 0;
+  const targetHeat = world.weather === 'HEATWAVE' ? 1.0 : world.season === 'SUMMER' ? 0.65 : 0;
+  const targetSakura = world.season === 'SPRING' ? 1.0 : 0;
+  const targetAutumn = world.season === 'AUTUMN' ? 1.0 : 0;
+  const blend = Math.min(1, dt * 1.4);
+
+  sv.snowCoverage += (targetSnow - sv.snowCoverage) * blend;
+  sv.heatDistortionIntensity += (targetHeat - sv.heatDistortionIntensity) * blend;
+  sv.sakuraDensity += (targetSakura - sv.sakuraDensity) * blend;
+  sv.autumnLeafDensity += (targetAutumn - sv.autumnLeafDensity) * blend;
+
+  const isStormWind = world.weather === 'TYPHOON' ? 2.1 : world.weather === 'RAINY' ? 1.35 : 1.0;
+
+  for (const p of sv.particles) {
+    p.swayPhase += dt * (p.kind === 'HEAT_RIPPLE' ? 2.4 : 1.55 + p.depth * 0.35);
+    p.rotation += p.rotSpeed * dt * (p.kind === 'AUTUMN_LEAF' ? isStormWind : 1);
+
+    const swayDx = Math.cos(p.swayPhase) * p.swayAmp * dt * 1.6;
+    p.x += p.vx * isStormWind * dt + swayDx;
+    p.y += p.vy * dt;
+
+    // Seamless toroidal wrap within normalized 0..1 canvas space
+    if (p.x > 1.06) p.x -= 1.12;
+    if (p.x < -0.06) p.x += 1.12;
+    if (p.y > 1.06) {
+      p.y -= 1.12;
+      p.x = Math.random();
+    } else if (p.y < -0.06) {
+      p.y += 1.12;
+      p.x = Math.random();
+    }
+  }
+}
+
 export function createInitialWorld(
   phase: GameWorld['phase'] = 'MAIN_MENU',
-  characterId: CharacterId = 'harbor_heir'
+  characterId: CharacterId = 'harbor_heir',
+  initialDay = 1
 ): GameWorld {
+  const calendar = resolveCalendarFromDay(initialDay);
+  const initialSeasonDef = getSeasonDef(calendar.season);
   const charDef = getCharacterDef(characterId);
   const unlockedZones: BuffetZoneId[] = ['ice_seafood', 'cooked_hot', 'hotpot_sides'];
   const unlockedSeafoodIds = ['prawns', 'beef_rolls', 'veggies_balls', 'garlic_scallops'];
@@ -289,10 +493,10 @@ export function createInitialWorld(
   const world: GameWorld = {
     phase,
     pausedFromPhase: phase === 'PLAYING' || phase === 'CLOSING' ? phase : 'PREP',
-    day: 1,
-    year: 1,
-    season: 'SPRING',
-    dayInSeason: 1,
+    day: calendar.day,
+    year: calendar.year,
+    season: calendar.season,
+    dayInSeason: calendar.dayInSeason,
     dayTime: 0,
     dayDuration: DAY_DURATION_SECONDS,
     speedMultiplier: 1,
@@ -462,11 +666,11 @@ export function createInitialWorld(
       {
         id: nextUid('alert'),
         timeText: '10:00',
-        message: `${charDef.name}（${charDef.title}）已入驻！当前为第1年春季筹备期，已自带熟食明档，可配置菜品/餐位档位、巡视7大场馆或邀请特聘伙伴，就绪后点击「正式开店」。`,
+        message: `${charDef.name}（${charDef.title}）已入驻！当前为第${calendar.year}年${initialSeasonDef.shortName}季筹备期，已自带熟食明档，可配置菜品/餐位档位、巡视7大场馆或邀请特聘伙伴，就绪后点击「正式开店」。`,
         severity: 'info',
       },
     ],
-    todayStats: createEmptyDailyStats(1, 1),
+    todayStats: createEmptyDailyStats(calendar.day, 1),
     penaltyStrikes: 0,
     maxPenaltyStrikes: 5,
     totalWalkouts: 0,
@@ -481,6 +685,7 @@ export function createInitialWorld(
     // Tycoon systems: weather, holiday, rivals, marketing, loan, analytics, decor & onboarding
     weather: 'SUNNY',
     holiday: 'NONE',
+    seasonalVisual: createSeasonalVisualState(calendar.season, 'SUNNY'),
     activeRivalEvent: null,
     activeMarketing: null,
     loan: {
@@ -783,11 +988,11 @@ function checkGameOver(world: GameWorld) {
     world.gameOverReason =
       '门店差评失控，口碑跌至 0 分，客流彻底断绝被迫关门停业，本次经营失败！';
     sound.playGameOver();
-  } else if (world.cash < -400) {
+  } else if (world.cash < -600) {
     world.phase = 'GAME_OVER';
     world.gameOverTitle = '资金断裂 · 宣告破产';
     world.gameOverReason =
-      '门店资金严重透支（低于 -¥400），无力支付租金、货款与员工薪资，宣告破产，本次经营失败！';
+      '门店资金严重透支（低于 -¥600），无力支付租金、货款与员工薪资，宣告破产，本次经营失败！';
     sound.playGameOver();
   }
 }
@@ -1078,7 +1283,21 @@ function completeTaskStep(
       actor.carryAmount = 0;
       if (staff) staff.tasksCompleted += 1;
 
-      sound.playIceRestock();
+      if (def.zone === 'live_seafood') {
+        sound.playTankBubbles();
+      } else if (def.zone === 'teppan_bbq') {
+        sound.playTeppanSizzle();
+      } else if (
+        def.zone === 'sashimi_sushi' ||
+        def.zone === 'raw_marinated' ||
+        def.zone === 'wagyu_carving'
+      ) {
+        sound.playSashimiSlice();
+      } else if (def.zone === 'steam_dimsum' || def.zone === 'cooked_hot') {
+        sound.playDishServed();
+      } else {
+        sound.playIceRestock();
+      }
       spawnParticles(world, slot.x, slot.y - 8, 'SPARKLE', 5);
       addFloatingText(
         world,
@@ -1273,7 +1492,7 @@ function completeTaskStep(
       actor.carryAmount =
         (staff && staff.role === 'CHEF' ? Math.max(2, Math.round(staff.bonusValue)) : 3) +
         cookBonuses.extraCookedYield;
-      sound.playSizzle();
+      sound.playTeppanSizzle();
       spawnParticles(world, STATIONS.BROTH_KITCHEN.x + 60, STATIONS.BROTH_KITCHEN.y - 8, 'STEAM', 6);
       return true;
     }
@@ -1286,7 +1505,7 @@ function completeTaskStep(
       actor.carryAmount = 0;
       if (staff) staff.tasksCompleted += 1;
 
-      sound.playSizzle();
+      sound.playDishServed();
       const cookedPad = getPadForBuffetZone(world, 'cooked_hot');
       const cx = cookedPad ? cookedPad.x + cookedPad.w * 0.5 : STATIONS.COOKED_COUNTER.x;
       const cy = cookedPad ? cookedPad.y + cookedPad.h * 0.5 : STATIONS.COOKED_COUNTER.y;
@@ -2743,7 +2962,7 @@ function settleCustomerBill(world: GameWorld, table: DiningTable) {
     changeReputation(world, -3);
   }
 
-  sound.playCoin();
+  sound.playCheckoutCombo();
   spawnParticles(world, table.x, table.y - 10, 'SPARKLE', cust.isSuperCustomer ? 12 : 7);
   addFloatingText(
     world,
@@ -3186,12 +3405,12 @@ export function finishBusinessDay(world: GameWorld) {
 
   if (
     world.penaltyStrikes > 0 &&
-    world.todayStats.walkouts === 0 &&
+    world.todayStats.walkouts <= 1 &&
     world.todayStats.healthInspectionsFailed === 0 &&
-    world.hygiene >= 85
+    world.hygiene >= 78
   ) {
     world.penaltyStrikes = Math.max(0, world.penaltyStrikes - 1);
-    addAlert(world, '今日零客诉且高卫生达标，监管部门撤销 1 次违规记点！', 'success');
+    addAlert(world, '今日客诉极少且卫生达标（≥78），监管部门撤销 1 次违规记点！', 'success');
   }
 
   checkGameOver(world);
@@ -3220,6 +3439,8 @@ export function startNextDay(world: GameWorld) {
   world.player.activeTaskLabel = '开店前准备中 · 可摆台/备菜/烹熟食或巡视场馆';
 
   // Advance Four Seasons calendar! (5 days per season)
+  const prevWeather = world.weather;
+  let seasonChanged = false;
   let seasonChangedMsg: string | null = null;
   world.dayInSeason += 1;
   if (world.dayInSeason > DAYS_PER_SEASON) {
@@ -3227,6 +3448,7 @@ export function startNextDay(world: GameWorld) {
     const curIdx = SEASON_ORDER.indexOf(world.season);
     const nextIdx = (curIdx + 1) % SEASON_ORDER.length;
     world.season = SEASON_ORDER[nextIdx];
+    seasonChanged = true;
     if (nextIdx === 0) {
       world.year += 1;
     }
@@ -3345,11 +3567,41 @@ export function startNextDay(world: GameWorld) {
   world.todayStats = createEmptyDailyStats(world.day, world.shopLevel);
 
   world.phase = 'PREP';
+  syncSeasonalVisualState(world, seasonChanged);
+  sound.setEnvironment(world.season, world.weather, true);
+
+  const weatherChanged = world.weather !== prevWeather;
   if (reports.length > 0) {
     reports.forEach((r) => addAlert(world, `【今晨动态】${r}`, 'success'));
-    sound.playUpgrade();
-  } else {
-    sound.playClick();
+  }
+
+  // Choreographed morning audio feedback so Season, Weather, and Holiday cues never clash
+  let nextCueDelayMs = 0;
+  if (seasonChanged) {
+    sound.playSeasonChange(world.season);
+    nextCueDelayMs += 720;
+  }
+  if (weatherChanged || world.weather === 'TYPHOON' || world.weather === 'SNOWY') {
+    const targetWeather = world.weather;
+    if (nextCueDelayMs > 0 && typeof window !== 'undefined') {
+      window.setTimeout(() => sound.playWeatherChange(targetWeather), nextCueDelayMs);
+    } else {
+      sound.playWeatherChange(targetWeather);
+    }
+    nextCueDelayMs += 680;
+  }
+  if (world.holiday !== 'NONE') {
+    if (nextCueDelayMs > 0 && typeof window !== 'undefined') {
+      window.setTimeout(() => sound.playHolidayFanfare(), nextCueDelayMs);
+    } else {
+      sound.playHolidayFanfare();
+    }
+  } else if (nextCueDelayMs === 0) {
+    if (reports.length > 0) {
+      sound.playUpgrade();
+    } else {
+      sound.playClick();
+    }
   }
   addAlert(
     world,
@@ -3561,7 +3813,9 @@ export function tickWorld(world: GameWorld, rawDt: number) {
       world.spawnTimer = Math.max(minInterval, baseInterval * (0.8 + Math.random() * 0.4));
     }
 
-    // 3. Update queue patience
+    // 3. Update queue patience (with early-game pacing curve & Days 1-2 newbie strike protection)
+    const earlyPace = world.day <= 3 ? 0.72 : world.day <= 5 ? 0.85 : 1.0;
+    const isNewbieProtection = world.day <= 2;
     const tickPolicy = evaluatePolicyBonuses(world);
     const hostDecayReduction = Math.min(
       0.8,
@@ -3572,7 +3826,7 @@ export function tickWorld(world: GameWorld, rawDt: number) {
     for (let i = world.queue.length - 1; i >= 0; i--) {
       const q = world.queue[i];
       q.waitTime += dt;
-      const baseDecay = q.party.specialStoryId ? 2.6 : q.party.isVip ? 3.5 : 2.75;
+      const baseDecay = (q.party.specialStoryId ? 2.15 : q.party.isVip ? 2.85 : 2.25) * earlyPace;
       const decayRate = baseDecay * (1 - hostDecayReduction) * tycoonTickMods.patienceMult;
       q.party.patience -= decayRate * dt;
 
@@ -3581,7 +3835,7 @@ export function tickWorld(world: GameWorld, rawDt: number) {
         repositionQueue(world);
         world.todayStats.walkouts += 1;
         world.totalWalkouts += 1;
-        const repLoss = q.party.specialStoryId ? 10 : q.party.isVip ? 8 : 6;
+        const repLoss = q.party.specialStoryId ? 6 : q.party.isVip ? 5 : 3;
         changeReputation(world, -repLoss);
         sound.playWalkout();
         spawnParticles(world, q.x, q.y, 'ANGRY', 6);
@@ -3589,11 +3843,16 @@ export function tickWorld(world: GameWorld, rawDt: number) {
         addFloatingText(world, q.x + 12, q.y - 16, `${label}！口碑-${repLoss}`, '#EF4444', 13);
         addAlert(
           world,
-          `${q.party.displayName || (q.party.isVip ? 'VIP贵宾' : '顾客')}因排队过久愤怒离场，口碑 -${repLoss}！`,
+          `${q.party.displayName || (q.party.isVip ? 'VIP贵宾' : '顾客')}因排队过久离场，口碑 -${repLoss}。`,
           'penalty'
         );
-        if (world.totalWalkouts % 3 === 0) {
-          addPenaltyStrike(world, 1, '顾客流失/逃单累计达 3 次，引发消协集中投诉');
+        if (world.totalWalkouts % 4 === 0) {
+          if (isNewbieProtection) {
+            addAlert(world, '【新店扶持期】前两日开业磨合免记违规，请尽快安排迎宾带位！', 'warning');
+            checkGameOver(world);
+          } else {
+            addPenaltyStrike(world, 1, '顾客流失/逃单累计达 4 次，引发消协集中投诉');
+          }
         } else {
           checkGameOver(world);
         }
@@ -3602,6 +3861,8 @@ export function tickWorld(world: GameWorld, rawDt: number) {
   }
 
   // 4. Update tables (during PLAYING & CLOSING; during PREP tables don't decay hygiene)
+  const earlyPaceNow = world.day <= 3 ? 0.72 : world.day <= 5 ? 0.85 : 1.0;
+  const isNewbieProtectionNow = world.day <= 2;
   const policyBonusesNow = evaluatePolicyBonuses(world);
   if (!isPrep) {
     const busserMitigation = Math.min(
@@ -3619,10 +3880,11 @@ export function tickWorld(world: GameWorld, rawDt: number) {
       if (table.status === 'WAITING_BROTH' && table.customer) {
         const tycoonPatienceMult = evaluateTycoonModifiers(world).patienceMult;
         const waitDecay =
-          (table.customer.isVip ? 3.6 : 3.0) *
+          (table.customer.isVip ? 2.95 : 2.45) *
+          earlyPaceNow *
           (1 - Math.min(0.65, charDef.bonuses.patienceDecayReduction + policyBonusesNow.patienceDecayReduction)) *
           tycoonPatienceMult *
-          (isClosing ? 0.55 : 1);
+          (isClosing ? 0.5 : 1);
         table.customer.patience -= waitDecay * dt;
         if (table.customer.patience <= 0) {
           const cust = table.customer;
@@ -3632,18 +3894,23 @@ export function tickWorld(world: GameWorld, rawDt: number) {
           table.reservedByStaffId = null;
           world.todayStats.walkouts += 1;
           world.totalWalkouts += 1;
-          const repLoss = cust.specialStoryId ? 12 : cust.isVip ? 11 : 9;
+          const repLoss = cust.specialStoryId ? 8 : cust.isVip ? 7 : 5;
           changeReputation(world, -repLoss);
           sound.playWalkout();
           spawnParticles(world, table.x, table.y, 'ANGRY', 7);
-          addFloatingText(world, table.x, table.y - 26, `没上锅底逃单！口碑-${repLoss}`, '#EF4444', 13);
+          addFloatingText(world, table.x, table.y - 26, `久等未上锅离开！口碑-${repLoss}`, '#EF4444', 13);
           addAlert(
             world,
-            `${table.id + 1}号桌（${cust.displayName || '顾客'}）久等未上锅底愤然离席，口碑 -${repLoss}！`,
+            `${table.id + 1}号桌（${cust.displayName || '顾客'}）久等未上锅底离席，口碑 -${repLoss}。`,
             'penalty'
           );
-          if (world.totalWalkouts % 3 === 0) {
-            addPenaltyStrike(world, 1, '顾客流失/逃单累计达 3 次，引发严重服务投诉');
+          if (world.totalWalkouts % 4 === 0) {
+            if (isNewbieProtectionNow) {
+              addAlert(world, '【新店扶持期】前两日开业磨合免记违规，落座后请尽快端上锅底！', 'warning');
+              checkGameOver(world);
+            } else {
+              addPenaltyStrike(world, 1, '顾客流失/逃单累计达 4 次，引发严重服务投诉');
+            }
           } else {
             checkGameOver(world);
           }
@@ -3713,23 +3980,28 @@ export function tickWorld(world: GameWorld, rawDt: number) {
               cust.satisfaction = Math.min(100, cust.satisfaction + 4);
             } else {
               cust.stockoutHits += 1;
-              cust.satisfaction = Math.max(10, cust.satisfaction - 26);
-              const compFine = 28;
+              cust.satisfaction = Math.max(15, cust.satisfaction - 16);
+              const compFine = world.day <= 3 ? 12 : 18;
               world.cash -= compFine;
               world.todayStats.penaltyFines += compFine;
               world.totalPenaltyFines += compFine;
               world.totalStockoutComplaints += 1;
-              changeReputation(world, -3.5);
+              changeReputation(world, -1.5);
               sound.playPenalty();
               spawnParticles(world, table.x, table.y - 12, 'ANGRY', 5);
               addFloatingText(world, table.x, table.y - 34, `自助断菜赔付 -¥${compFine}`, '#EF4444', 13);
               addAlert(
                 world,
-                `海鲜冰台断货！${table.id + 1}号桌投诉获赔 ¥${compFine}，口碑 -3.5。`,
+                `海鲜冰台断货！${table.id + 1}号桌安抚折让 ¥${compFine}，口碑 -1.5。`,
                 'penalty'
               );
-              if (world.totalStockoutComplaints % 3 === 0) {
-                addPenaltyStrike(world, 1, '海鲜自助多次断供，被举报虚假宣传');
+              if (world.totalStockoutComplaints % 5 === 0) {
+                if (isNewbieProtectionNow) {
+                  addAlert(world, '【新店扶持期】前两日开业磨合免记违规，请留意冷库与冰台补货！', 'warning');
+                  checkGameOver(world);
+                } else {
+                  addPenaltyStrike(world, 1, '海鲜自助多次断供（累计 5 次），被举报虚假宣传');
+                }
               } else {
                 checkGameOver(world);
               }
@@ -3743,13 +4015,13 @@ export function tickWorld(world: GameWorld, rawDt: number) {
       } else if (table.status === 'DIRTY') {
         dirtyCount += 1;
         table.dirtyTime += dt;
-        if (table.dirtyTime > 4.5) {
+        if (table.dirtyTime > 7.5) {
           const closingRelief = isClosing ? 0.2 : 1.0;
           world.hygiene = Math.max(
             0,
-            world.hygiene - 0.62 * (1 - busserMitigation) * closingRelief * dt
+            world.hygiene - 0.42 * earlyPaceNow * (1 - busserMitigation) * closingRelief * dt
           );
-          if (Math.random() < dt * 2.5) {
+          if (Math.random() < dt * 2.2) {
             spawnParticles(world, table.x, table.y - 8, 'FLY', 1);
           }
         }
@@ -3758,13 +4030,16 @@ export function tickWorld(world: GameWorld, rawDt: number) {
 
     // 5. Dirty sink overflow hygiene drain (only during PLAYING)
     if (isPlaying) {
-      if (world.dirtyDishes >= Math.ceil(world.dishwareMax * 0.65)) {
-        world.hygiene = Math.max(0, world.hygiene - 0.48 * (1 - world.hygieneDecayPerk) * dt);
-        if (Math.random() < dt * 2.0) {
+      if (world.dirtyDishes >= Math.ceil(world.dishwareMax * 0.75)) {
+        world.hygiene = Math.max(
+          0,
+          world.hygiene - 0.32 * earlyPaceNow * (1 - world.hygieneDecayPerk) * dt
+        );
+        if (Math.random() < dt * 1.8) {
           spawnParticles(world, STATIONS.SINK.x, STATIONS.SINK.y - 6, 'FLY', 1);
         }
       } else if (dirtyCount === 0 && world.dirtyDishes <= 1 && world.hygiene < 100) {
-        world.hygiene = Math.min(100, world.hygiene + 0.35 * dt);
+        world.hygiene = Math.min(100, world.hygiene + 0.42 * dt);
       }
 
       // 5b. Backstage facility meters: Restroom Cleanliness (seafood handwashing!) & Equipment Health
@@ -3775,41 +4050,55 @@ export function tickWorld(world: GameWorld, rawDt: number) {
 
       world.restroomCleanliness = Math.max(
         0,
-        Math.min(100, world.restroomCleanliness - (0.08 + activeDiners * 0.14) * dt + (techBonus * 0.45 + busserRestroomHelp) * dt)
+        Math.min(
+          100,
+          world.restroomCleanliness -
+            (0.05 + activeDiners * 0.09) * earlyPaceNow * dt +
+            (techBonus * 0.45 + busserRestroomHelp) * dt
+        )
       );
       world.equipmentHealth = Math.max(
         0,
-        Math.min(100, world.equipmentHealth - 0.14 * dt + techBonus * 0.65 * dt)
+        Math.min(100, world.equipmentHealth - 0.09 * earlyPaceNow * dt + techBonus * 0.65 * dt)
       );
       world.oxygenLevel = Math.max(
         20,
-        Math.min(100, world.oxygenLevel - 0.1 * dt + (techBonus * 0.4 + liveMasterOxy) * dt)
+        Math.min(100, world.oxygenLevel - 0.07 * earlyPaceNow * dt + (techBonus * 0.4 + liveMasterOxy) * dt)
       );
 
-      if (world.restroomCleanliness < 38) {
-        world.hygiene = Math.max(0, world.hygiene - 0.25 * dt);
+      if (world.restroomCleanliness < 30) {
+        world.hygiene = Math.max(0, world.hygiene - 0.16 * earlyPaceNow * dt);
       }
 
       // 6. Health inspection penalty (only during open business hours)
       world.hygieneInspectionCooldown = Math.max(0, world.hygieneInspectionCooldown - dt);
-      if (world.hygiene < 45 && world.hygieneInspectionCooldown <= 0) {
-        const fine = 180 + world.shopLevel * 120;
+      if (world.hygiene < 35 && world.hygieneInspectionCooldown <= 0) {
+        const fine = world.day <= 3 ? 80 : 80 + world.shopLevel * 70;
         world.cash -= fine;
         world.todayStats.penaltyFines += fine;
         world.totalPenaltyFines += fine;
         world.todayStats.healthInspectionsFailed += 1;
-        changeReputation(world, -12);
-        world.hygiene = 56;
-        world.hygieneInspectionCooldown = 26;
+        changeReputation(world, -6);
+        world.hygiene = 60;
+        world.hygieneInspectionCooldown = 38;
 
         sound.playInspectionAlarm();
-        addFloatingText(world, CANVAS_WIDTH / 2, 168, `食安突击检查罚款 -¥${fine} · 口碑-12`, '#EF4444', 18);
-        addAlert(
-          world,
-          `卫生不达标（低于45）触发食安突击检查！罚款 ¥${fine}，口碑 -12！请及时清理餐桌、洗碗与洗手间。`,
-          'penalty'
-        );
-        addPenaltyStrike(world, 2, '食品安全突击检查不合格（重度违规）');
+        addFloatingText(world, CANVAS_WIDTH / 2, 168, `食安突击整改罚款 -¥${fine} · 口碑-6`, '#EF4444', 17);
+        if (isNewbieProtectionNow) {
+          addAlert(
+            world,
+            `卫生低于 35 触发食安巡查！罚款 ¥${fine}、口碑 -6（新店前两日首次仅书面整改，免记违规）。请及时收桌洗碗！`,
+            'penalty'
+          );
+          checkGameOver(world);
+        } else {
+          addAlert(
+            world,
+            `卫生不达标（低于 35）触发食安突击检查！罚款 ¥${fine}，口碑 -6，记 1 次违规。请及时清理餐桌、洗碗与洗手间。`,
+            'penalty'
+          );
+          addPenaltyStrike(world, 1, '食品安全突击检查不合格');
+        }
       }
     }
   }
@@ -3954,6 +4243,9 @@ export function tickWorld(world: GameWorld, rawDt: number) {
     }
     if (pt.life <= 0) world.particles.splice(i, 1);
   }
+
+  // 12. Update dynamic Four-Season visual layers (sakura petals, summer heatwave distortion, autumn leaves, winter snow)
+  updateSeasonalVisuals(world, rawDt);
 }
 
 const TOP_STATION_STAND_Y = 126;

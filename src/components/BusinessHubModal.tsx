@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   BarChart3,
   Check,
-  CloudRain,
   Coins,
   Crown,
   Landmark,
@@ -15,7 +14,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
-import { SEAFOOD_CATALOG } from '../data/gameConfig';
+import { getSeasonDef, SEAFOOD_CATALOG } from '../data/gameConfig';
 import {
   DECOR_THEMES,
   getHolidayDef,
@@ -24,6 +23,7 @@ import {
 } from '../data/tycoonSystemsConfig';
 import { computeCityLeaderboard, evaluateTycoonModifiers } from '../engine/tycoonSystems';
 import { DecorThemeId, GameWorld, MarketingCampaignId } from '../types/game';
+import { HudResourceSvgIcon, SeasonSvgIcon, WeatherSvgIcon } from './VintageIcons';
 
 export type BusinessTab = 'MARKETING' | 'DECOR' | 'RANKING' | 'ANALYTICS';
 
@@ -48,6 +48,7 @@ export function BusinessHubModal({
 }: BusinessHubModalProps) {
   const [tab, setTab] = useState<BusinessTab>(initialTab);
 
+  const seasonDef = getSeasonDef(world.season);
   const weatherDef = getWeatherDef(world.weather);
   const holidayDef = getHolidayDef(world.holiday);
   const mods = evaluateTycoonModifiers(world);
@@ -94,13 +95,18 @@ export function BusinessHubModal({
               </h2>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#C5AE92]">
-              <span className="inline-flex items-center gap-1" style={{ color: weatherDef.color }}>
-                <CloudRain className="w-3.5 h-3.5" />
+              <span className="inline-flex items-center gap-1 font-semibold" style={{ color: seasonDef.color }}>
+                <SeasonSvgIcon season={world.season} className="w-4 h-4 shrink-0" />
+                {seasonDef.name}
+              </span>
+              <span className="inline-flex items-center gap-1 font-semibold" style={{ color: weatherDef.color }}>
+                <WeatherSvgIcon weather={world.weather} className="w-4 h-4 shrink-0" />
                 今日天气：{weatherDef.name}
               </span>
               {world.holiday !== 'NONE' && (
-                <span className="font-bold" style={{ color: holidayDef.color }}>
-                  ★ 节庆：{holidayDef.name}
+                <span className="inline-flex items-center gap-1 font-bold" style={{ color: holidayDef.color }}>
+                  <HudResourceSvgIcon kind="HOLIDAY" className="w-3.5 h-3.5 shrink-0" />
+                  节庆：{holidayDef.name}
                 </span>
               )}
               <span className="font-mono-num text-[#F6DA8D]">
@@ -174,11 +180,14 @@ export function BusinessHubModal({
 
                 <div className="game-inset rounded-lg p-3.5">
                   <div className="text-[11px] text-[#C5AE92] font-semibold">今日天气与街区态势</div>
-                  <div className="mt-1 text-xs text-[#EFE2D0] leading-relaxed">
-                    <span style={{ color: weatherDef.color }} className="font-bold">
-                      [{weatherDef.name}]
-                    </span>{' '}
-                    {weatherDef.description}
+                  <div className="mt-1 text-xs text-[#EFE2D0] leading-relaxed flex items-start gap-2">
+                    <WeatherSvgIcon weather={world.weather} className="w-5 h-5 shrink-0 mt-0.5" />
+                    <span>
+                      <span style={{ color: weatherDef.color }} className="font-bold">
+                        [{weatherDef.name}]
+                      </span>{' '}
+                      {weatherDef.description}
+                    </span>
                   </div>
                   {world.activeRivalEvent && (
                     <div className="mt-1.5 text-xs text-[#FCA5A5] font-medium">

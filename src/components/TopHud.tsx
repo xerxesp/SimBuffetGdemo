@@ -1,10 +1,5 @@
 import {
-  Award,
-  CloudRain,
-  Coins,
   FastForward,
-  Flame,
-  Heart,
   HelpCircle,
   Home,
   Music,
@@ -13,10 +8,7 @@ import {
   Save,
   Settings,
   ShieldAlert,
-  Sparkles,
   Trophy,
-  Truck,
-  Utensils,
   Volume2,
   VolumeX,
 } from 'lucide-react';
@@ -26,6 +18,7 @@ import { getHolidayDef, getWeatherDef } from '../data/tycoonSystemsConfig';
 import { getPlayerLevelTitle, getXpRequiredForNextLevel } from '../engine/playerProgression';
 import { calculateTicketPrice, formatClock } from '../engine/simulation';
 import { GameWorld } from '../types/game';
+import { HudResourceSvgIcon, SeasonSvgIcon, WeatherSvgIcon } from './VintageIcons';
 
 interface TopHudProps {
   world: GameWorld;
@@ -101,7 +94,7 @@ export function TopHud({
       {/* Left Floating Island: Core Business Resources & Penalty Meter */}
       <div className="pointer-events-auto hud-float backdrop-blur-md rounded-xl px-3.5 h-10 flex items-center gap-3 min-w-0 overflow-x-auto">
         <div className="flex items-center gap-1.5 whitespace-nowrap" title="当前流动资金">
-          <Coins className="w-3.5 h-3.5 text-[#E8C97A] shrink-0" />
+          <HudResourceSvgIcon kind="CASH" className="w-4 h-4 shrink-0" />
           <span
             className={`font-mono-num text-sm font-bold ${
               world.cash < 0 ? 'text-[#F87171]' : 'text-[#F6DA8D]'
@@ -119,7 +112,7 @@ export function TopHud({
           title={`店长 Lv.${world.playerLevel} ${playerLevelTitle}（经验 ${world.playerXp}/${xpRequired}，赚取 ¥1 = +1 EXP）· 可用 ${world.upgradePoints} 升级点，点击前往天赋发展树`}
           className="flex items-center gap-1.5 px-1.5 h-7 rounded-md hover:bg-[#332116] transition-colors cursor-pointer whitespace-nowrap shrink-0"
         >
-          <Award className="w-3.5 h-3.5 text-[#F6DA8D] shrink-0" />
+          <HudResourceSvgIcon kind="LEVEL" className="w-4 h-4 shrink-0" />
           <span className="font-mono-num text-xs font-bold text-[#FFF6E5]">
             Lv.{world.playerLevel}
           </span>
@@ -141,7 +134,7 @@ export function TopHud({
         <span className="h-3.5 w-px bg-[#6b4d31]/70 shrink-0" aria-hidden="true" />
 
         <div className="flex items-center gap-1.5 whitespace-nowrap" title="门店口碑（跌至 0 倒闭）">
-          <Heart className="w-3.5 h-3.5 text-[#6EE7B7] shrink-0" />
+          <HudResourceSvgIcon kind="REPUTATION" className="w-4 h-4 shrink-0" />
           <span className="text-[11px] text-[#C5AE92] hidden sm:inline">口碑</span>
           <span
             className={`font-mono-num text-xs font-bold ${
@@ -158,15 +151,15 @@ export function TopHud({
 
         <div
           className="flex items-center gap-1.5 whitespace-nowrap"
-          title="食安卫生（低于 45 触发食安突击重罚）"
+          title="食安卫生（低于 35 触发食安突击整改）"
         >
-          <Sparkles className="w-3.5 h-3.5 text-[#7DD3FC] shrink-0" />
+          <HudResourceSvgIcon kind="HYGIENE" className="w-4 h-4 shrink-0" />
           <span className="text-[11px] text-[#C5AE92] hidden sm:inline">卫生</span>
           <span
             className={`font-mono-num text-xs font-bold ${
-              world.hygiene >= 70
+              world.hygiene >= 68
                 ? 'text-[#7DD3FC]'
-                : world.hygiene >= 45
+                : world.hygiene >= 38
                   ? 'text-[#FBBF24]'
                   : 'text-[#F87171]'
             }`}
@@ -181,7 +174,7 @@ export function TopHud({
           className="hidden md:flex items-center gap-1.5 whitespace-nowrap text-xs"
           title="可用消毒净餐具 / 待洗脏餐具"
         >
-          <Utensils className="w-3.5 h-3.5 text-[#E5C9A8] shrink-0" />
+          <HudResourceSvgIcon kind="DISHES" className="w-4 h-4 shrink-0" />
           <span className="font-mono-num text-[#EFE2D0]">
             净{world.cleanDishes}/脏{world.dirtyDishes}
           </span>
@@ -191,7 +184,7 @@ export function TopHud({
           className="hidden lg:flex items-center gap-1 whitespace-nowrap text-xs"
           title={`熟食热菜存量（冷链原料 ${world.rawIngredients}/${world.rawIngredientsMax}）`}
         >
-          <Flame className="w-3.5 h-3.5 text-[#FB923C] shrink-0" />
+          <HudResourceSvgIcon kind="COOKED" className="w-4 h-4 shrink-0" />
           <span
             className={`font-mono-num font-semibold ${
               world.cookedStock <= 1 ? 'text-[#F87171]' : 'text-[#FDBA74]'
@@ -206,11 +199,7 @@ export function TopHud({
             className="hidden xl:flex items-center gap-1 whitespace-nowrap text-xs"
             title="后场冷库低库存菜品数 / 明日闭店在途冷链单数"
           >
-            <Truck
-              className={`w-3.5 h-3.5 shrink-0 ${
-                lowWarehouseCount > 0 ? 'text-[#FCA5A5]' : 'text-[#7DD3FC]'
-              }`}
-            />
+            <HudResourceSvgIcon kind="DELIVERY" className="w-4 h-4 shrink-0" />
             <span
               className={`font-mono-num font-semibold ${
                 lowWarehouseCount > 0 ? 'text-[#FCA5A5]' : 'text-[#7DD3FC]'
@@ -277,10 +266,11 @@ export function TopHud({
       {/* Center Floating Island: Calendar, Weather, Store Tier & Phase (Clean Unboxed Typography) */}
       <div className="pointer-events-auto hidden lg:flex hud-float backdrop-blur-md rounded-xl px-4 h-10 items-center gap-2 text-xs whitespace-nowrap shrink-0">
         <span
-          className="font-display font-bold"
+          className="inline-flex items-center gap-1 font-display font-bold"
           style={{ color: seasonDef.color }}
           title={`${seasonDef.description}（食材成本 ×${seasonDef.costMultiplier}）`}
         >
+          <SeasonSvgIcon season={world.season} className="w-4 h-4 shrink-0" />
           第{world.year}年·{seasonDef.shortName}
         </span>
         <span className="text-[#7c5c38]" aria-hidden="true">
@@ -291,7 +281,7 @@ export function TopHud({
           style={{ color: weatherDef.color }}
           title={`今日天气：${weatherDef.name} — ${weatherDef.description}`}
         >
-          <CloudRain className="w-3 h-3" />
+          <WeatherSvgIcon weather={world.weather} className="w-4 h-4 shrink-0" />
           {weatherDef.shortName}
         </span>
         {world.holiday !== 'NONE' && (
@@ -300,10 +290,11 @@ export function TopHud({
               ·
             </span>
             <span
-              className="font-bold"
+              className="inline-flex items-center gap-1 font-bold"
               style={{ color: holidayDef.color }}
               title={`今日节庆：${holidayDef.name} — ${holidayDef.description}`}
             >
+              <HudResourceSvgIcon kind="HOLIDAY" className="w-3.5 h-3.5 shrink-0" />
               {holidayDef.shortName}
             </span>
           </>

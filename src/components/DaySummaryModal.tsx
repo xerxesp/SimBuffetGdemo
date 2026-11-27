@@ -1,7 +1,9 @@
 import { ArrowRight, Award, CalendarClock, Sparkles, Truck } from 'lucide-react';
 import { getSeasonDef } from '../data/gameConfig';
+import { getWeatherDef } from '../data/tycoonSystemsConfig';
 import { getPlayerLevelTitle, getXpRequiredForNextLevel } from '../engine/playerProgression';
 import { GameWorld } from '../types/game';
+import { SeasonSvgIcon, WeatherSvgIcon } from './VintageIcons';
 
 interface DaySummaryModalProps {
   world: GameWorld;
@@ -11,6 +13,7 @@ interface DaySummaryModalProps {
 export function DaySummaryModal({ world, onNextDay }: DaySummaryModalProps) {
   const s = world.todayStats;
   const seasonDef = getSeasonDef(world.season);
+  const weatherDef = getWeatherDef(world.weather);
   const totalIncome = s.ticketRevenue + s.tipRevenue;
   const totalExpense = s.ingredientCost + s.staffWages + s.rentCost + s.penaltyFines;
   const netProfit = totalIncome - totalExpense;
@@ -28,8 +31,14 @@ export function DaySummaryModal({ world, onNextDay }: DaySummaryModalProps) {
       <div className="game-panel w-full max-w-lg rounded-xl overflow-hidden text-[#F7EFE2] max-h-[92vh] flex flex-col">
         <div className="px-6 py-4 bg-gradient-to-b from-[#331f15] to-[#1d110c] border-b-2 border-[#b58942] flex items-baseline justify-between shrink-0">
           <div>
-            <p className="text-xs font-semibold tracking-wider" style={{ color: seasonDef.color }}>
-              第 {world.year} 年 · {seasonDef.name} · 闭店结算总簿
+            <p className="text-xs font-semibold tracking-wider flex items-center gap-1.5 flex-wrap" style={{ color: seasonDef.color }}>
+              <SeasonSvgIcon season={world.season} className="w-4 h-4 shrink-0" />
+              <span>第 {world.year} 年 · {seasonDef.name}</span>
+              <span className="text-[#7c5c38]">·</span>
+              <span className="inline-flex items-center gap-1" style={{ color: weatherDef.color }}>
+                <WeatherSvgIcon weather={world.weather} className="w-4 h-4 shrink-0" />
+                {weatherDef.shortName}
+              </span>
             </p>
             <h2 className="font-display text-2xl font-bold mt-0.5 text-[#FFF6E5]">
               第 {s.day} 天营业结算

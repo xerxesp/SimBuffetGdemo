@@ -15,7 +15,9 @@ import {
 } from './isoCharacterAnimations';
 import {
   drawIsoCharacter,
+  getIsoCharacterHeadAnchorZ,
   getStaffVisualPreset,
+  ISO_CHARACTER_ROLE_SCALE,
   resolveCustomerVisual,
 } from './isoCharacterArt';
 import {
@@ -27,6 +29,7 @@ import {
   drawIsoZonePad,
 } from './isoFurnitureArt';
 import {
+  collectIsoInteriorWallDepthItems,
   drawIsoArchitecturalBackdrop,
   drawIsoFoundationSlab,
   drawIsoSceneFloors,
@@ -35,7 +38,7 @@ import {
   SceneAtmosphere,
 } from './isoSceneArt';
 import { getBackstagePlayerRoom } from './policyAndTech';
-import { CanvasViewportTransform, SceneCamera } from './renderer';
+import { CanvasViewportTransform, drawSeasonalVisualLayer, SceneCamera } from './renderer';
 import { getVisibleFrontHallPads } from './storyAndFacilities';
 
 // ==========================================
@@ -173,6 +176,15 @@ export function screenBufToUnifiedWorld(
 }
 
 // ==========================================
+// SEASON & WEATHER VISUAL TRANSITION TRACKER
+// ==========================================
+let lastTrackedSeason: string | null = null;
+let lastTrackedWeather: string | null = null;
+let atmoSweepStartSec = -10;
+let atmoSweepKind: 'SEASON' | 'WEATHER' = 'WEATHER';
+let atmoSweepColor = 'rgba(255, 226, 152, 0.22)';
+
+// ==========================================
 // MAIN UNIFIED ISOMETRIC GRAND MAP RENDERER
 // ==========================================
 
@@ -196,6 +208,8 @@ export function renderUnifiedIsoCanvas(
     phase: world.phase,
     dayProgress: Math.max(0, Math.min(1, world.dayTime / Math.max(1, world.dayDuration))),
     timeSec,
+    holiday: world.holiday,
+    rushHourActive: world.rushHourActive,
   };
 
   // 1. Style-3 Deep Architectural Jade-Slate Backdrop Void (weather & time-of-day reactive)
@@ -240,6 +254,9 @@ export function renderUnifiedIsoCanvas(
   // ==========================================
   type DepthItem = { depth: number; draw: () => void };
   const items: DepthItem[] = [];
+
+  // 5.0 Depth-Sorted Interior Backstage Partition Walls & Front-Back Grand Partition Wall
+  items.push(...collectIsoInteriorWallDepthItems(ctx, UNIFIED_MIN_Y, BACKSTAGE_OFFSET_Y));
 
   // 5A. Backstage 7 Rooms Props & Special Staff NPCs
   for (const r of BACKSTAGE_ROOMS) {
@@ -351,9 +368,13 @@ export function renderUnifiedIsoCanvas(
           animState: 'QUEUE_WAIT',
           animTime: timeSec + idx * 0.83,
           patienceRatio: ratio,
-          scale: 0.98,
+          scale: ISO_CHARACTER_ROLE_SCALE.QUEUE_GUEST,
         });
-        const p = worldToIso(qx, qy, 43);
+        const p = worldToIso(
+          qx,
+          qy,
+          getIsoCharacterHeadAnchorZ(ISO_CHARACTER_ROLE_SCALE.QUEUE_GUEST, 8)
+        );
         ctx.fillStyle = 'rgba(18, 12, 8, 0.85)';
         ctx.fillRect(p.x - 16, p.y - 2, 32, 4.4);
         ctx.fillStyle = ratio > 0.5 ? '#4ADE80' : ratio > 0.25 ? '#FBBF24' : '#EF4444';
@@ -398,10 +419,15 @@ export function renderUnifiedIsoCanvas(
             canChatStaff && !world.staffChattedTodayIds.includes(s.id)
               ? 'rgba(232, 201, 122, 0.75)'
               : undefined,
-          scale: 1.0,
+          scale: ISO_CHARACTER_ROLE_SCALE.STAFF,
         });
         if (canChatStaff && !world.staffChattedTodayIds.includes(s.id)) {
-          const sp = worldToIso(s.x, s.y, 46 + Math.sin(timeSec * 3.5 + s.x) * 2);
+          const sp = worldToIso(
+            s.x,
+            s.y,
+            getIsoCharacterHeadAnchorZ(ISO_CHARACTER_ROLE_SCALE.STAFF, 11) +
+              Math.sin(timeSec * 3.5 + s.x) * 2
+          );
           drawIsoTextTag(ctx, '💬', sp.x, sp.y, {
             color: '#FEF08A',
             bg: 'rgba(32, 20, 14, 0.9)',
@@ -449,10 +475,14 @@ export function renderUnifiedIsoCanvas(
         walkCycle: managerWalk,
         carrying: world.activeScene === 'DINING_HALL' ? world.player.carrying : 'NONE',
         highlightRing: isGhostMode ? '#67E8F9' : '#FDE047',
-        scale: 1.08,
+        scale: ISO_CHARACTER_ROLE_SCALE.MANAGER,
       });
       ctx.restore();
-      const mp = worldToIso(managerWx, managerWy, 49);
+      const mp = worldToIso(
+        managerWx,
+        managerWy,
+        getIsoCharacterHeadAnchorZ(ISO_CHARACTER_ROLE_SCALE.MANAGER, 11)
+      );
       drawIsoTextTag(ctx, `店长·${charDef.name}`, mp.x, mp.y, {
         color: isGhostMode ? '#A5F3FC' : '#FEF08A',
         bg: 'rgba(38, 20, 12, 0.9)',
@@ -542,11 +572,11 @@ export function renderUnifiedIsoCanvas(
     const alpha = Math.max(0, Math.min(1, pt.life / Math.max(0.05, pt.maxLife * 0.6)));
     const zLift =
       pt.kind === 'STEAM'
-        ? 24 + progress * 22
+        ? 24 + progress * 26
         : pt.kind === 'SPARKLE'
-          ? 28 + progress * 14
+          ? 28 + Math.sin(progress * Math.PI * 0.85) * 20
           : pt.kind === 'SPLASH'
-            ? 20 + Math.sin(progress * Math.PI) * 10
+            ? 20 + Math.sin(progress * Math.PI) * 12
             : pt.kind === 'FLY'
               ? 26 + Math.sin(timeSec * 14 + pt.x) * 4
               : 34 + progress * 12;
@@ -554,15 +584,46 @@ export function renderUnifiedIsoCanvas(
     ctx.save();
     ctx.globalAlpha = alpha;
     if (pt.kind === 'STEAM') {
-      const r = pt.radius * (0.75 + progress * 0.85);
-      ctx.fillStyle = pt.color || 'rgba(255, 250, 240, 0.55)';
+      const winterSteamBoost = world.season === 'WINTER' || world.weather === 'SNOWY' ? 1.26 : 1.0;
+      const r = pt.radius * (0.78 + progress * 0.95) * winterSteamBoost;
+      const puffGrad = ctx.createRadialGradient(pp.x - r * 0.2, pp.y - r * 0.2, r * 0.1, pp.x, pp.y, r);
+      puffGrad.addColorStop(
+        0,
+        pt.color ||
+          (winterSteamBoost > 1 ? 'rgba(255, 250, 236, 0.84)' : 'rgba(255, 252, 244, 0.72)')
+      );
+      puffGrad.addColorStop(1, 'rgba(255, 248, 236, 0)');
+      ctx.fillStyle = puffGrad;
       ctx.beginPath();
       ctx.arc(pp.x, pp.y, r, 0, Math.PI * 2);
       ctx.fill();
     } else if (pt.kind === 'SPARKLE') {
-      const s = Math.max(2.2, pt.radius * 1.15);
+      const isGoldCoin =
+        !pt.color ||
+        pt.color.toUpperCase().includes('FDE') ||
+        pt.color.toUpperCase().includes('FBB') ||
+        pt.color.toUpperCase().includes('F59') ||
+        pt.color.toUpperCase().includes('EAB');
+      if (isGoldCoin) {
+        // Spinning antique gold coin with gleaming edge & square center mint hole (铜钱/金币)
+        const spin = Math.max(0.24, Math.abs(Math.cos(timeSec * 9.5 + pt.x * 0.13)));
+        const r = Math.max(2.9, pt.radius * 1.15);
+        ctx.fillStyle = '#F5C451';
+        ctx.strokeStyle = '#784814';
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.ellipse(pp.x, pp.y, r * spin, r, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#FEF08A';
+        ctx.beginPath();
+        ctx.ellipse(pp.x - r * 0.18 * spin, pp.y - r * 0.18, r * 0.45 * spin, r * 0.45, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Crisp 4-point warm starlight glint
+      const s = Math.max(2.4, pt.radius * 1.25);
       ctx.strokeStyle = pt.color || '#FEF08A';
-      ctx.lineWidth = 1.25;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(pp.x - s, pp.y);
       ctx.lineTo(pp.x + s, pp.y);
@@ -574,10 +635,14 @@ export function renderUnifiedIsoCanvas(
       ctx.arc(pp.x, pp.y, s * 0.28, 0, Math.PI * 2);
       ctx.fill();
     } else if (pt.kind === 'SPLASH') {
+      const dr = Math.max(1.6, pt.radius * 0.78);
       ctx.fillStyle = pt.color || '#7DD3FC';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.78)';
+      ctx.lineWidth = 0.65;
       ctx.beginPath();
-      ctx.arc(pp.x, pp.y, Math.max(1.4, pt.radius * 0.72), 0, Math.PI * 2);
+      ctx.arc(pp.x, pp.y, dr, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
     } else if (pt.kind === 'FLY') {
       const wingFlutter = Math.sin(timeSec * 42 + pt.y) * 1.6;
       ctx.fillStyle = '#1E1B18';
@@ -600,7 +665,7 @@ export function renderUnifiedIsoCanvas(
   }
 
   for (const ft of world.floatingTexts) {
-    const fp = worldToIso(ft.x, ft.y, 44 + (1 - ft.life / Math.max(0.1, ft.maxLife)) * 22);
+    const fp = worldToIso(ft.x, ft.y, 56 + (1 - ft.life / Math.max(0.1, ft.maxLife)) * 22);
     const alpha = Math.max(0, Math.min(1, ft.life / Math.max(0.1, ft.maxLife * 0.45)));
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -614,7 +679,17 @@ export function renderUnifiedIsoCanvas(
   ctx.restore();
 
   // Screen-space atmospheric lighting, distinct seasonal grading & rich weather layers
-  if (world.phase === 'CLOSING') {
+  if (world.phase === 'PREP' && world.weather !== 'RAINY' && world.weather !== 'TYPHOON') {
+    // Crisp morning harbor dawn light sweeping gently from top-left
+    ctx.save();
+    const dawnGrad = ctx.createLinearGradient(0, 0, backingWidth * 0.72, backingHeight * 0.85);
+    dawnGrad.addColorStop(0, 'rgba(255, 244, 210, 0.13)');
+    dawnGrad.addColorStop(0.5, 'rgba(220, 245, 248, 0.045)');
+    dawnGrad.addColorStop(1, 'rgba(255, 240, 210, 0)');
+    ctx.fillStyle = dawnGrad;
+    ctx.fillRect(0, 0, backingWidth, backingHeight);
+    ctx.restore();
+  } else if (world.phase === 'CLOSING') {
     // Cozy harbor evening twilight vignette leaving warm lantern-lit interior bright!
     ctx.save();
     const twGrad = ctx.createRadialGradient(
@@ -625,9 +700,9 @@ export function renderUnifiedIsoCanvas(
       backingHeight * 0.5,
       Math.max(backingWidth, backingHeight) * 0.78
     );
-    twGrad.addColorStop(0, 'rgba(255, 196, 118, 0.05)');
-    twGrad.addColorStop(0.58, 'rgba(14, 24, 42, 0.16)');
-    twGrad.addColorStop(1, 'rgba(8, 15, 28, 0.34)');
+    twGrad.addColorStop(0, 'rgba(255, 196, 118, 0.06)');
+    twGrad.addColorStop(0.58, 'rgba(14, 24, 42, 0.17)');
+    twGrad.addColorStop(1, 'rgba(8, 15, 28, 0.36)');
     ctx.fillStyle = twGrad;
     ctx.fillRect(0, 0, backingWidth, backingHeight);
     ctx.restore();
@@ -648,162 +723,122 @@ export function renderUnifiedIsoCanvas(
     ctx.restore();
   }
 
-  // Distinct Seasonal Ambient Overlay (visible even on SUNNY days so every season feels unmistakable!)
-  if (world.weather !== 'RAINY' && world.weather !== 'TYPHOON') {
-    if (world.season === 'SPRING') {
-      ctx.save();
-      // Fresh warm spring sunlit veil + abundant fluttering cherry-blossom petals across viewport
-      const spGrad = ctx.createLinearGradient(0, 0, backingWidth, backingHeight);
-      spGrad.addColorStop(0, 'rgba(255, 224, 238, 0.075)');
-      spGrad.addColorStop(0.5, 'rgba(255, 248, 232, 0.03)');
-      spGrad.addColorStop(1, 'rgba(167, 243, 208, 0.045)');
-      ctx.fillStyle = spGrad;
-      ctx.fillRect(0, 0, backingWidth, backingHeight);
-
-      const petals = 42;
-      for (let i = 0; i < petals; i++) {
-        const layer = i % 3; // 0 = distant, 1 = mid, 2 = foreground soft petal
-        const speedX = 34 + layer * 16 + (i % 5) * 6;
-        const speedY = 22 + layer * 11 + (i % 4) * 5;
-        const px =
-          ((i * 191 + timeSec * speedX + Math.sin(timeSec * 1.4 + i) * 28) % (backingWidth + 100)) -
-          50;
-        const py =
-          ((i * 127 + timeSec * speedY + Math.cos(timeSec * 1.1 + i * 0.7) * 18) %
-            (backingHeight + 80)) -
-          40;
-        const rot = timeSec * (1.2 + layer * 0.5) + i * 1.7;
-        const rx = 3.2 + layer * 1.45;
-        const ry = 1.8 + layer * 0.75;
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.rotate(rot);
-        ctx.fillStyle =
-          i % 3 === 0
-            ? `rgba(255, 228, 240, ${(0.55 + layer * 0.14).toFixed(2)})`
-            : `rgba(251, 168, 206, ${(0.5 + layer * 0.14).toFixed(2)})`;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-      ctx.restore();
-    } else if (world.season === 'SUMMER' || world.weather === 'HEATWAVE') {
-      ctx.save();
-      const isHeat = world.weather === 'HEATWAVE';
-      // Radiant diagonal summer sunbeams & warm shimmering golden motes
-      const sunGrad = ctx.createLinearGradient(backingWidth, 0, backingWidth * 0.18, backingHeight * 0.82);
-      sunGrad.addColorStop(0, isHeat ? 'rgba(255, 202, 92, 0.20)' : 'rgba(255, 226, 134, 0.12)');
-      sunGrad.addColorStop(0.45, isHeat ? 'rgba(255, 176, 76, 0.08)' : 'rgba(255, 218, 128, 0.04)');
-      sunGrad.addColorStop(1, 'rgba(255, 210, 120, 0)');
-      ctx.fillStyle = sunGrad;
-      ctx.fillRect(0, 0, backingWidth, backingHeight);
-
-      // Soft diagonal sun shafts from top-right
-      for (let b = 0; b < 3; b++) {
-        const bx = backingWidth * (0.58 + b * 0.17);
-        const shimmer = 0.78 + Math.sin(timeSec * 1.6 + b * 2.1) * 0.22;
-        const rayGrad = ctx.createLinearGradient(bx, 0, bx - 220, backingHeight * 0.75);
-        rayGrad.addColorStop(0, `rgba(255, 240, 180, ${((isHeat ? 0.13 : 0.075) * shimmer).toFixed(3)})`);
-        rayGrad.addColorStop(1, 'rgba(255, 240, 180, 0)');
-        ctx.fillStyle = rayGrad;
-        ctx.beginPath();
-        ctx.moveTo(bx - 42, 0);
-        ctx.lineTo(bx + 54, 0);
-        ctx.lineTo(bx - 165, backingHeight * 0.78);
-        ctx.lineTo(bx - 270, backingHeight * 0.78);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // Floating sunlit golden dust motes
-      const motes = isHeat ? 26 : 16;
-      for (let i = 0; i < motes; i++) {
-        const mx = ((i * 211 + Math.sin(timeSec * 0.65 + i) * 34) % backingWidth + backingWidth) % backingWidth;
-        const my = ((i * 139 - timeSec * (10 + (i % 4) * 4)) % backingHeight + backingHeight) % backingHeight;
-        const pulse = 0.4 + Math.sin(timeSec * 2.8 + i * 1.5) * 0.35;
-        ctx.fillStyle = `rgba(255, 242, 178, ${(pulse * (isHeat ? 0.75 : 0.5)).toFixed(2)})`;
-        ctx.beginPath();
-        ctx.arc(mx, my, 1.4 + (i % 3) * 0.65, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-    } else if (world.season === 'AUTUMN') {
-      ctx.save();
-      // Warm amber-ochre autumn light wash + swirling golden ginkgo & crimson maple leaves
-      const auGrad = ctx.createLinearGradient(backingWidth, 0, 0, backingHeight);
-      auGrad.addColorStop(0, 'rgba(245, 166, 62, 0.12)');
-      auGrad.addColorStop(0.55, 'rgba(217, 119, 6, 0.045)');
-      auGrad.addColorStop(1, 'rgba(120, 53, 15, 0.06)');
-      ctx.fillStyle = auGrad;
-      ctx.fillRect(0, 0, backingWidth, backingHeight);
-
-      const leaves = 38;
-      for (let i = 0; i < leaves; i++) {
-        const layer = i % 3;
-        const speedX = 44 + layer * 18 + (i % 5) * 7;
-        const speedY = 26 + layer * 12 + (i % 4) * 6;
-        const lx =
-          ((i * 197 + timeSec * speedX + Math.sin(timeSec * 1.7 + i) * 34) % (backingWidth + 100)) -
-          50;
-        const ly =
-          ((i * 131 + timeSec * speedY + Math.cos(timeSec * 1.3 + i) * 20) % (backingHeight + 80)) -
-          40;
-        const rot = timeSec * (1.6 + layer * 0.55) + i * 1.4;
-        const r = 3.8 + layer * 1.6;
-        ctx.save();
-        ctx.translate(lx, ly);
-        ctx.rotate(rot);
-        ctx.fillStyle =
-          i % 3 === 0
-            ? `rgba(220, 68, 42, ${(0.62 + layer * 0.12).toFixed(2)})`
-            : i % 2 === 0
-              ? `rgba(245, 180, 42, ${(0.64 + layer * 0.12).toFixed(2)})`
-              : `rgba(234, 120, 32, ${(0.6 + layer * 0.12).toFixed(2)})`;
-        ctx.beginPath();
-        // Stylized ginkgo / maple leaf silhouette
-        ctx.moveTo(0, -r);
-        ctx.quadraticCurveTo(r * 0.95, -r * 0.2, r * 0.65, r * 0.7);
-        ctx.lineTo(0, r * 0.35);
-        ctx.lineTo(-r * 0.65, r * 0.7);
-        ctx.quadraticCurveTo(-r * 0.95, -r * 0.2, 0, -r);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
-      ctx.restore();
-    }
+  // Vibrant Crimson-Amber Banquet Rush-Hour Bloom (pulses gently during peak dinner/lunch rush)
+  if (world.rushHourActive && world.phase === 'PLAYING') {
+    const rushPulse = 0.82 + Math.sin(timeSec * 2.8) * 0.18;
+    ctx.save();
+    const rushGrad = ctx.createRadialGradient(
+      backingWidth * 0.5,
+      backingHeight * 0.5,
+      backingHeight * 0.3,
+      backingWidth * 0.5,
+      backingHeight * 0.5,
+      Math.max(backingWidth, backingHeight) * 0.76
+    );
+    rushGrad.addColorStop(0, 'rgba(255, 194, 102, 0)');
+    rushGrad.addColorStop(0.68, `rgba(235, 114, 48, ${(0.065 * rushPulse).toFixed(3)})`);
+    rushGrad.addColorStop(1, `rgba(176, 46, 26, ${(0.145 * rushPulse).toFixed(3)})`);
+    ctx.fillStyle = rushGrad;
+    ctx.fillRect(0, 0, backingWidth, backingHeight);
+    ctx.restore();
   }
 
-  // Intense Weather Effects: Rain, Typhoon (with lightning pulse!), and Winter/Snowy multi-depth Snowfall!
+  // Festive Holiday Floating Golden Lantern Sparks / Celebratory Confetti Overlay
+  if (world.holiday !== 'NONE') {
+    ctx.save();
+    const isLanternFest = world.holiday === 'MID_AUTUMN' || world.holiday === 'NEW_YEAR_EVE';
+    const sparkCount = 22;
+    for (let i = 0; i < sparkCount; i++) {
+      const layer = i % 2;
+      const sx =
+        ((i * 223 + Math.sin(timeSec * (0.9 + layer * 0.4) + i * 1.3) * 42 + timeSec * (isLanternFest ? 12 : 24)) %
+          (backingWidth + 80)) -
+        40;
+      const sy = isLanternFest
+        ? ((backingHeight + 60 - ((i * 137 + timeSec * (18 + layer * 10)) % (backingHeight + 80))) %
+            (backingHeight + 80)) -
+          20
+        : ((i * 131 + timeSec * (22 + layer * 12)) % (backingHeight + 80)) - 40;
+      const shimmer = 0.55 + Math.sin(timeSec * 3.8 + i * 1.9) * 0.4;
+      if (isLanternFest) {
+        const rad = 2.0 + layer * 1.2;
+        const glow = ctx.createRadialGradient(sx, sy, 0.4, sx, sy, rad * 3.2);
+        glow.addColorStop(0, `rgba(255, 240, 178, ${(0.82 * shimmer).toFixed(2)})`);
+        glow.addColorStop(0.45, `rgba(248, 166, 62, ${(0.34 * shimmer).toFixed(2)})`);
+        glow.addColorStop(1, 'rgba(248, 166, 62, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(sx, sy, rad * 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(timeSec * (1.8 + layer) + i);
+        ctx.fillStyle =
+          i % 3 === 0
+            ? `rgba(226, 68, 52, ${(0.62 * shimmer).toFixed(2)})`
+            : `rgba(252, 211, 77, ${(0.68 * shimmer).toFixed(2)})`;
+        ctx.fillRect(-3, -1.6, 6, 3.2);
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+
+  // Simulation-Driven Four-Season Visual Layers (Spring sakura petals, Summer heatwave distortion,
+  // Autumn falling leaves, Winter snow blanket coverage & snowflakes, plus cross-season sweep!)
+  drawSeasonalVisualLayer(ctx, world, timeSec, backingWidth, backingHeight);
+
+  // Intense Storm Weather Effects: Rain & Typhoon (with cloud shadows, lightning fork & rain curtains!)
   if (world.weather === 'RAINY' || world.weather === 'TYPHOON') {
     const isTyphoon = world.weather === 'TYPHOON';
     ctx.save();
     // Atmospheric cool harbor storm grading
     const stormGrad = ctx.createLinearGradient(0, 0, 0, backingHeight);
-    stormGrad.addColorStop(0, isTyphoon ? 'rgba(12, 28, 44, 0.24)' : 'rgba(18, 38, 54, 0.14)');
-    stormGrad.addColorStop(1, isTyphoon ? 'rgba(16, 36, 52, 0.16)' : 'rgba(20, 42, 58, 0.08)');
+    stormGrad.addColorStop(0, isTyphoon ? 'rgba(12, 28, 44, 0.25)' : 'rgba(18, 38, 54, 0.14)');
+    stormGrad.addColorStop(1, isTyphoon ? 'rgba(16, 36, 52, 0.17)' : 'rgba(20, 42, 58, 0.08)');
     ctx.fillStyle = stormGrad;
     ctx.fillRect(0, 0, backingWidth, backingHeight);
 
-    // Subtle periodic distant lightning flash during TYPHOON
+    // Sweeping diagonal storm-cloud shadow bands & distant forked sky flash during TYPHOON
     if (isTyphoon) {
+      for (let c = 0; c < 2; c++) {
+        const cx = ((timeSec * (85 + c * 35) + c * 420) % (backingWidth + 520)) - 260;
+        const cloudBand = ctx.createLinearGradient(cx - 180, 0, cx + 180, backingHeight);
+        cloudBand.addColorStop(0, 'rgba(6, 16, 28, 0)');
+        cloudBand.addColorStop(0.5, 'rgba(6, 16, 28, 0.11)');
+        cloudBand.addColorStop(1, 'rgba(6, 16, 28, 0)');
+        ctx.fillStyle = cloudBand;
+        ctx.fillRect(0, 0, backingWidth, backingHeight);
+      }
+
       const boltCycle = (timeSec * 0.22) % 1;
       if (boltCycle > 0.94 && boltCycle < 0.985) {
         const flashIntensity = Math.sin(((boltCycle - 0.94) / 0.045) * Math.PI) * 0.16;
         ctx.fillStyle = `rgba(220, 240, 255, ${flashIntensity.toFixed(3)})`;
         ctx.fillRect(0, 0, backingWidth, backingHeight);
+
+        // Subtle distant forked harbor lightning silhouette in top-right sky margin
+        const bx = backingWidth * 0.82;
+        ctx.strokeStyle = `rgba(232, 246, 255, ${(flashIntensity * 3.8).toFixed(2)})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(bx, 0);
+        ctx.lineTo(bx - 18, backingHeight * 0.07);
+        ctx.lineTo(bx - 6, backingHeight * 0.13);
+        ctx.lineTo(bx - 26, backingHeight * 0.21);
+        ctx.stroke();
       }
     }
 
     // Two-depth rain curtains (distant fine rain + bold wind-driven foreground streaks)
-    const drops = isTyphoon ? 132 : 84;
+    const drops = isTyphoon ? 136 : 86;
     for (let i = 0; i < drops; i++) {
       const fg = i % 3 === 0;
-      const windDx = isTyphoon ? (fg ? -30 : -20) : fg ? -16 : -10;
-      const lenY = isTyphoon ? (fg ? 42 : 28) : fg ? 34 : 22;
-      const speedX = isTyphoon ? (fg ? 760 : 520) : fg ? 480 : 340;
-      const speedY = isTyphoon ? (fg ? 1020 : 760) : fg ? 780 : 580;
+      const windDx = isTyphoon ? (fg ? -32 : -22) : fg ? -16 : -10;
+      const lenY = isTyphoon ? (fg ? 44 : 28) : fg ? 34 : 22;
+      const speedX = isTyphoon ? (fg ? 780 : 540) : fg ? 480 : 340;
+      const speedY = isTyphoon ? (fg ? 1040 : 760) : fg ? 780 : 580;
       const rx = ((i * 197 + timeSec * speedX) % (backingWidth + 240)) - 120;
       const ry = ((i * 131 + timeSec * speedY) % (backingHeight + 160)) - 80;
       ctx.strokeStyle = isTyphoon
@@ -819,42 +854,55 @@ export function renderUnifiedIsoCanvas(
       ctx.lineTo(rx + windDx, ry + lenY);
       ctx.stroke();
     }
-    ctx.restore();
-  } else if (world.weather === 'SNOWY' || world.season === 'WINTER') {
-    const isBlizzard = world.weather === 'SNOWY';
-    ctx.save();
-    // Crisp frosty winter corner vignette leaving warm golden restaurant interior cozy!
-    const frostGrad = ctx.createRadialGradient(
-      backingWidth * 0.5,
-      backingHeight * 0.5,
-      backingHeight * 0.26,
-      backingWidth * 0.5,
-      backingHeight * 0.5,
-      Math.max(backingWidth, backingHeight) * 0.78
-    );
-    frostGrad.addColorStop(0, 'rgba(224, 242, 254, 0)');
-    frostGrad.addColorStop(0.68, isBlizzard ? 'rgba(186, 226, 250, 0.08)' : 'rgba(186, 226, 250, 0.04)');
-    frostGrad.addColorStop(1, isBlizzard ? 'rgba(204, 234, 252, 0.22)' : 'rgba(186, 226, 250, 0.13)');
-    ctx.fillStyle = frostGrad;
-    ctx.fillRect(0, 0, backingWidth, backingHeight);
 
-    const flakes = isBlizzard ? 86 : 34;
-    for (let i = 0; i < flakes; i++) {
-      const layer = i % 3;
-      const speedY = (isBlizzard ? 48 : 28) + layer * 18 + (i % 4) * 7;
-      const windX = (isBlizzard ? 26 : 12) + layer * 9;
-      const fx =
-        ((i * 173 + timeSec * windX + Math.sin(timeSec * (1.2 + layer * 0.35) + i) * 32) %
-          (backingWidth + 100)) -
-        50;
-      const fy = ((i * 109 + timeSec * speedY) % (backingHeight + 80)) - 40;
-      const r = (isBlizzard ? 1.8 : 1.4) + layer * 1.15;
-      const alpha = (isBlizzard ? 0.56 : 0.4) + layer * 0.14;
-      ctx.fillStyle = `rgba(246, 252, 255, ${Math.min(0.92, alpha).toFixed(2)})`;
-      ctx.beginPath();
-      ctx.arc(fx, fy, r, 0, Math.PI * 2);
-      ctx.fill();
+    // Soft coastal rain-mist wisps along lower corners
+    for (let m = 0; m < 2; m++) {
+      const mx = m === 0 ? backingWidth * 0.16 : backingWidth * 0.84;
+      const my = backingHeight * 0.92;
+      const mist = ctx.createRadialGradient(mx, my, 12, mx, my, backingWidth * 0.26);
+      mist.addColorStop(0, isTyphoon ? 'rgba(182, 224, 245, 0.13)' : 'rgba(182, 224, 245, 0.075)');
+      mist.addColorStop(1, 'rgba(182, 224, 245, 0)');
+      ctx.fillStyle = mist;
+      ctx.fillRect(0, backingHeight * 0.65, backingWidth, backingHeight * 0.35);
     }
     ctx.restore();
+  }
+
+  // Graceful Weather Transition Sweep (Season transitions are handled by world.seasonalVisual)
+  if (world.phase === 'MAIN_MENU' || world.phase === 'CHARACTER_SELECT') {
+    lastTrackedSeason = null;
+    lastTrackedWeather = null;
+  } else {
+    if (lastTrackedSeason !== null && lastTrackedWeather !== null && world.weather !== lastTrackedWeather) {
+      atmoSweepStartSec = timeSec;
+      atmoSweepKind = 'WEATHER';
+      atmoSweepColor =
+        world.weather === 'TYPHOON' || world.weather === 'RAINY'
+          ? 'rgba(125, 211, 252, 0.22)'
+          : world.weather === 'SNOWY'
+            ? 'rgba(224, 242, 254, 0.26)'
+            : world.weather === 'HEATWAVE'
+              ? 'rgba(251, 191, 36, 0.24)'
+              : 'rgba(255, 244, 200, 0.18)';
+    }
+    lastTrackedSeason = world.season;
+    lastTrackedWeather = world.weather;
+
+    const sweepAge = timeSec - atmoSweepStartSec;
+    const sweepDur = atmoSweepKind === 'SEASON' ? 2.6 : 1.9;
+    if (sweepAge >= 0 && sweepAge < sweepDur) {
+      const t = sweepAge / sweepDur;
+      const alpha = Math.sin(t * Math.PI);
+      const bandX = -backingWidth * 0.25 + t * backingWidth * 1.5;
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.85;
+      const swGrad = ctx.createLinearGradient(bandX - 180, 0, bandX + 180, backingHeight * 0.65);
+      swGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      swGrad.addColorStop(0.5, atmoSweepColor);
+      swGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = swGrad;
+      ctx.fillRect(0, 0, backingWidth, backingHeight);
+      ctx.restore();
+    }
   }
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Check, Play } from 'lucide-react';
 import { MANAGER_CHARACTERS, TITLE_KEYART_URL } from '../data/storyConfig';
 import { CharacterId } from '../types/game';
+import { ChaoshanCornerOrnament, VermilionSealStamp } from './VintageIcons';
 
 interface CharacterSelectScreenProps {
   initialCharacterId: CharacterId;
@@ -48,13 +49,16 @@ export function CharacterSelectScreen({
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>返回主菜单</span>
             </button>
-            <div>
-              <h1 className="font-display text-2xl md:text-3xl font-bold text-[#FFF6E5]">
-                择定开局店长
-              </h1>
-              <p className="text-xs text-[#C5AE92] mt-0.5">
-                三位店长各具出身、初始资金与经营绝技 · 双击立绘可直接启程
-              </p>
+            <div className="flex items-center gap-3">
+              <VermilionSealStamp label="择主" size="sm" className="hidden sm:inline-flex" />
+              <div>
+                <h1 className="font-display text-2xl md:text-3xl font-bold text-[#FFF6E5]">
+                  择定开局店长
+                </h1>
+                <p className="text-xs text-[#C5AE92] mt-0.5">
+                  三位店长各具出身、初始资金与经营绝技 · 双击立绘可直接启程
+                </p>
+              </div>
             </div>
           </div>
           <span className="text-xs font-mono-num text-[#E8C97A] hidden sm:inline whitespace-nowrap">
@@ -72,12 +76,18 @@ export function CharacterSelectScreen({
                 type="button"
                 onClick={() => setSelectedId(char.id)}
                 onDoubleClick={() => onConfirmStart(char.id)}
-                className={`text-left rounded-xl overflow-hidden transition-all duration-200 cursor-pointer flex flex-col ${
+                className={`relative text-left rounded-xl overflow-hidden transition-all duration-200 cursor-pointer flex flex-col ${
                   active
                     ? 'bg-[#342015] border-2 border-[#E8C97A] shadow-[0_0_30px_rgba(232,201,122,0.22)] -translate-y-0.5'
                     : 'bg-[#20130d]/92 border border-[#593b25] hover:border-[#b58942]'
                 }`}
               >
+                {active && (
+                  <>
+                    <ChaoshanCornerOrnament className="absolute top-1.5 left-1.5 z-20 w-6 h-6" />
+                    <ChaoshanCornerOrnament className="absolute bottom-1.5 right-1.5 z-20 w-6 h-6 rotate-180" />
+                  </>
+                )}
                 {/* Tall 3:4 Illustrated Character Portrait */}
                 <div className="relative h-64 sm:h-72 lg:h-80 w-full bg-[#160c08] overflow-hidden shrink-0">
                   <img
@@ -96,8 +106,11 @@ export function CharacterSelectScreen({
                     }}
                   />
                   {active && (
-                    <div className="absolute top-3 right-3 w-7 h-7 rounded-full bg-[#E8C97A] text-[#211208] flex items-center justify-center shadow-md">
-                      <Check className="w-4 h-4 stroke-[3]" />
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                      <VermilionSealStamp label="掌柜" size="sm" className="rotate-[4deg]" />
+                      <div className="w-7 h-7 rounded-full bg-[#E8C97A] text-[#211208] flex items-center justify-center shadow-md">
+                        <Check className="w-4 h-4 stroke-[3]" />
+                      </div>
                     </div>
                   )}
                   <div className="absolute bottom-3 left-4 right-4 flex items-baseline justify-between gap-2">

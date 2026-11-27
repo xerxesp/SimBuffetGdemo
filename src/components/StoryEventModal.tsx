@@ -1,34 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Award, Check, ChevronRight, FastForward, ScrollText } from 'lucide-react';
 import { getCharacterDef, resolveSpeakerPortrait } from '../data/storyConfig';
 import { CharacterId, StoryChoiceOption, StoryModalEvent } from '../types/game';
 import { sound } from '../utils/sound';
+import { ChaoshanCornerOrnament, VermilionSealStamp } from './VintageIcons';
 
 interface StoryEventModalProps {
   event: StoryModalEvent;
   characterId: CharacterId;
   onSelectChoice?: (choice: StoryChoiceOption) => void;
   onClose: () => void;
-}
-
-/** Delicate classical Chinese gold corner flourish SVG for the VN dialogue box */
-function GoldCornerFlourish({ className }: { className: string }) {
-  return (
-    <svg
-      viewBox="0 0 28 28"
-      fill="none"
-      aria-hidden="true"
-      className={`pointer-events-none absolute w-6 h-6 text-[#d9b060]/85 ${className}`}
-    >
-      <path
-        d="M2 18V4.5C2 3.1 3.1 2 4.5 2H18M2 9.5H7.5C8.6 9.5 9.5 8.6 9.5 7.5V2"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-      <circle cx="5.5" cy="5.5" r="1.3" fill="currentColor" />
-    </svg>
-  );
 }
 
 export function StoryEventModal({
@@ -45,9 +26,16 @@ export function StoryEventModal({
   const [chosenOption, setChosenOption] = useState<StoryChoiceOption | null>(null);
   const [revealedChars, setRevealedChars] = useState(0);
 
+  // Guard refs preventing stale typewriter state or rapid double-clicks from skipping choices / closing early
+  const skipNextTypewriterRef = useRef(false);
+  const lastRevealAtRef = useRef(0);
+
   useEffect(() => {
+    skipNextTypewriterRef.current = false;
+    lastRevealAtRef.current = 0;
     setLineIndex(0);
     setChosenOption(null);
+    setRevealedChars(0);
   }, [event.id]);
 
   const activeLine = lines ? lines[Math.min(lineIndex, lines.length - 1)] : null;
@@ -58,10 +46,19 @@ export function StoryEventModal({
       ? activeLine.text
       : event.body;
 
-  // Smooth typewriter cadence (snappy 18ms/char, instantly skippable by click or Space/Enter)
+  // Smooth typewriter cadence (snappy 22ms/2 chars, subtle brush tick SFX, instantly skippable)
   useEffect(() => {
+    if (!fullText) {
+      setRevealedChars(0);
+      return;
+    }
+    if (skipNextTypewriterRef.current) {
+      skipNextTypewriterRef.current = false;
+      setRevealedChars(fullText.length);
+      lastRevealAtRef.current = performance.now();
+      return;
+    }
     setRevealedChars(0);
-    if (!fullText) return;
     const total = fullText.length;
     const timer = window.setInterval(() => {
       setRevealedChars((prev) => {
@@ -69,7 +66,13 @@ export function StoryEventModal({
           window.clearInterval(timer);
           return total;
         }
-        return Math.min(total, prev + 2);
+        const next = Math.min(total, prev + 2);
+        if (next >= total) {
+          lastRevealAtRef.current = performance.now();
+        } else if (next % 6 === 0) {
+          sound.playDialogueTick();
+        }
+        return next;
       });
     }, 22);
     return () => window.clearInterval(timer);
@@ -77,7 +80,8 @@ export function StoryEventModal({
 
   const isTypingDone = revealedChars >= fullText.length;
   const visibleText = isTypingDone ? fullText : fullText.slice(0, revealedChars);
-  const showChoices = Boolean(choices && isLastLine && !chosenOption && isTypingDone);
+  const hasPendingChoice = Boolean(choices && !chosenOption);
+  const showChoices = Boolean(hasPendingChoice && isLastLine && isTypingDone);
 
   const displaySpeaker = activeLine ? activeLine.speaker : event.speakerName;
   const displayTitle = activeLine?.title ?? event.speakerTitle;
@@ -141,29 +145,42 @@ export function StoryEventModal({
   const handleAdvanceOrFinish = useCallback(() => {
     if (!isTypingDone) {
       setRevealedChars(fullText.length);
+      lastRevealAtRef.current = performance.now();
       return;
     }
     if (lines && !isLastLine) {
-      sound.playClick();
+      sound.playPageFlip();
+      setRevealedChars(0);
       setLineIndex((idx) => Math.min(lines.length - 1, idx + 1));
       return;
     }
-    if (!showChoices) {
-      sound.playClick();
-      onClose();
+    // Never close the modal while branching choices are still pending selection!
+    if (hasPendingChoice) {
+      return;
     }
-  }, [isTypingDone, fullText.length, lines, isLastLine, showChoices, onClose]);
+    // Brief 240ms anti-double-click guard right after finishing final text reveal
+    if (performance.now() - lastRevealAtRef.current < 240) {
+      return;
+    }
+    sound.playPageFlip();
+    onClose();
+  }, [isTypingDone, fullText.length, lines, isLastLine, hasPendingChoice, onClose]);
 
   const handleSkipToEnd = () => {
     if (!lines) return;
-    sound.playClick();
-    setLineIndex(lines.length - 1);
-    setRevealedChars(9999);
+    sound.playPageFlip();
+    skipNextTypewriterRef.current = true;
+    lastRevealAtRef.current = performance.now();
+    const lastIdx = lines.length - 1;
+    setLineIndex(lastIdx);
+    setRevealedChars(lines[lastIdx].text.length);
   };
 
   const handlePickChoice = useCallback(
     (choice: StoryChoiceOption) => {
       sound.playClick();
+      setRevealedChars(0);
+      lastRevealAtRef.current = performance.now();
       setChosenOption(choice);
       if (onSelectChoice) {
         onSelectChoice(choice);
@@ -172,9 +189,10 @@ export function StoryEventModal({
     [onSelectChoice]
   );
 
-  // Keyboard shortcuts: Space/Enter advances, 1-3 selects branching choices
+  // Keyboard shortcuts: Space/Enter advances (ignoring key-repeat), 1-3 selects branching choices
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
         handleAdvanceOrFinish();
@@ -194,9 +212,21 @@ export function StoryEventModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0d0705]/62 backdrop-blur-[3px] flex flex-col justify-between items-center px-3 py-3 sm:px-6 sm:py-5 overflow-hidden">
-      {/* Top Floating Chapter Ribbon (translucent, clean unboxed metadata) */}
+      {/* Top Floating Chapter Ribbon (translucent, clean unboxed metadata + vermilion chapter seal) */}
       <div className="w-full max-w-5xl hud-float rounded-xl px-5 py-2.5 flex items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
+          <VermilionSealStamp
+            label={
+              event.category === 'INSPECTION'
+                ? '核查'
+                : event.category === 'INCIDENT'
+                  ? '奇遇'
+                  : event.category === 'STAFF_CHAT'
+                    ? '羁绊'
+                    : '见闻'
+            }
+            size="sm"
+          />
           <span
             className="text-xs font-semibold tracking-wider whitespace-nowrap shrink-0"
             style={{ color: event.accentColor }}
@@ -300,10 +330,10 @@ export function StoryEventModal({
 
         {/* Classical Chinese Lacquer & Gold-Filigree Dialogue Box */}
         <div className="relative z-20 vn-dialogue-box rounded-2xl text-[#F7EFE2]">
-          <GoldCornerFlourish className="top-2 left-2" />
-          <GoldCornerFlourish className="top-2 right-2 rotate-90" />
-          <GoldCornerFlourish className="bottom-2 right-2 rotate-180" />
-          <GoldCornerFlourish className="bottom-2 left-2 -rotate-90" />
+          <ChaoshanCornerOrnament className="absolute top-2 left-2 w-7 h-7 opacity-90" />
+          <ChaoshanCornerOrnament className="absolute top-2 right-2 w-7 h-7 rotate-90 opacity-90" />
+          <ChaoshanCornerOrnament className="absolute bottom-2 right-2 w-7 h-7 rotate-180 opacity-90" />
+          <ChaoshanCornerOrnament className="absolute bottom-2 left-2 w-7 h-7 -rotate-90 opacity-90" />
 
           {/* Floating Ornate Speaker Name Plaque perched on top rim (matching approved mockup!) */}
           <div
@@ -427,22 +457,32 @@ export function StoryEventModal({
 
             {/* Clean Footer Action Bar */}
             <div className="pt-3 border-t border-[#593b25]/70 flex items-center justify-between gap-3">
-              {lines && !isLastLine ? (
+              {!isTypingDone || (lines && !isLastLine) ? (
                 <>
                   <span className="text-xs text-[#BFA587] inline-flex items-center gap-1.5">
                     <ScrollText className="w-3.5 h-3.5 text-[#D9B060]" />
-                    <span>点击对话框或按空格键继续</span>
+                    <span>
+                      {!isTypingDone && hasPendingChoice && isLastLine
+                        ? '点击显示全文并展开抉择选项'
+                        : '点击对话框或按空格键继续'}
+                    </span>
                   </span>
                   <button
                     type="button"
                     onClick={handleAdvanceOrFinish}
                     className="game-btn-gold inline-flex items-center gap-1.5 px-6 py-2 rounded-lg font-bold text-sm cursor-pointer whitespace-nowrap"
                   >
-                    <span>{isTypingDone ? '继续对话' : '显示全文'}</span>
+                    <span>
+                      {!isTypingDone
+                        ? hasPendingChoice && isLastLine
+                          ? '显示选项'
+                          : '显示全文'
+                        : '继续对话'}
+                    </span>
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </>
-              ) : showChoices ? (
+              ) : hasPendingChoice ? (
                 <span className="text-xs text-[#E8C97A]">
                   抉择将深刻影响人物羁绊与最终结局走向
                 </span>
